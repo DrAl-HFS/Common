@@ -1,5 +1,5 @@
 // util.h - miscelleaneous utility code
-// https://github.com/DrAl-HFS/*.git
+// https://github.com/DrAl-HFS/Common.git
 // (c) Project Contributors Feb 2018 - June 2019
 
 #ifndef UTIL_H
@@ -80,7 +80,7 @@ extern int strFmtNSMV (char s[], const int maxS, const char *fmt, const SMVal v[
 extern SMVal sumNSMV (const SMVal v[], const size_t n);
 extern SMVal meanNSMV (const SMVal v[], const size_t n);
 
-// DISPLACE MATH/COMP TOOLS ? INLINE? 
+// DISPLACE MATH/COMP TOOLS ? INLINE?
 extern F64 lcombF64 (const F64 x0, const F64 x1, const F64 r0, const F64 r1); // return(x0 * r0 + x1 * r1);
 extern F64 lerpF64 (const F64 x0, const F64 x1, const F64 r0); // return(x0 * r0 + x1 * (1-r0));
 

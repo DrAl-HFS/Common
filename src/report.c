@@ -1,5 +1,5 @@
-// report.c - GSRD/DIFF3D
-// https://github.com/DrAl-HFS/ .git
+// report.c - Filtered error/debug/log reporting.
+// https://github.com/DrAl-HFS/Common.git
 // (c) Project Contributors  Feb 2018 - June 2019
 
 

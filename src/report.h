@@ -1,5 +1,5 @@
-// report.h - GSRD/DIFF3D
-// https://github.com/DrAl-HFS/*.git
+// report.h - Filtered error/debug/log reporting.
+// https://github.com/DrAl-HFS/Common.git
 // (c) Project Contributors Jan-June 2019
 
 #ifndef REPORT_H

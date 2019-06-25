@@ -1,5 +1,5 @@
 // util.c - miscelleaneous utility code
-// https://github.com/DrAl-HFS/*.git
+// https://github.com/DrAl-HFS/Common.git
 // (c) Project Contributors Feb 2018 - June 2019
 
 #include "util.h"
