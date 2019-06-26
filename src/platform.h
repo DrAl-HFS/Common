@@ -38,6 +38,8 @@ extern "C" {
 #define FALSE (0)
 #endif
 
+#define BITS_TO_BYTES(b) (((b)+7)>>3)
+
 //define _PASTE(a,b) a##b
 //define PASTE(a,b) _PASTE(a,b)
 
