@@ -22,6 +22,9 @@ extern "C" {
 // General compiler tweaks
 //pragma clang diagnostic ignored "-Wmissing-field-initializers"
 
+#ifndef M_PI
+#define M_PI (3.14159265358979323846)
+#endif
 #ifndef SWAP
 #define SWAP(Type,a,b) { Type tmp= (a); (a)= (b); (b)= tmp; }
 #endif
@@ -38,7 +41,9 @@ extern "C" {
 #define FALSE (0)
 #endif
 
-#define BITS_TO_BYTES(b) (((b)+7)>>3)
+#define BIT_MASK(n)        ((1<<(n))-1)
+#define BITS_TO_BYTES(b)   (((b)+7)>>3)
+#define BITS_TO_WRDSH(b,s) (((b)+BIT_MASK(s))>>s)
 
 //define _PASTE(a,b) a##b
 //define PASTE(a,b) _PASTE(a,b)
