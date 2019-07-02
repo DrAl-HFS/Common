@@ -61,6 +61,7 @@ extern size_t saveBuff (const void * const pB, const char * const path, const si
 extern MBVal readBytesLE (const U8 * const pB, const size_t idx, const U8 nB);
 extern MBVal writeBytesLE (U8 * const pB, const size_t idx, const U8 nB, const MBVal v);
 
+// Timing
 extern SMVal deltaT (void);
 
 extern void statMom1AddW (StatMomD1R2 * const pS, const SMVal v, const SMVal w);
@@ -68,12 +69,15 @@ extern void statMom3AddW (StatMomD3R2 * const pS, const SMVal x, const SMVal y, 
 extern U32 statMom1Res1 (StatResD1R2 * const pR, const StatMomD1R2 * const pS, const SMVal dof);
 extern U32 statMom3Res1 (StatResD1R2 r[3], const StatMomD3R2 * const pS, const SMVal dof);
 
+// Convert size to binary/scientific multiplier format for readability
 extern float binSizeZ (char *pCh, size_t s);
-extern float decSizeZ (char *pCh, size_t s);
+extern float decSizeZ (char *pCh, size_t s); // see also sciFmt.h : double sciFmtSetF (char *, const double);
 
+// Bit twiddling
 extern U32 bitCountZ (size_t u);
 extern I32 bitNumHiZ (size_t u); // Number of highest bit set or -1
 extern U32 bitsReqI32 (I32 i); // Bits required to store value - NB - additional bit for sign flag / leading zero not included!
+
 
 extern int strFmtNSMV (char s[], const int maxS, const char *fmt, const SMVal v[], const int n);
 

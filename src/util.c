@@ -7,8 +7,8 @@
 #define GETTIME(a) gettimeofday(a,NULL)
 #define USEC(t1,t2) (((t2).tv_sec-(t1).tv_sec)*1000000+((t2).tv_usec-(t1).tv_usec))
 
-static const char gMultChar[]=" KMGTEP";
-#define MULT_CHAR_MAX (sizeof(gMultChar)-2) // discount leading space and trailing nul
+static const char gUMultChar[]=" KMGTEP";
+#define MULT_CHAR_MAX (sizeof(gUMultChar)-2) // discount leading space and trailing nul
 
 // Not sure how portable __WORDSIZE is...
 #define SIZET_BITS __WORDSIZE
@@ -198,7 +198,7 @@ float binSizeZ (char *pCh, const size_t s)
 {
    int i=0;
    while ((i < MULT_CHAR_MAX) && (s > ((size_t)1 << (10 * (i+1))))) { ++i; }
-   *pCh= gMultChar[i];
+   *pCh= gUMultChar[i];
    return( (float)s / (1 << (10 * i)) );
 } // binSizeZ
 
@@ -207,7 +207,7 @@ float decSizeZ (char *pCh, size_t s)
    size_t m=1;
    int i=0;
    while ((i < MULT_CHAR_MAX) && (s > (1000 * m))) { ++i; m*= 1000; }
-   *pCh= gMultChar[i];
+   *pCh= gUMultChar[i];
    return( (float)s / m );
 } // decSizeZ
 

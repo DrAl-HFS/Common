@@ -5,6 +5,10 @@
 #ifndef PLATFORM_H
 #define PLATFORM_H
 
+#ifdef __GNUC__
+#define _GNU_SOURCE // Enable extras in <math.h> etc.
+#endif
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
