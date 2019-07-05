@@ -1,4 +1,4 @@
-// Common/I2C/lxI2C.h - I2C bus utils for Linux
+// Common/MBD/lxI2C.h - I2C bus utils for Linux
 // https://github.com/DrAl-HFS/Common.git
 // (c) Project Contributors Feb 2018 - July 2019
 
@@ -9,13 +9,6 @@
 #include <linux/i2c.h>
 //#include <linux/i2c-dev.h>
 
-#if 0
-typedef int8_t   I8;
-typedef uint8_t  U8;
-typedef uint16_t U16;
-typedef uint32_t U32;
-typedef uint32_t Bool32;
-#endif
 
 #define I2C_M_WR  (0x0)   // Dummy for code readability
 

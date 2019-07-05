@@ -1,4 +1,4 @@
-// Common/I2C/lxI2C.c - I2C bus utils for Linux
+// Common/MBD/lxI2C.c - I2C bus utils for Linux
 // https://github.com/DrAl-HFS/Common.git
 // (c) Project Contributors Feb 2018 - July 2019
 
@@ -216,6 +216,8 @@ void lxDumpI2C (const LXI2CBusCtx *pC, U16 dev, U8 bytes, U8 addr)
 } // lxDumpI2C
 
 #ifdef LX_I2C_MAIN
+
+// Standalone test
 
 LXI2CBusCtx gBusCtx={0,-1};
 
