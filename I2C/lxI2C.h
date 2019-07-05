@@ -1,3 +1,7 @@
+// Common/I2C/lxI2C.h - I2C bus utils for Linux
+// https://github.com/DrAl-HFS/Common.git
+// (c) Project Contributors Feb 2018 - July 2019
+
 #ifndef LX_I2C_H
 #define LX_I2C_H
 

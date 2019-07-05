@@ -1,3 +1,6 @@
+// Common/I2C/lxI2C.c - I2C bus utils for Linux
+// https://github.com/DrAl-HFS/Common.git
+// (c) Project Contributors Feb 2018 - July 2019
 
 #include <fcntl.h>
 #include <errno.h>
