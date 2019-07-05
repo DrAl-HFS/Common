@@ -7,3 +7,4 @@ Modules:-
 * **platform** : general system library header includes, macros, tersely named rudimentary types.
 * **util** : dumping ground for miscellaneous types & functions.
 * **report** : filtered reporting (stdout/stderr).
+* **I2C/lxI2C** : I2C bus utilities.
