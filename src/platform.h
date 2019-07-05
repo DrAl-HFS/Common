@@ -6,7 +6,9 @@
 #define PLATFORM_H
 
 #ifdef __GNUC__
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE // Enable extras in <math.h> etc.
+#endif
 #endif
 
 #include <stdio.h>
