@@ -42,20 +42,20 @@ double sciFmtSetF (char *pCh, const double uf)
 {
    float m=1;
    int i=MULT_CHAR_IDX0;
-	if (uf > 1)
-	{
+   if (uf > 1)
+   {
       if (uf < 1E30)
       {
          while ((i < MULT_CHAR_MAX) && (uf > (1000 * m))) { ++i; m*= 1000; }
       }
-	}
-	else if (uf > 0)
+   }
+   else if (uf > 0)
    {
       if (uf > 1E-30)
       {
          while ((i > 0) && (uf < (m * 0.099))) { --i; m*= 0.001; }
       }
-	}
+   }
    *pCh= gSFMultChar[i];
    return( uf / m );
 } // sciFmtSetF
