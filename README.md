@@ -5,7 +5,8 @@ configuration rather than as library.
 General Modules (src/*.c) :-
 
 * **platform** : general system library header includes, macros, tersely named rudimentary types.
-* **util** : dumping ground for miscellaneous types & functions.
+* **util**   : dumping ground for miscellaneous types & functions.
+* **sciFmt** : Scientific multiplier (y through Y in 1k steps) number format read/write.
 * **report** : filtered reporting (stdout/stderr).
 
 Embedded Modules (MBD/*.c) :-
