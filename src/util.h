@@ -74,7 +74,7 @@ extern float binSizeZ (char *pCh, size_t s);
 extern float decSizeZ (char *pCh, size_t s); // see also sciFmt.h : double sciFmtSetF (char *, const double);
 
 // Bit twiddling
-extern U32 bitCountZ (size_t u);
+extern U32 bitCountZ (size_t u); // ?> X86:SSE4	POPCNT, ARM:NEON VCNT
 extern I32 bitNumHiZ (size_t u); // Number of highest bit set or -1
 extern U32 bitsReqI32 (I32 i); // Bits required to store value - NB - additional bit for sign flag / leading zero not included!
 
