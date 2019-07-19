@@ -21,6 +21,17 @@
 #include <sys/time.h>
 #include <unistd.h>
 
+#ifdef __PGI
+#include <intrin.h>     // ABM
+#include <immintrin.h>  // AVX
+#include <mmintrin.h>   // MMX
+#include <xmmintrin.h>  // SSE
+#include <emmintrin.h>  // SSE2
+#include <pmmintrin.h>  // SSE3
+#include <tmmintrin.h>  // SSSE3
+#include <ammintrin.h>  // SSE4a
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
