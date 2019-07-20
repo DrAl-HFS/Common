@@ -73,6 +73,14 @@ extern U32 statMom3Res1 (StatResD1R2 r[3], const StatMomD3R2 * const pS, const S
 extern float binSizeZ (char *pCh, size_t s);
 extern float decSizeZ (char *pCh, size_t s); // see also sciFmt.h : double sciFmtSetF (char *, const double);
 
+#ifdef PGI_INTRINSIC
+#define BIT_COUNT_Z(z) __popcnt64(z)
+//unsigned int __popcnt(unsigned int);
+//unsigned short __popcnt16(unsigned short);
+#else
+#define BIT_COUNT_Z(z) bitCountZ(z)
+#endif
+
 // Bit twiddling
 extern U32 bitCountZ (size_t u); // ?> X86:SSE4	POPCNT, ARM:NEON VCNT
 extern I32 bitNumHiZ (size_t u); // Number of highest bit set or -1

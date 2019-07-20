@@ -21,7 +21,8 @@
 #include <sys/time.h>
 #include <unistd.h>
 
-#ifdef __PGI
+#if 0 //def __PGI
+#define __ABM__
 #include <intrin.h>     // ABM
 #include <immintrin.h>  // AVX
 #include <mmintrin.h>   // MMX
@@ -30,6 +31,7 @@
 #include <pmmintrin.h>  // SSE3
 #include <tmmintrin.h>  // SSSE3
 #include <ammintrin.h>  // SSE4a
+#define PGI_INTRINSIC
 #endif
 
 #ifdef __cplusplus
