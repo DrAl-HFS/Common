@@ -156,18 +156,47 @@ void lxSleepm (U32 ms)
    if (0 != r) { WARN_CALL("(%u) -> %d\n", ms, r); }
 } // lxSleepm
 
-/*
-int lxOpenSMBUS (const char *path, I8 devID)
+Bool32 lxOpenSMBUS (LXI2CBusCtx *pBC, const char *path, I8 devID)
 {
    int r=-1;
-   if (lxOpenI2C(path))
+   if (lxOpenI2C(pBC,path))
    {
-      r= ioctl(activeBC()->fd, I2C_SLAVE, &devID); // SMBUS address locked
+      r= ioctl(pBC->fd, I2C_SLAVE, devID); // SMBUS address locked
+      TRACE_CALL("(0x%X) I2C:0x%X - ioctl(..I2C_SLAVE..)->%d\n", devID, pBC->flags & I2C_FUNC_SMBUS_EMUL, r);
       //if (r >= 0) { gCtx.smDevID= devID; }
    }
    return(r >= 0);
 } // lxOpenSMBUS
-* */
+
+static U32 getSizeSMBUS (U16 bytes)
+{
+   if (bytes <= I2C_SMBUS_BLOCK_MAX)
+   {
+      switch(bytes)
+      {
+         case 1 : return(I2C_SMBUS_BYTE_DATA);
+         case 2 : return(I2C_SMBUS_WORD_DATA);
+         default : return(I2C_SMBUS_BLOCK_DATA);
+      }
+   }
+   //else
+   return(I2C_SMBUS_I2C_BLOCK_DATA);
+} // getSizeSMBUS
+
+int lxReadSMBUS (const LXI2CBusCtx *pBC, U16 nB, U8 *pB, U8 reg)
+{
+   struct i2c_smbus_ioctl_data s={ .read_write=I2C_SMBUS_READ, .command= reg, .size= getSizeSMBUS(nB), .data=(void*)pB };
+//   union i2c_smbus_data d={???};
+   //
+   return ioctl(pBC->fd, I2C_SMBUS, &s);
+} // lxReadSMBUS
+
+int lxWriteSMBUS (const LXI2CBusCtx *pBC, U16 nB, U8 *pB, U8 reg)
+{
+   struct i2c_smbus_ioctl_data s={ .read_write=I2C_SMBUS_WRITE, .command= reg, .size= getSizeSMBUS(nB), .data=(void*)pB };
+
+   return ioctl(pBC->fd, I2C_SMBUS, &s);
+} // lxWriteSMBUS
 
 void lxClose (LXI2CBusCtx *pC)
 {

@@ -31,7 +31,9 @@ extern void lxSleepm (U32 ms);
 
 extern void lxDumpI2C (const LXI2CBusCtx *pC, U16 dev, U8 bytes, U8 addr);
 
-//extern int lxOpenSMBUS (const char *path, I8 devID);
+extern Bool32 lxOpenSMBUS (LXI2CBusCtx *pBC, const char *path, I8 devID);
+extern int lxReadSMBUS (const LXI2CBusCtx *pBC, U16 nB, U8 *pB, U8 reg);
+extern int lxWriteSMBUS (const LXI2CBusCtx *pBC, U16 nB, U8 *pB, U8 reg);
 
 extern void lxClose (LXI2CBusCtx *pC);
 
