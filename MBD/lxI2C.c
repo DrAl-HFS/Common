@@ -76,9 +76,10 @@ int lxi2cTrans (const LXI2CBusCtx *pBC, const U16 dev, const U16 f, U16 nB, U8 *
    struct i2c_msg m[LX_I2C_TRANS_NM]=
    { // define two "packets" necessary to complete a transaction
       { .addr= dev,  .flags= 0,  .len= 1,  .buf= &reg }, // command set device "address register"
-      { .addr= dev,  .flags= f | I2C_M_NOSTART,  .len= nB,  .buf= pB } // transfer buffer to/from the address set on device
+      { .addr= dev,  .flags= f|I2C_M_STOP,  .len= nB,  .buf= pB } // transfer buffer to/from the address set on device
    };
    struct i2c_rdwr_ioctl_data d={m,LX_I2C_TRANS_NM};
+   if (I2C_M_RD != (f & I2C_M_RD)) { m[1].flags|= I2C_M_NOSTART; }
    if (gCtx.flags & LX_I2C_FLAG_TRACE)
    {
       TRACE_CALL("(Dev=0x%X, Flg=0x%04X, Buf={%u, %p}, Reg=x%02X)\n", dev, f, nB, pB, reg);
