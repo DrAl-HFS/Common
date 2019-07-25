@@ -85,7 +85,7 @@ int lxi2cTrans (const LXI2CBusCtx *pBC, const U16 dev, const U16 f, U16 nB, U8 *
       reportBytes(TRC1, pB, nB);
    }
    int r= ioctl(pBC->fd, I2C_RDWR, &d);
-   if (gCtx.flags & LX_I2C_FLAG_TRACE)
+   if ((I2C_M_RD & f) && (gCtx.flags & LX_I2C_FLAG_TRACE))
    {
       const U8 gTEC[2]={TRC1,ERR0};
       REPORT(gTEC[(r<0)]," -> %d\n", r);
@@ -144,6 +144,7 @@ static U32 getSizeSMBUS (U16 bytes)
 
 int lxi2cTransSMBUS (const LXI2CBusCtx *pBC, const U16 f, U16 nB, U8 *pB, U8 reg)
 {
+   int r= -1;
    struct i2c_smbus_ioctl_data s={ .read_write=f, .command= reg, .size= getSizeSMBUS(nB), .data=(void*)pB };
 //   union i2c_smbus_data d={???};
    //
@@ -152,14 +153,13 @@ int lxi2cTransSMBUS (const LXI2CBusCtx *pBC, const U16 f, U16 nB, U8 *pB, U8 reg
       TRACE_CALL("(Flg=0x%X, Buf={%u, %p}, Reg=x%02X)\n", f, nB, pB, reg);
       reportBytes(TRC1, pB, nB);
    }
-   int r= ioctl(pBC->fd, I2C_SMBUS, &s);
-   if (gCtx.flags & LX_I2C_FLAG_TRACE)
+   r= ioctl(pBC->fd, I2C_SMBUS, &s);
+   if ((I2C_SMBUS_READ & f) && (gCtx.flags & LX_I2C_FLAG_TRACE))
    {
       const U8 gTEC[2]={TRC1,ERR0};
       REPORT(gTEC[(r<0)]," -> %d\n", r);
       reportBytes(TRC1, pB, nB);
    }
-   if (r > 0) { r= 0; }
    return(r);
 } // lxi2cTransSMBUS
 
