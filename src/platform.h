@@ -48,10 +48,10 @@ extern "C" {
 #define SWAP(Type,a,b) { Type tmp= (a); (a)= (b); (b)= tmp; }
 #endif
 #ifndef MIN
-#define MIN(a,b) (a)<(b)?(a):(b)
+#define MIN(a,b) ((a)<(b)?(a):(b))
 #endif
 #ifndef MAX
-#define MAX(a,b) (a)>(b)?(a):(b)
+#define MAX(a,b) ((a)>(b)?(a):(b))
 #endif
 #ifndef TRUE
 #define TRUE (1)
