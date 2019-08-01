@@ -23,16 +23,18 @@ typedef struct
 
 /***/
 
-extern Bool32 lxOpenI2C (LXI2CBusCtx *pBC, const char *path);
+extern Bool32 lxi2cOpen (LXI2CBusCtx *pBC, const char *path);
 
-extern int lxTransactI2C (const LXI2CBusCtx *pBC, const U16 dev, const U16 f, U16 nB, U8 *pB, U8 reg);
+extern int lxi2cTrans (const LXI2CBusCtx *pBC, const U16 dev, const U16 f, U16 nB, U8 *pB, U8 reg);
 
-extern void lxSleepm (U32 ms);
+extern void lxi2cSleepm (U32 ms);
 
-extern void lxDumpI2C (const LXI2CBusCtx *pC, U16 dev, U8 bytes, U8 addr);
+extern void lxi2cDumpDevAddr (const LXI2CBusCtx *pC, U16 dev, U8 bytes, U8 addr);
 
-//extern int lxOpenSMBUS (const char *path, I8 devID);
+extern Bool32 lxi2cOpenSMBUS (LXI2CBusCtx *pBC, const char *path, I8 devID);
+// f= I2C_SMBUS_READ / I2C_SMBUS_WRITE
+extern int lxi2cTransSMBUS (const LXI2CBusCtx *pBC, const U16 f, U16 nB, U8 *pB, U8 reg);
 
-extern void lxClose (LXI2CBusCtx *pC);
+extern void lxi2cClose (LXI2CBusCtx *pC);
 
 #endif // LX_I2C_H
