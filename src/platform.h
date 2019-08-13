@@ -82,7 +82,7 @@ typedef unsigned long long U64;
 typedef float F32;
 typedef double F64;
 
-typedef int Bool32;
+typedef int B32; // Boolean
 
 #ifdef __cplusplus
 } // extern "C"

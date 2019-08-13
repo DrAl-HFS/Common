@@ -114,7 +114,7 @@ int sciFmtScanF64 (double *pF, const char s[], const int max)
 
 int sciFmtScanF32 (float *pF32, const char s[], const int max)
 {
-   double f64;
+   double f64=0;
    int n= sciFmtScanF64(&f64, s, max);
    if (pF32 && (n > 0)) { *pF32= f64; }
    return(n);

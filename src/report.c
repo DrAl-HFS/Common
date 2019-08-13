@@ -23,7 +23,7 @@ static ReportCtx gRC={ {0xFFFF,0xFFFF,0xFFFF,0xFFFF} };
 
 /***/
 
-static Bool32 notMasked (const U8 fcid, const U8 lnid)
+static B32 notMasked (const U8 fcid, const U8 lnid)
 {
    return ((fcid & FRCD) || (gRC.filterMask[fcid & ERR0] & (1 << lnid)));
 } // masked

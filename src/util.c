@@ -16,12 +16,12 @@ static const char gUMultChar[]=" KMGTEP";
 
 /***/
 
-Bool32 validMemBuff (const MemBuff *pB, const size_t bytes)
+B32 validMemBuff (const MemBuff *pB, const size_t bytes)
 {
    return(pB && pB->p && (pB->bytes >= bytes));
 } // validMemBuff
 
-Bool32 allocMemBuff (MemBuff *pB, const size_t bytes)
+B32 allocMemBuff (MemBuff *pB, const size_t bytes)
 {
    if (pB)
    {
@@ -41,7 +41,7 @@ void releaseMemBuff (MemBuff *pB)
    if (pB && pB->p) { free(pB->p); pB->p= NULL; }
 } // releaseMemBuff
 
-Bool32 adjustMemBuff (MemBuff *pR, const MemBuff *pB, size_t skipS, size_t skipE)
+B32 adjustMemBuff (MemBuff *pR, const MemBuff *pB, size_t skipS, size_t skipE)
 {
    const size_t s= skipS + skipE;
    if (s < pB->bytes)
