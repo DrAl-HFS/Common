@@ -9,10 +9,12 @@
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE // Enable extras in <math.h> etc.
 #endif
-#endif
+#endif // __GNUC__
 
-#include <stdio.h>
+#include <stddef.h>
+#include <stdint.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 #include <ctype.h>
 #include <math.h>
@@ -68,6 +70,17 @@ extern "C" {
 //define PASTE(a,b) _PASTE(a,b)
 
 // Terse type names
+#if _STDINT_H
+typedef int8_t   I8;
+typedef int16_t  I16;
+typedef int32_t  I32;
+typedef int64_t  I64;
+
+typedef uint8_t  U8;
+typedef uint16_t U16;
+typedef uint32_t U32;
+typedef uint64_t U64;
+#else // _STDINT_H broken
 typedef signed char       I8;
 typedef signed short      I16;
 typedef signed int        I32;
@@ -78,7 +91,10 @@ typedef unsigned char      U8;
 typedef unsigned short     U16;
 typedef unsigned int       U32;
 typedef unsigned long long U64;
+#endif // _STDINT_H broken
 
+//typedef __fp16 F16; // gcc on ARM: -mfpu=neon-fp16 -mfp16-format=ieee (or -mfp16-format=alternative for no Inf/NaN)
+//typedef _Float16 F16; // CLANG / CStd no ABI ?
 typedef float F32;
 typedef double F64;
 
