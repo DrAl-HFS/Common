@@ -62,6 +62,8 @@ extern "C" {
 #define FALSE (0)
 #endif
 
+#define LOG2I(x)     ((int)log2(x))
+
 #define BIT_MASK(n)        ((1<<(n))-1)
 #define BITS_TO_BYTES(b)   (((b)+7)>>3)
 #define BITS_TO_WRDSH(b,s) (((b)+BIT_MASK(s))>>s)

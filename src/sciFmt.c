@@ -4,15 +4,6 @@
 
 #include "sciFmt.h"
 
-// Enable GNU extensions if needed (exp10 etc. not avilable by default)
-#ifdef __GNUC__
-#ifndef _GNU_SOURCE
-#define _GNU_SOURCE
-#undef _MATH_H
-#include <math.h>
-#endif // _GNU_SOURCE
-#endif // __GNUC_
-
 static const char gSFMultChar[]="yzafpnum kMGTPEZY";
 #define MULT_CHAR_IDX0 8   // central space
 #define MULT_CHAR_MAX (sizeof(gSFMultChar)-2) // discount central space and trailing nul
