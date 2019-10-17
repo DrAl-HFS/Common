@@ -134,6 +134,13 @@ SMVal deltaT (void)
    return(dt);
 } // deltaT
 
+void statMom1Add (StatMomD1R2 * const pS, const SMVal v)
+{
+   pS->m[0]+= 1;
+   pS->m[1]+= v;
+   pS->m[2]+= v * v;
+} // statMom1Add
+
 void statMom1AddW (StatMomD1R2 * const pS, const SMVal v, const SMVal w)
 {
    pS->m[0]+= w;

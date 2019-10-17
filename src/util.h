@@ -65,6 +65,7 @@ extern MBVal writeBytesLE (U8 * const pB, const size_t idx, const U8 nB, const M
 // Timing
 extern SMVal deltaT (void);
 
+extern void statMom1Add (StatMomD1R2 * const pS, const SMVal v);
 extern void statMom1AddW (StatMomD1R2 * const pS, const SMVal v, const SMVal w);
 extern void statMom3AddW (StatMomD3R2 * const pS, const SMVal x, const SMVal y, const SMVal z, const SMVal w);
 extern U32 statMom1Res1 (StatResD1R2 * const pR, const StatMomD1R2 * const pS, const SMVal dof);
@@ -83,7 +84,7 @@ extern float decSizeZ (char *pCh, size_t s); // see also sciFmt.h : double sciFm
 #endif
 
 // Bit twiddling
-extern U32 bitCountZ (size_t u); // ?> X86:SSE4	POPCNT, ARM:NEON VCNT
+extern U32 bitCountZ (size_t u); // ?> X86:SSE4 POPCNT, ARM:NEON VCNT
 extern I32 bitNumHiZ (size_t u); // Number of highest bit set or -1
 extern U32 bitsReqI32 (I32 i); // Bits required to store value - NB - additional bit for sign flag / leading zero not included!
 
