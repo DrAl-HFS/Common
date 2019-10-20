@@ -68,6 +68,10 @@ extern "C" {
 #define BITS_TO_BYTES(b)   (((b)+7)>>3)
 #define BITS_TO_WRDSH(b,s) (((b)+BIT_MASK(s))>>s)
 
+// a/b round up with denominator check
+// Returns numerator if denominator <= 1 i.e. neg. denom. unsupported!
+#define DIV_RUP(a,b) ((b)>1 ? ((a)+(b)-1)/(b) : (a))
+
 //define _PASTE(a,b) a##b
 //define PASTE(a,b) _PASTE(a,b)
 
