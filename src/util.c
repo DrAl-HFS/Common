@@ -273,6 +273,13 @@ U32 bitsReqI32 (I32 i)
    return MAX(1,1+w);
 } // bitsReqI32
 
+size_t bitCountNU32 (U32 u[], const int n)
+{
+   size_t t= 0;
+   for (int i= 0; i<n; i++) { t+= BIT_COUNT_Z(u[i]); }
+   return(t);
+} // bitCountNU32
+
 extern int strFmtNSMV (char s[], const int maxS, const char *fmt, const SMVal v[], const int n)
 {
    int i=0, nS=0;

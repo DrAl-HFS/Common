@@ -88,6 +88,7 @@ extern U32 bitCountZ (size_t u); // ?> X86:SSE4 POPCNT, ARM:NEON VCNT
 extern I32 bitNumHiZ (size_t u); // Number of highest bit set or -1
 extern U32 bitsReqI32 (I32 i); // Bits required to store value - NB - additional bit for sign flag / leading zero not included!
 
+extern size_t bitCountNU32 (U32 u[], const int n);
 
 extern int strFmtNSMV (char s[], const int maxS, const char *fmt, const SMVal v[], const int n);
 
