@@ -219,9 +219,9 @@ LXI2CBusCtx gBusCtx={0,-1};
 int main (int argc, char *argv[])
 {
    char *busDevPath="/dev/i2c-1";
-   U8 devID= 0x76;
+   U8 devID= 0x48;
 
-   if (lxi2cOpenI2C(&gBusCtx, busDevPath))
+   if (lxi2cOpen(&gBusCtx, busDevPath))
    {
       lxi2cDumpDevAddr(&gBusCtx, devID, 0xFF,0x00);
       lxi2cClose(&gBusCtx);
