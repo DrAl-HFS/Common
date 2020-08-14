@@ -1,5 +1,6 @@
 // report.h - Filtered error/debug/log reporting.
 // https://github.com/DrAl-HFS/Common.git
+// Licence: GPL V3
 // (c) Project Contributors Jan-June 2019
 
 #ifndef REPORT_H

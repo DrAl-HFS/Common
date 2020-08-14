@@ -1,5 +1,6 @@
 // platform.h - fundamental type & macro declarations (to simplify multi-platform support)
 // https://github.com/DrAl-HFS/Common.git
+// Licence: GPL V3
 // (c) Project Contributors Jan-June 2019
 
 #ifndef PLATFORM_H

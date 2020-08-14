@@ -1,5 +1,6 @@
 // util.h - miscellaneous utility code
 // https://github.com/DrAl-HFS/Common.git
+// Licence: GPL V3
 // (c) Project Contributors Feb 2018 - June 2019
 
 #ifndef UTIL_H

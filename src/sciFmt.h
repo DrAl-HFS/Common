@@ -1,5 +1,6 @@
 // sciFmt.h - Scientific number format handling.
 // https://github.com/DrAl-HFS/Common.git
+// Licence: GPL V3
 // (c) Project Contributors April 2019
 
 #ifndef SCI_FMT_H
