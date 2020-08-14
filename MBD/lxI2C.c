@@ -2,7 +2,8 @@
 // https://github.com/DrAl-HFS/Common.git
 // Licence: GPL V3
 // (c) Project Contributors Feb 2018 - Aug 2020
-// Ref: https://www.kernel.org/doc/html/latest/driver-api/i2c.html
+
+// Linux Ref: https://www.kernel.org/doc/html/latest/driver-api/i2c.html
 
 #include <fcntl.h>
 #include <errno.h>
@@ -55,6 +56,7 @@ Bool32 lxi2cOpen (LXI2CBusCtx *pBC, const char *path)
             LX_TRC1("ioctl(.. I2C_FUNCS ..) -> %d\n", r);
             LX_TRC1("flags=0x%0X (%dbytes)\n", pBC->flags, sizeof(pBC->flags));
          }
+         pBC->clk= 100000; // default I2C clock rate - TODO: determine actual rate ???
       }
       else { report(ERR0,"lxOpenI2C(.. %s)\n", path); }
    }
@@ -215,17 +217,21 @@ void lxi2cDumpDevAddr (const LXI2CBusCtx *pC, U16 dev, U8 bytes, U8 addr)
 #ifdef LX_I2C_MAIN
 
 // Standalone test
+#include "ads1x.h"
+
 
 LXI2CBusCtx gBusCtx={0,-1};
 
+// Endian handling - displace to where ?
 typedef union { U16 u16; struct { U8 u8[2]; }; } UU16; // for endian check/twiddle
 
-int rnbe (const U8 b[], const int n)
+// Read n bytes big-endian
+int rdnbe (const U8 b[], const int n)
 {
    int r= b[0];
    for (int i= 1; i<n; i++) { r= (r<<8) | b[i]; }
    return(r);
-} // rnbe
+} // rdnbe
 
 void dumpCfg (const UU16 c)
 {
@@ -265,7 +271,7 @@ int testADS1015 (const LXI2CBusCtx *pC, const U16 dev)
             } while ((0 == r) && (++i < 5) && (0 == (cfg2.u8[0] & 0x80)));
 
             r= lxi2cTrans(pC, dev, I2C_M_RD, 2, dat.u8, 0x0); // read result
-            printf("data: 0x%x\n", rnbe(dat.u8, 2));
+            printf("data: 0x%x\n", rdnbe(dat.u8, 2));
          } while (++n < 10);
       }
    }
