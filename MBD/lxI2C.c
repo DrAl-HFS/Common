@@ -1,6 +1,7 @@
 // Common/MBD/lxI2C.c - I2C bus utils for Linux
 // https://github.com/DrAl-HFS/Common.git
-// (c) Project Contributors Feb 2018 - July 2019
+// Licence: GPL V3
+// (c) Project Contributors Feb 2018 - Aug 2020
 // Ref: https://www.kernel.org/doc/html/latest/driver-api/i2c.html
 
 #include <fcntl.h>
@@ -21,7 +22,7 @@
 #define LX_TRC0(fmt,...) TRACE_CALL(fmt,__VA_ARGS__)
 #define LX_TRC1(fmt,...) report(TRC1,fmt,__VA_ARGS__)
 
-typedef struct
+typedef struct // Global Module Context: debug flags etc...
 {
    U8 flags;
    U8 pad[3];
@@ -178,7 +179,7 @@ void lxi2cDumpDevAddr (const LXI2CBusCtx *pC, U16 dev, U8 bytes, U8 addr)
    int r;
    U8 buf[1<<8];
 
-   memset(buf, 0, 1<<8);
+   memset(buf, 0xA5, 1<<8);
    // read into first 16byte row of buf
    r= lxi2cTrans(pC, dev, I2C_M_RD, bytes, buf+(addr&0xF), addr);
    if (r >= 0)
@@ -187,6 +188,7 @@ void lxi2cDumpDevAddr (const LXI2CBusCtx *pC, U16 dev, U8 bytes, U8 addr)
       const int rh= bytes & 0xF0;
       char row[17]; row[16]= 0;
 
+      printf("lxi2cTrans() -> %d\n",r);
       printf("\n   "); // headers
       for (int j= 0; j<16; j++) { printf("  %x", j); }
       printf("\t");
@@ -216,6 +218,60 @@ void lxi2cDumpDevAddr (const LXI2CBusCtx *pC, U16 dev, U8 bytes, U8 addr)
 
 LXI2CBusCtx gBusCtx={0,-1};
 
+typedef union { U16 u16; struct { U8 u8[2]; }; } UU16; // for endian check/twiddle
+
+int rnbe (const U8 b[], const int n)
+{
+   int r= b[0];
+   for (int i= 1; i<n; i++) { r= (r<<8) | b[i]; }
+   return(r);
+} // rnbe
+
+void dumpCfg (const UU16 c)
+{
+   printf("cfg: 0x%02x:%02x :\n", c.u8[0], c.u8[1]); // NB: Big Endian on-the-wire
+   printf(" OS%d MUX%d PGA%d M%d", (c.u8[0]>>7) & 0x1, (c.u8[0]>>4) & 0x7, (c.u8[0]>>1) & 0x7, c.u8[0] & 0x1);
+   printf(" DR%d CM%d CP%d CL%d CQ%d\n", (c.u8[1]>>5) & 0x7, (c.u8[1]>>4) & 0x1, (c.u8[1]>>3) & 0x1, (c.u8[1]>>2) & 0x1, c.u8[1] & 0x3);
+} // dumpCfg
+
+int testADS1015 (const LXI2CBusCtx *pC, const U16 dev)
+{
+   UU16 cfg={0}, cfg2={0}, dat={0xAAAA};
+   int r= lxi2cTrans(pC, dev, I2C_M_RD, 2, cfg.u8, 0x1);
+   if (0 == r)
+   {  // default single shot, 1600sps => 625us
+      dumpCfg(cfg);
+      gCtx.flags &= ~LX_I2C_FLAG_TRACE; // enough verbosity
+      cfg.u8[0]&= 0x0F; // IN-0/1 // cfg.u8[0]|= 4<<4; // IN-0/G single-shot // 3<<4; // IN-2/3, continuous
+      // set data rate 1->250sps (4ms)
+      //cfg.u8[1]&= 0x1F; cfg.u8[1]|= 3<<5; // 920sps (1.08ms)
+      //dumpCfg(cfg);
+      // Change settings wthout starting
+      r= lxi2cTrans(pC, dev, I2C_M_WR, 2, cfg.u8, 0x1);
+      usleep(1000);
+      cfg.u8[0]|= 0x80; // Now enable conversion
+      if (0 == r)
+      {
+         int i, n= 0;
+         do
+         {
+            r= lxi2cTrans(pC, dev, I2C_M_WR, 2, cfg.u8, 0x1); // start conversion
+
+            i= 0;
+            do { // poll status
+               usleep(500);
+               r= lxi2cTrans(pC, dev, I2C_M_RD, 2, cfg2.u8, 0x1);
+               //printf("%d: ", i); dumpCfg(cfg2);
+            } while ((0 == r) && (++i < 5) && (0 == (cfg2.u8[0] & 0x80)));
+
+            r= lxi2cTrans(pC, dev, I2C_M_RD, 2, dat.u8, 0x0); // read result
+            printf("data: 0x%x\n", rnbe(dat.u8, 2));
+         } while (++n < 10);
+      }
+   }
+   return(r);
+} // testADS1015
+
 int main (int argc, char *argv[])
 {
    char *busDevPath="/dev/i2c-1";
@@ -223,7 +279,8 @@ int main (int argc, char *argv[])
 
    if (lxi2cOpen(&gBusCtx, busDevPath))
    {
-      lxi2cDumpDevAddr(&gBusCtx, devID, 0xFF,0x00);
+      //lxi2cDumpDevAddr(&gBusCtx, devID, 0xFF,0x00);
+      testADS1015(&gBusCtx,devID);
       lxi2cClose(&gBusCtx);
    }
 
@@ -231,3 +288,4 @@ int main (int argc, char *argv[])
 } // main
 
 #endif // LX_I2C_MAIN
+
