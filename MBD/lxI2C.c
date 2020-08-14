@@ -240,6 +240,12 @@ void dumpCfg (const UU16 c)
    printf(" DR%d CM%d CP%d CL%d CQ%d\n", (c.u8[1]>>5) & 0x7, (c.u8[1]>>4) & 0x1, (c.u8[1]>>3) & 0x1, (c.u8[1]>>2) & 0x1, c.u8[1] & 0x3);
 } // dumpCfg
 
+void ads10GenCfg (U8 cfg[2], enum ADS1xMux mux, enum ADS1xGain gain, enum ADS10SampleRate rate)
+{
+   cfg[0]= (mux << ADS1X_SH0_MUX) | (gain << ADS1X_SH0_PGA);
+   cfg[1]= rate << ADS1X_SH1_DR; // | enum ADS1xCompare
+} // ads10SetCfg
+
 int testADS1015 (const LXI2CBusCtx *pC, const U16 dev)
 {
    UU16 cfg={0}, cfg2={0}, dat={0xAAAA};
@@ -247,17 +253,20 @@ int testADS1015 (const LXI2CBusCtx *pC, const U16 dev)
    int r;
 
    LOG("testADS1015() - i2cWait=%dus\n",i2cWait);
-   r= lxi2cTrans(pC, dev, I2C_M_RD, 2, cfg.u8, 0x1);
+   r= lxi2cTrans(pC, dev, I2C_M_RD, 2, cfg.u8, ADS1X_RC);
    if (0 == r)
    {  // default single shot, 1600sps => 625us
       dumpCfg(cfg);
       gCtx.flags &= ~LX_I2C_FLAG_TRACE; // enough verbosity
-      cfg.u8[0]&= 0x0F; // IN-0/1 // cfg.u8[0]|= 4<<4; // IN-0/G single-shot // 3<<4; // IN-2/3, continuous
-      // set data rate 1->250sps (4ms)
-      //cfg.u8[1]&= 0x1F; cfg.u8[1]|= 3<<5; // 920sps (1.08ms)
-      //dumpCfg(cfg);
-      // Change settings wthout starting
-      r= lxi2cTrans(pC, dev, I2C_M_WR, 2, cfg.u8, 0x1);
+      ads10GenCfg(cfg.u8, ADS1X_M0G, ADS1X_G6_144, ADS10_S250);
+      printf("setting "); dumpCfg(cfg);
+      // Change settings without starting
+      r= lxi2cTrans(pC, dev, I2C_M_WR, 2, cfg.u8, ADS1X_RC);
+      if (0 == r)
+      {
+         r= lxi2cTrans(pC, dev, I2C_M_RD, 2, cfg2.u8, ADS1X_RC);
+         printf("verify: "); dumpCfg(cfg);
+      }
       usleep(i2cWait);
       cfg.u8[0]|= ADS1X_FL0_OS; // Now enable conversion
       if (0 == r)
@@ -265,16 +274,16 @@ int testADS1015 (const LXI2CBusCtx *pC, const U16 dev)
          int i, n= 0;
          do
          {
-            r= lxi2cTrans(pC, dev, I2C_M_WR, 2, cfg.u8, 0x1); // start conversion
+            r= lxi2cTrans(pC, dev, I2C_M_WR, 2, cfg.u8, ADS1X_RC); // start conversion
             usleep(i2cWait);
             i= 0;
             do { // poll status
                usleep(500);
-               r= lxi2cTrans(pC, dev, I2C_M_RD, 2, cfg2.u8, 0x1);
+               r= lxi2cTrans(pC, dev, I2C_M_RD, 2, cfg2.u8, ADS1X_RC);
                //printf("%d: ", i); dumpCfg(cfg2);
             } while ((0 == r) && (++i < 5) && (0 == (cfg2.u8[0] & ADS1X_FL0_OS)));
 
-            r= lxi2cTrans(pC, dev, I2C_M_RD, 2, dat.u8, 0x0); // read result
+            r= lxi2cTrans(pC, dev, I2C_M_RD, 2, dat.u8, ADS1X_RR); // read result
             printf("data: 0x%x\n", rdnbe(dat.u8, 2));
          } while (++n < 10);
       }
