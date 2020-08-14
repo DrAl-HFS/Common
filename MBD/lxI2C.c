@@ -243,7 +243,11 @@ void dumpCfg (const UU16 c)
 int testADS1015 (const LXI2CBusCtx *pC, const U16 dev)
 {
    UU16 cfg={0}, cfg2={0}, dat={0xAAAA};
-   int r= lxi2cTrans(pC, dev, I2C_M_RD, 2, cfg.u8, 0x1);
+   const int i2cWait= ADS1X_TRANS_NCLK * 1E6 / pC->clk;
+   int r;
+
+   LOG("testADS1015() - i2cWait=%dus\n",i2cWait);
+   r= lxi2cTrans(pC, dev, I2C_M_RD, 2, cfg.u8, 0x1);
    if (0 == r)
    {  // default single shot, 1600sps => 625us
       dumpCfg(cfg);
@@ -254,7 +258,7 @@ int testADS1015 (const LXI2CBusCtx *pC, const U16 dev)
       //dumpCfg(cfg);
       // Change settings wthout starting
       r= lxi2cTrans(pC, dev, I2C_M_WR, 2, cfg.u8, 0x1);
-      usleep(1000);
+      usleep(i2cWait);
       cfg.u8[0]|= ADS1X_FL0_OS; // Now enable conversion
       if (0 == r)
       {
@@ -262,7 +266,7 @@ int testADS1015 (const LXI2CBusCtx *pC, const U16 dev)
          do
          {
             r= lxi2cTrans(pC, dev, I2C_M_WR, 2, cfg.u8, 0x1); // start conversion
-
+            usleep(i2cWait);
             i= 0;
             do { // poll status
                usleep(500);
