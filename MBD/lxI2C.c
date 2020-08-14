@@ -255,7 +255,7 @@ int testADS1015 (const LXI2CBusCtx *pC, const U16 dev)
       // Change settings wthout starting
       r= lxi2cTrans(pC, dev, I2C_M_WR, 2, cfg.u8, 0x1);
       usleep(1000);
-      cfg.u8[0]|= 0x80; // Now enable conversion
+      cfg.u8[0]|= ADS1X_FL0_OS; // Now enable conversion
       if (0 == r)
       {
          int i, n= 0;
@@ -268,7 +268,7 @@ int testADS1015 (const LXI2CBusCtx *pC, const U16 dev)
                usleep(500);
                r= lxi2cTrans(pC, dev, I2C_M_RD, 2, cfg2.u8, 0x1);
                //printf("%d: ", i); dumpCfg(cfg2);
-            } while ((0 == r) && (++i < 5) && (0 == (cfg2.u8[0] & 0x80)));
+            } while ((0 == r) && (++i < 5) && (0 == (cfg2.u8[0] & ADS1X_FL0_OS)));
 
             r= lxi2cTrans(pC, dev, I2C_M_RD, 2, dat.u8, 0x0); // read result
             printf("data: 0x%x\n", rdnbe(dat.u8, 2));

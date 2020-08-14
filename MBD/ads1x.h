@@ -1,4 +1,4 @@
-// Common/MBD/ads1x.h - Definitions & utils for TI I2C ADC devices (ADS1xxx series)
+// Common/MBD/ads1x.h - Definitions (& utils?) for TI I2C ADC devices (ADS1xxx series)
 // https://github.com/DrAl-HFS/Common.git
 // Licence: GPL V3
 // (c) Project Contributors Aug 2020
@@ -30,7 +30,48 @@ enum ADS1xReg
    ADS1X_RH=3, //  high compare thresholds
 }; // ADS1xReg, ADS10Reg, ADS11Reg
 
-// Config register bit field definitions
+/*
+* Config register layout and value definitions.
+* Rather than performing 16b endian conversion, the bitfields
+* are manipulated as 2 distinct bytes - no field crosses a
+* byte boundary :)
+*/
+
+// Alignment shifts within bytes
+
+enum ADS1xShift0
+{  // Shifts within byte 0 (Big-Endian 16b MSB)
+   ADS1X_SH0_OS=   7, // 1b see ADS1xFlag0 below
+   ADS1X_SH0_MUX=  4, // 3b see ADS1xMux below
+   ADS1X_SH0_PGA=  1, // 3b see ADS1xGain below
+   ADS1X_SH0_MODE= 0 // 1b see ADS1xFlag0 below
+}; // ADS1xShift0
+
+enum ADS1xShift1
+{  // Shifts within byte 1 (Big-Endian 16b LSB)
+   ADS1X_SH1_DR= 5, // 3b (Data Rate) see ADS10SampleRate below
+   ADS1X_SH1_CM= 4, // 1b see ADS1xFlag1 below
+   ADS1X_SH1_CP= 3, // "
+   ADS1X_SH1_CL= 2, // "
+   ADS1X_SH1_CQ= 0  // 2b see ADS1xCompare below
+}; // ADS1xShift1
+
+// Mask values for flags
+enum ADS1xFlag0
+{
+   ADS1X_FL0_OS=   1<<ADS1X_SH0_OS,  // Operational Status (busy) flag
+   ADS1X_FL0_MODE= 1<<ADS1X_SH0_MODE // Mode flag (continuous / single shot)
+}; // ADS1xFlag0
+
+enum ADS1xFlag1
+{
+   ADS1X_FL1_CM= 1<<ADS1X_SH1_CM, // Compare Mode (window vs. simple)
+   ADS1X_FL1_CP= 1<<ADS1X_SH1_CP, //  " (alert signal) Polarity
+   ADS1X_FL1_CL= 1<<ADS1X_SH1_CL  //  " (alert signal) Latch
+}; // ADS1xFlag1
+
+// Ordinal values within bit fields (mostly generic across device family)
+
 enum ADS1xMux
 {  // Input multiplexing, 4 double + 4 single ended modes
    ADS1X_M01=0, // default
@@ -53,6 +94,16 @@ enum ADS1xGain
    ADS1X_G0_256=5
    //ADS1X_G0_256=6,7
 }; // ADS1xGain, ADS10Gain, ADS11Gain
+
+enum ADS1xCompare
+{  // Compare signal assertion modes
+   ADS1X_C1=0, // 1 conversion
+   ADS1X_C2,
+   ADS1X_C4,
+   ADS1X_CD=3  // default = disable
+}; // ADS1xCompare, ADS10Compare, ADS11Compare
+
+// NB: 12b & 16b precision sub-families have distict sample rates
 
 enum ADS10SampleRate
 {  // Sample rates (samples per second)
@@ -78,14 +129,10 @@ enum ADS11SampleRate
    ADS11_S860=7
 }; // ADS11SampleRate
 
-enum ADS1xCompare
-{  // Compare signal assertion modes
-   ADS1X_C1=0, // 1 conversion
-   ADS1X_C2,
-   ADS1X_C4,
-   ADS1X_CD=3  // default = disable
-}; // ADS1xCompare, ADS10Compare, ADS11Compare
-
+// Map (endian converted) ADC reading to Volts
+//extern float ads1xRVF (int r, enum ADS1xGain g, float fsrs); // fsrs= 1.0/ADS10_FSR or 1.0/ADS11_FSR
+//static const float gainV[]={6.144, 4.096, 2.048, 1.024, 0.512, 0.256};
+//return(r * gainV[g] * fsrs);
 
 #ifdef __cplusplus
 } // extern "C"
