@@ -85,22 +85,22 @@ enum ADS1xMux
 }; // ADS1xMux, ADS10Mux, ADS11Mux
 
 enum ADS1xGain
-{  // Gain setting in terms of Volts Full Scale (assumes 5V supply ?)
-   ADS1X_G6_144=0,
-   ADS1X_G4_096,
-   ADS1X_G2_048, // default= 2.048V
-   ADS1X_G1_024,
-   ADS1X_G0_512,
-   ADS1X_G0_256=5
-   //ADS1X_G0_256=6,7
+{  // Gain specified as Volts Full Scale (based on internal reference, independant of supply ?)
+   ADS1X_GFS_6V144=0,
+   ADS1X_GFS_4V096,
+   ADS1X_GFS_2V048, // default= 2.048V
+   ADS1X_GFS_1V024,
+   ADS1X_GFS_0V512,
+   ADS1X_GFS_0V256=5
+   //ADS1X_GFS_0V256=6,7
 }; // ADS1xGain, ADS10Gain, ADS11Gain
 
 enum ADS1xCompare
 {  // Compare signal assertion modes
-   ADS1X_C1=0, // 1 conversion
-   ADS1X_C2,
-   ADS1X_C4,
-   ADS1X_CD=3  // default = disable
+   ADS1X_CMP_1=0, // 1 conversion
+   ADS1X_CMP_2,
+   ADS1X_CMP_4,
+   ADS1X_CMP_DISABLE=3  // default
 }; // ADS1xCompare, ADS10Compare, ADS11Compare
 
 // NB: 12b & 16b precision sub-families have distict sample rates

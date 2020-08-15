@@ -77,8 +77,8 @@ Bool32 lxi2cOpen (LXI2CBusCtx *pBC, const char *path)
 int lxi2cTrans (const LXI2CBusCtx *pBC, const U16 dev, const U16 f, U16 nB, U8 *pB, U8 reg)
 {
    struct i2c_msg m[LX_I2C_TRANS_NM]=
-   { // define two "packets" necessary to complete a transaction
-      { .addr= dev,  .flags= 0,  .len= 1,  .buf= &reg }, // command set device "address register"
+   { // define two frames necessary to complete a transaction
+      { .addr= dev,  .flags= I2C_M_WR,  .len= 1,  .buf= &reg }, // command set device "address register"
       { .addr= dev,  .flags= f|I2C_M_STOP,  .len= nB,  .buf= pB } // transfer buffer to/from the address set on device
    };
    struct i2c_rdwr_ioctl_data d={m,LX_I2C_TRANS_NM};
@@ -218,7 +218,7 @@ void lxi2cDumpDevAddr (const LXI2CBusCtx *pC, U16 dev, U8 bytes, U8 addr)
 
 // Standalone test
 #include "ads1x.h"
-
+#include "rpiUtil.h"
 
 LXI2CBusCtx gBusCtx={0,-1};
 
@@ -240,17 +240,20 @@ void dumpCfg (const UU16 c)
    printf(" DR%d CM%d CP%d CL%d CQ%d\n", (c.u8[1]>>5) & 0x7, (c.u8[1]>>4) & 0x1, (c.u8[1]>>3) & 0x1, (c.u8[1]>>2) & 0x1, c.u8[1] & 0x3);
 } // dumpCfg
 
-void ads10GenCfg (U8 cfg[2], enum ADS1xMux mux, enum ADS1xGain gain, enum ADS10SampleRate rate)
+void ads10GenCfg (U8 cfg[2], enum ADS1xMux mux, enum ADS1xGain gain, enum ADS10SampleRate rate, enum ADS1xCompare cmp)//=ADS1X_CD
 {
    cfg[0]= (mux << ADS1X_SH0_MUX) | (gain << ADS1X_SH0_PGA);
-   cfg[1]= rate << ADS1X_SH1_DR; // | enum ADS1xCompare
+   cfg[1]= (rate << ADS1X_SH1_DR) | (cmp << ADS1X_SH1_CQ);
 } // ads10SetCfg
 
 int testADS1015 (const LXI2CBusCtx *pC, const U16 dev)
 {
    UU16 cfg={0}, cfg2={0}, dat={0xAAAA};
    const int i2cWait= ADS1X_TRANS_NCLK * 1E6 / pC->clk;
-   int r;
+   int r,ts=0;
+   uint64_t ts0, ts1;
+
+   ts= vcAcquire(-1);
 
    LOG("testADS1015() - i2cWait=%dus\n",i2cWait);
    r= lxi2cTrans(pC, dev, I2C_M_RD, 2, cfg.u8, ADS1X_RC);
@@ -258,14 +261,20 @@ int testADS1015 (const LXI2CBusCtx *pC, const U16 dev)
    {  // default single shot, 1600sps => 625us
       dumpCfg(cfg);
       gCtx.flags &= ~LX_I2C_FLAG_TRACE; // enough verbosity
-      ads10GenCfg(cfg.u8, ADS1X_M0G, ADS1X_G6_144, ADS10_S250);
+      ads10GenCfg(cfg.u8, ADS1X_M0G, ADS1X_GFS_6V144, ADS10_S250, ADS1X_CMP_DISABLE);
       printf("setting "); dumpCfg(cfg);
+      if (ts) { ts0= vcTimestamp(); }
       // Change settings without starting
       r= lxi2cTrans(pC, dev, I2C_M_WR, 2, cfg.u8, ADS1X_RC);
       if (0 == r)
       {
          r= lxi2cTrans(pC, dev, I2C_M_RD, 2, cfg2.u8, ADS1X_RC);
          printf("verify: "); dumpCfg(cfg);
+      }
+      if (ts)
+      {
+         ts1= vcTimestamp();
+         printf("dt=%d\n",(int)(ts1-ts0));
       }
       usleep(i2cWait);
       cfg.u8[0]|= ADS1X_FL0_OS; // Now enable conversion
