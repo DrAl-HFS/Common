@@ -218,7 +218,60 @@ void lxi2cDumpDevAddr (const LXI2CBusCtx *pC, U16 dev, U8 bytes, U8 addr)
 
 // Standalone test
 #include "ads1x.h"
+
+#ifdef RPI_VC4
+
 #include "rpiUtil.h"
+
+void setup (void)
+{
+   uint64_t ts0, ts1;
+   if (vcAcquire(-1))
+   {
+      ts0= vcTimestamp();
+      ts1= vcTimestamp();
+      printf("dt=%d\n",(int)(ts1-ts0));
+   }
+} // setup
+
+#else
+
+//#include <sys/time.h>
+#include <time.h>
+#include <signal.h>
+
+void setup (void)
+{
+   struct itimerval t0={0}, t1={0};
+   struct itimerspec ts0={0}, ts1={0};
+   timer_t hT=NULL;
+   int r;
+   
+   t1.it_value.tv_sec= 10;
+   t1.it_interval=   t1.it_value;
+
+   r= setitimer(ITIMER_REAL, &t1, NULL);
+   printf("%ld : %ld (%ld : %ld)\n", t0.it_value.tv_sec, t0.it_value.tv_usec, t0.it_interval.tv_sec, t0.it_interval.tv_usec);
+   usleep(1000);
+   if (0 == getitimer(ITIMER_REAL, &t0))
+   {
+      printf("%ld : %ld (%ld : %ld)\n", t0.it_value.tv_sec, t0.it_value.tv_usec, t0.it_interval.tv_sec, t0.it_interval.tv_usec);
+   }
+   // CLOCK_REALTIME CLOCK_MONOTONIC
+   struct sigevent ev={SIGEV_NONE, };
+   r= timer_create(CLOCK_REALTIME, &ev, &hT);
+   printf("r=%d %p\n", r, hT);
+   if (0 == r)
+   {
+      timer_gettime(hT, &ts0);
+      printf("%ld : %ld (%ld : %ld)\n", ts0.it_value.tv_sec, ts0.it_value.tv_nsec, ts0.it_interval.tv_sec, ts0.it_interval.tv_nsec);
+      //timer_settime(t, int flags, const struct itimerspec *new_value, struct itimerspec * old_value);
+      timer_gettime(hT, &ts1);
+      printf("%ld : %ld (%ld : %ld)\n", ts1.it_value.tv_sec, ts1.it_value.tv_nsec, ts1.it_interval.tv_sec, ts1.it_interval.tv_nsec);
+   }
+} // setup
+
+#endif
 
 LXI2CBusCtx gBusCtx={0,-1};
 
@@ -250,11 +303,9 @@ int testADS1015 (const LXI2CBusCtx *pC, const U16 dev)
 {
    UU16 cfg={0}, cfg2={0}, dat={0xAAAA};
    const int i2cWait= ADS1X_TRANS_NCLK * 1E6 / pC->clk;
-   int r,ts=0;
-   uint64_t ts0, ts1;
+   int r;
 
-   ts= vcAcquire(-1);
-
+   setup();
    LOG("testADS1015() - i2cWait=%dus\n",i2cWait);
    r= lxi2cTrans(pC, dev, I2C_M_RD, 2, cfg.u8, ADS1X_RC);
    if (0 == r)
@@ -263,18 +314,12 @@ int testADS1015 (const LXI2CBusCtx *pC, const U16 dev)
       gCtx.flags &= ~LX_I2C_FLAG_TRACE; // enough verbosity
       ads10GenCfg(cfg.u8, ADS1X_M0G, ADS1X_GFS_6V144, ADS10_S250, ADS1X_CMP_DISABLE);
       printf("setting "); dumpCfg(cfg);
-      if (ts) { ts0= vcTimestamp(); }
       // Change settings without starting
       r= lxi2cTrans(pC, dev, I2C_M_WR, 2, cfg.u8, ADS1X_RC);
       if (0 == r)
       {
          r= lxi2cTrans(pC, dev, I2C_M_RD, 2, cfg2.u8, ADS1X_RC);
          printf("verify: "); dumpCfg(cfg);
-      }
-      if (ts)
-      {
-         ts1= vcTimestamp();
-         printf("dt=%d\n",(int)(ts1-ts0));
       }
       usleep(i2cWait);
       cfg.u8[0]|= ADS1X_FL0_OS; // Now enable conversion
