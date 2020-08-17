@@ -245,13 +245,13 @@ void setup (void)
 void setup (void)
 {
    int r, u, n, sdd, i;
-   
+
    //gettimeofday(&(t0.it_value),NULL);
    //thrd_sleep();
    //nanosleep();
    {
       struct timespec ts0, ts1;
-      struct timespec sr0={0}, sr1;
+      struct timespec sr0={0}, sr1={0};
       r= clock_getres(CLOCK_REALTIME, &ts0);
       if (0 == r)
       {
@@ -301,7 +301,7 @@ void setup (void)
             usleep(u);
             r= getitimer(ITIMER_REAL, &t1);
             if (0==r)
-            { 
+            {
                int dtu= USEC(t1.it_value, t0.it_value);
                int ddu= dtu - u;
                sdd+= ddu; ++i;
