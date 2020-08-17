@@ -251,7 +251,7 @@ void setup (void)
    //nanosleep();
    {
       struct timespec ts0, ts1;
-      struct timespec sr0={0}, sr1;
+      struct timespec sr0={0}, sr1={0};
       r= clock_getres(CLOCK_REALTIME, &ts0);
       if (0 == r)
       {
