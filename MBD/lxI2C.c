@@ -239,35 +239,97 @@ void setup (void)
 //#include <sys/time.h>
 #include <time.h>
 #include <signal.h>
+#define USEC(t1,t2) (((t2).tv_sec-(t1).tv_sec)*1000000+((t2).tv_usec-(t1).tv_usec))
+#define NSEC(t1,t2) (((t2).tv_sec-(t1).tv_sec)*1000000000+((t2).tv_nsec-(t1).tv_nsec))
 
 void setup (void)
 {
-   struct itimerval t0={0}, t1={0};
-   struct itimerspec ts0={0}, ts1={0};
-   timer_t hT=NULL;
-   int r;
+   int r, u, n, sdd, i;
    
-   t1.it_value.tv_sec= 10;
-   t1.it_interval=   t1.it_value;
-
-   r= setitimer(ITIMER_REAL, &t1, NULL);
-   printf("%ld : %ld (%ld : %ld)\n", t0.it_value.tv_sec, t0.it_value.tv_usec, t0.it_interval.tv_sec, t0.it_interval.tv_usec);
-   usleep(1000);
-   if (0 == getitimer(ITIMER_REAL, &t0))
+   //gettimeofday(&(t0.it_value),NULL);
+   //thrd_sleep();
+   //nanosleep();
    {
-      printf("%ld : %ld (%ld : %ld)\n", t0.it_value.tv_sec, t0.it_value.tv_usec, t0.it_interval.tv_sec, t0.it_interval.tv_usec);
+      struct timespec ts0, ts1;
+      struct timespec sr0={0}, sr1;
+      r= clock_getres(CLOCK_REALTIME, &ts0);
+      if (0 == r)
+      {
+         printf("r=%d, res: %ld %ld\n", r, ts0.tv_sec, ts0.tv_nsec);
+         r= clock_gettime(CLOCK_REALTIME, &ts0);
+         u= 2000;
+         i= 0;
+         sdd= 0;
+         printf("slept\tresid\tmeasure\tdiff (nsec)\n");
+         do
+         {
+            n= u * 1000;
+            //usleep(u);
+            sr0.tv_nsec= n;
+            nanosleep(&sr0, &sr1);
+            r= clock_gettime(CLOCK_REALTIME, &ts1);
+            if (0==r)
+            { 
+               int dtn= NSEC(ts0, ts1);
+               int ddn= dtn - n;
+               sdd+= ddn; ++i;
+               printf("%d\t%ld:%ld\t%d\t%d\n", n, sr1.tv_sec,sr1.tv_nsec, dtn, ddn);
+            }
+            ts0= ts1; // delta, not cumulative
+            u-= 100;
+         } while ((0 == r) && (u > 0)); //<= 2000));
+         if (i > 0) { printf("%d : mean diff= %d\n", i, sdd / i); }
+      }
    }
-   // CLOCK_REALTIME CLOCK_MONOTONIC
-   struct sigevent ev={SIGEV_NONE, };
-   r= timer_create(CLOCK_REALTIME, &ev, &hT);
-   printf("r=%d %p\n", r, hT);
-   if (0 == r)
-   {
-      timer_gettime(hT, &ts0);
-      printf("%ld : %ld (%ld : %ld)\n", ts0.it_value.tv_sec, ts0.it_value.tv_nsec, ts0.it_interval.tv_sec, ts0.it_interval.tv_nsec);
-      //timer_settime(t, int flags, const struct itimerspec *new_value, struct itimerspec * old_value);
-      timer_gettime(hT, &ts1);
-      printf("%ld : %ld (%ld : %ld)\n", ts1.it_value.tv_sec, ts1.it_value.tv_nsec, ts1.it_interval.tv_sec, ts1.it_interval.tv_nsec);
+   /***/
+   {  // Interval timer
+      struct itimerval t0={0}, t1={0};
+
+      t0.it_value.tv_sec= 10;
+      t0.it_interval=   t0.it_value;
+
+      r= setitimer(ITIMER_REAL, &t0, NULL);
+      if (0==r)
+      {
+         printf("%ld : %ld (%ld : %ld)\n", t0.it_value.tv_sec, t0.it_value.tv_usec, t0.it_interval.tv_sec, t0.it_interval.tv_usec);
+         u= 2000;
+         i= 0;
+         sdd= 0;
+         printf("slept\tmeasure\tdiff (usec)\n");
+         do
+         {
+            usleep(u);
+            r= getitimer(ITIMER_REAL, &t1);
+            if (0==r)
+            { 
+               int dtu= USEC(t1.it_value, t0.it_value);
+               int ddu= dtu - u;
+               sdd+= ddu; ++i;
+               printf("%d\t%d\t%d\n", u, dtu, ddu);
+            }
+            t0= t1; // delta, not cumulative
+            u-= 100;
+         } while ((0 ==r) && (u > 0)); //<= 2000));
+         if (i > 0) { printf("%d : mean diff= %d\n", i, sdd / i); }
+      }
+   }
+   /***/
+   {  // Process clock
+      // CLOCK_REALTIME CLOCK_MONOTONIC
+      timer_t hT=NULL;
+      struct sigevent ev={SIGEV_NONE, };
+      struct itimerspec ts0={0}, ts1={0};
+
+      r= timer_create(CLOCK_REALTIME, &ev, &hT);
+      printf("r=%d %p\n", r, hT);
+      if (0 == r)
+      {
+         timer_gettime(hT, &ts0);
+         printf("%ld : %ld (%ld : %ld)\n", ts0.it_value.tv_sec, ts0.it_value.tv_nsec, ts0.it_interval.tv_sec, ts0.it_interval.tv_nsec);
+         //timer_settime(t, int flags, const struct itimerspec *new_value, struct itimerspec * old_value);
+         timer_gettime(hT, &ts1);
+         printf("%ld : %ld (%ld : %ld)\n", ts1.it_value.tv_sec, ts1.it_value.tv_nsec, ts1.it_interval.tv_sec, ts1.it_interval.tv_nsec);
+      }
    }
 } // setup
 
