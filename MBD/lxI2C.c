@@ -245,7 +245,7 @@ void setup (void)
 void setup (void)
 {
    int r, u, n, sdd, i;
-   
+
    //gettimeofday(&(t0.it_value),NULL);
    //thrd_sleep();
    //nanosleep();
@@ -269,7 +269,7 @@ void setup (void)
             nanosleep(&sr0, &sr1);
             r= clock_gettime(CLOCK_REALTIME, &ts1);
             if (0==r)
-            { 
+            {
                int dtn= NSEC(ts0, ts1);
                int ddn= dtn - n;
                sdd+= ddn; ++i;
@@ -301,7 +301,7 @@ void setup (void)
             usleep(u);
             r= getitimer(ITIMER_REAL, &t1);
             if (0==r)
-            { 
+            {
                int dtu= USEC(t1.it_value, t0.it_value);
                int ddu= dtu - u;
                sdd+= ddu; ++i;
@@ -355,7 +355,7 @@ void dumpCfg (const UU16 c)
    printf(" DR%d CM%d CP%d CL%d CQ%d\n", (c.u8[1]>>5) & 0x7, (c.u8[1]>>4) & 0x1, (c.u8[1]>>3) & 0x1, (c.u8[1]>>2) & 0x1, c.u8[1] & 0x3);
 } // dumpCfg
 
-void ads10GenCfg (U8 cfg[2], enum ADS1xMux mux, enum ADS1xGain gain, enum ADS10SampleRate rate, enum ADS1xCompare cmp)//=ADS1X_CD
+void ads10GenCfg (U8 cfg[2], enum ADS1xMux mux, enum ADS1xGain gain, enum ADS10Rate rate, enum ADS1xCompare cmp)//=ADS1X_CD
 {
    cfg[0]= (mux << ADS1X_SH0_MUX) | (gain << ADS1X_SH0_PGA);
    cfg[1]= (rate << ADS1X_SH1_DR) | (cmp << ADS1X_SH1_CQ);
@@ -367,7 +367,7 @@ int testADS1015 (const LXI2CBusCtx *pC, const U16 dev)
    const int i2cWait= ADS1X_TRANS_NCLK * 1E6 / pC->clk;
    int r;
 
-   setup();
+   //setup();
    LOG("testADS1015() - i2cWait=%dus\n",i2cWait);
    r= lxi2cTrans(pC, dev, I2C_M_RD, 2, cfg.u8, ADS1X_RC);
    if (0 == r)
@@ -383,7 +383,7 @@ int testADS1015 (const LXI2CBusCtx *pC, const U16 dev)
          r= lxi2cTrans(pC, dev, I2C_M_RD, 2, cfg2.u8, ADS1X_RC);
          printf("verify: "); dumpCfg(cfg);
       }
-      usleep(i2cWait);
+      //usleep(i2cWait);
       cfg.u8[0]|= ADS1X_FL0_OS; // Now enable conversion
       if (0 == r)
       {
@@ -391,7 +391,7 @@ int testADS1015 (const LXI2CBusCtx *pC, const U16 dev)
          do
          {
             r= lxi2cTrans(pC, dev, I2C_M_WR, 2, cfg.u8, ADS1X_RC); // start conversion
-            usleep(i2cWait);
+            //usleep(i2cWait);
             i= 0;
             do { // poll status
                usleep(500);

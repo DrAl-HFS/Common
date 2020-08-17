@@ -15,7 +15,7 @@ extern "C" {
 
 // Transaction clock cycles: (ADR+REG+2*B) * (8b + 1 ack) + 1 stop
 // Used along with bus clock rate to determine wait duration
-#define ADS1X_TRANS_NCLK (1 + 4 * (8+1)) 
+#define ADS1X_TRANS_NCLK (1 + 4 * (8+1))
 
 // Full scale positive readings (ignoring 2's complement sign)
 // as obtained from conversion result register
@@ -105,7 +105,7 @@ enum ADS1xCompare
 
 // NB: 12b & 16b precision sub-families have distict sample rates
 
-enum ADS10SampleRate
+enum ADS10Rate
 {  // Sample rates (samples per second)
    ADS10_S128=0,
    ADS10_S250,
@@ -117,7 +117,7 @@ enum ADS10SampleRate
    //,ADS10_S3300=7
 }; // ADS10SampleRate
 
-enum ADS11SampleRate
+enum ADS11Rate
 {  // Sample rates (samples per second)
    ADS11_S8=0,
    ADS11_S16,
