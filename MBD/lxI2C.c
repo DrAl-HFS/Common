@@ -348,11 +348,35 @@ int rdnbe (const U8 b[], const int n)
    return(r);
 } // rdnbe
 
+typedef struct
+{
+   F32 gainFSV;
+   U16 rate;
+   U8 mux;
+   U8 cmp;
+} ADS1xUnpack;
+
+void ads1xUnpackCfg (ADS1xUnpack *pU, const U8 cfg[2], const U8 x)
+{
+static const U8 m[]= {0x01, 0x03, 0x13,  0x23, 0x0F, 0x1F, 0x2F, 0x3F};
+static const U16 r[2][8]=
+{  {128,250,490,920,1600,2400,3300,3300},
+   {8,16,32,64,128,250,475,860} };
+static const F32 g[]= { 6.144, 4.096, 2.048, 1.024, 0.512, 0.256 };
+   pU->mux= m[ (cfg[0] >> ADS1X_SH0_MUX) & ADS1X_M_M ];
+   pU->gainFSV= g[ (cfg[0] >> ADS1X_SH0_PGA) & ADS1X_GFS_M ];
+   pU->cmp= (((cfg[1] >> ADS1X_SH1_CQ) & ADS1X_CMP_M) + 1 ) & ADS1X_CMP_M;
+   pU->rate= r[x&1][ (cfg[1] >> ADS1X_SH1_DR) & ADS10_R_M ];
+} // adsExtCfg
+
 void dumpCfg (const UU16 c)
 {
+   ADS1xUnpack u;
    printf("cfg: 0x%02x:%02x :\n", c.u8[0], c.u8[1]); // NB: Big Endian on-the-wire
    printf(" OS%d MUX%d PGA%d M%d", (c.u8[0]>>7) & 0x1, (c.u8[0]>>4) & 0x7, (c.u8[0]>>1) & 0x7, c.u8[0] & 0x1);
    printf(" DR%d CM%d CP%d CL%d CQ%d\n", (c.u8[1]>>5) & 0x7, (c.u8[1]>>4) & 0x1, (c.u8[1]>>3) & 0x1, (c.u8[1]>>2) & 0x1, c.u8[1] & 0x3);
+   ads1xUnpackCfg(&u, c.u8, 0);
+   printf("%x/%x %GV, %d/s C:%d\n", (u.mux>>4)&0xF, u.mux&0xF, u.gainFSV, u.rate, u.cmp);
 } // dumpCfg
 
 void ads10GenCfg (U8 cfg[2], enum ADS1xMux mux, enum ADS1xGain gain, enum ADS10Rate rate, enum ADS1xCompare cmp)//=ADS1X_CD
@@ -374,7 +398,7 @@ int testADS1015 (const LXI2CBusCtx *pC, const U16 dev)
    {  // default single shot, 1600sps => 625us
       dumpCfg(cfg);
       gCtx.flags &= ~LX_I2C_FLAG_TRACE; // enough verbosity
-      ads10GenCfg(cfg.u8, ADS1X_M0G, ADS1X_GFS_6V144, ADS10_S250, ADS1X_CMP_DISABLE);
+      ads10GenCfg(cfg.u8, ADS1X_M0G, ADS1X_GFS_6V144, ADS10_R250, ADS1X_CMP_DISABLE);
       printf("setting "); dumpCfg(cfg);
       // Change settings without starting
       r= lxi2cTrans(pC, dev, I2C_M_WR, 2, cfg.u8, ADS1X_RC);

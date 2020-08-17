@@ -81,7 +81,8 @@ enum ADS1xMux
    ADS1X_M0G,  // Single ended (Ground relative)
    ADS1X_M1G,
    ADS1X_M2G,
-   ADS1X_M3G=7
+   ADS1X_M3G=7,
+   ADS1X_M_M= 0x7   // mask
 }; // ADS1xMux, ADS10Mux, ADS11Mux
 
 enum ADS1xGain
@@ -91,8 +92,9 @@ enum ADS1xGain
    ADS1X_GFS_2V048, // default= 2.048V
    ADS1X_GFS_1V024,
    ADS1X_GFS_0V512,
-   ADS1X_GFS_0V256=5
+   ADS1X_GFS_0V256=5,
    //ADS1X_GFS_0V256=6,7
+   ADS1X_GFS_M= 0x7   // mask
 }; // ADS1xGain, ADS10Gain, ADS11Gain
 
 enum ADS1xCompare
@@ -100,34 +102,37 @@ enum ADS1xCompare
    ADS1X_CMP_1=0, // 1 conversion
    ADS1X_CMP_2,
    ADS1X_CMP_4,
-   ADS1X_CMP_DISABLE=3  // default
+   ADS1X_CMP_DISABLE=3,  // default
+   ADS1X_CMP_M= 0x3   // mask
 }; // ADS1xCompare, ADS10Compare, ADS11Compare
 
 // NB: 12b & 16b precision sub-families have distict sample rates
 
 enum ADS10Rate
 {  // Sample rates (samples per second)
-   ADS10_S128=0,
-   ADS10_S250,
-   ADS10_S490,
-   ADS10_S920,
-   ADS10_S1600, // default
-   ADS10_S2400,
-   ADS10_S3300=6
+   ADS10_R128=0,
+   ADS10_R250,
+   ADS10_R490,
+   ADS10_R920,
+   ADS10_R1600, // default
+   ADS10_R2400,
+   ADS10_R3300=6,
    //,ADS10_S3300=7
-}; // ADS10SampleRate
+   ADS10_R_M= 0x7   // mask
+}; // ADS10Rate
 
 enum ADS11Rate
 {  // Sample rates (samples per second)
-   ADS11_S8=0,
-   ADS11_S16,
-   ADS11_S32,
-   ADS11_S64,
-   ADS11_S128, // default
-   ADS11_S250,
-   ADS11_S475,
-   ADS11_S860=7
-}; // ADS11SampleRate
+   ADS11_R8=0,
+   ADS11_R16,
+   ADS11_R32,
+   ADS11_R64,
+   ADS11_R128, // default
+   ADS11_R250,
+   ADS11_R475,
+   ADS11_R860=7,
+   ADS11_R_M= 0x7   // mask
+}; // ADS11Rate
 
 // Map (endian converted) ADC reading to Volts
 //extern float ads1xRVF (int r, enum ADS1xGain g, float fsrs); // fsrs= 1.0/ADS10_FSR or 1.0/ADS11_FSR
