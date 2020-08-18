@@ -74,15 +74,26 @@ Bool32 lxi2cOpen (LXI2CBusCtx *pBC, const char *path)
    m[1].len=    nB;
    m[1].buf=    pB;
 #endif
+
+int i2cWrite (const LXI2CBusCtx *pBC, const U8 dev, const U8 reg, const U8 b[2], const U8 n)
+{
+   U8 wb[8];
+   struct i2c_msg m= { .addr= dev,  .flags= I2C_M_WR,  .len= 1+(n&0x7),  .buf= wb };
+   struct i2c_rdwr_ioctl_data d={ &m, 1 };
+   wb[0]= reg;
+   for (int i=0; i<(n&0x7); i++) wb[1+i]= b[i];
+   return ioctl(pBC->fd, I2C_RDWR, &d);
+} // i2cWrite
+
 int lxi2cTrans (const LXI2CBusCtx *pBC, const U16 dev, const U16 f, U16 nB, U8 *pB, U8 reg)
 {
    struct i2c_msg m[LX_I2C_TRANS_NM]=
    { // define two frames necessary to complete a transaction
       { .addr= dev,  .flags= I2C_M_WR,  .len= 1,  .buf= &reg }, // command set device "address register"
-      { .addr= dev,  .flags= f|I2C_M_STOP,  .len= nB,  .buf= pB } // transfer buffer to/from the address set on device
-   };
+      { .addr= dev,  .flags= f,  .len= nB,  .buf= pB } // transfer buffer to/from the address set on device
+   };//|I2C_M_STOP
    struct i2c_rdwr_ioctl_data d={m,LX_I2C_TRANS_NM};
-   if (I2C_M_RD != (f & I2C_M_RD)) { m[1].flags|= I2C_M_NOSTART; }
+   //if (I2C_M_RD != (f & I2C_M_RD)) { m[1].flags|= I2C_M_NOSTART; }
    if (gCtx.flags & LX_I2C_FLAG_TRACE)
    {
       TRACE_CALL("(Dev=0x%X, Flg=0x%04X, Buf={%u, %p}, Reg=x%02X)\n", dev, f, nB, pB, reg);
@@ -313,7 +324,7 @@ void setup (void)
          if (i > 0) { printf("%d : mean diff= %d\n", i, sdd / i); }
       }
    }
-   /***/
+#if 0 // not functional
    {  // Process clock
       // CLOCK_REALTIME CLOCK_MONOTONIC
       timer_t hT=NULL;
@@ -331,6 +342,7 @@ void setup (void)
          printf("%ld : %ld (%ld : %ld)\n", ts1.it_value.tv_sec, ts1.it_value.tv_nsec, ts1.it_interval.tv_sec, ts1.it_interval.tv_nsec);
       }
    }
+#endif
 } // setup
 
 #endif
@@ -338,7 +350,9 @@ void setup (void)
 LXI2CBusCtx gBusCtx={0,-1};
 
 // Endian handling - displace to where ?
-typedef union { U16 u16; struct { U8 u8[2]; }; } UU16; // for endian check/twiddle
+typedef union { U64 u64; struct { U8 u8[8]; }; } UU64;
+typedef union { U32 u32; struct { U8 u8[4]; }; } UU32;
+typedef union { U16 u16; struct { U8 u8[2]; }; } UU16;
 
 // Read n bytes big-endian
 int rdnbe (const U8 b[], const int n)
@@ -346,6 +360,11 @@ int rdnbe (const U8 b[], const int n)
    int r= b[0];
    for (int i= 1; i<n; i++) { r= (r<<8) | b[i]; }
    return(r);
+} // rdnbe
+
+void wrnbe (U8 b[], int x, const int n)
+{
+   for (int i= n-1; i>0; i--) { b[i]= x & 0xFF; x>>= 8; }
 } // rdnbe
 
 typedef struct
@@ -358,7 +377,7 @@ typedef struct
 
 void ads1xUnpackCfg (ADS1xUnpack *pU, const U8 cfg[2], const U8 x)
 {
-static const U8 m[]= {0x01, 0x03, 0x13,  0x23, 0x0F, 0x1F, 0x2F, 0x3F};
+static const U8 m[]= {0x01, 0x03, 0x13, 0x23, 0x0F, 0x1F, 0x2F, 0x3F};
 static const U16 r[2][8]=
 {  {128,250,490,920,1600,2400,3300,3300},
    {8,16,32,64,128,250,475,860} };
@@ -369,15 +388,27 @@ static const F32 g[]= { 6.144, 4.096, 2.048, 1.024, 0.512, 0.256 };
    pU->rate= r[x&1][ (cfg[1] >> ADS1X_SH1_DR) & ADS10_R_M ];
 } // adsExtCfg
 
-void dumpCfg (const UU16 c)
+int convInterval (ADS1xUnpack *pU, const U8 cfg[2], const U8 x)
+{
+   if (pU)
+   {
+      ads1xUnpackCfg(pU, cfg, x);
+      if (pU->rate > 0) return(1000000 / pU->rate);
+   }
+   return(0);
+} // convInterval
+
+char muxCh (const U8 c) { if (c<=3) return('0'+c); else return('G'); }
+
+void ads1xDumpCfg (const U8 cfg[2], const U8 x)
 {
    ADS1xUnpack u;
-   printf("cfg: 0x%02x:%02x :\n", c.u8[0], c.u8[1]); // NB: Big Endian on-the-wire
-   printf(" OS%d MUX%d PGA%d M%d", (c.u8[0]>>7) & 0x1, (c.u8[0]>>4) & 0x7, (c.u8[0]>>1) & 0x7, c.u8[0] & 0x1);
-   printf(" DR%d CM%d CP%d CL%d CQ%d\n", (c.u8[1]>>5) & 0x7, (c.u8[1]>>4) & 0x1, (c.u8[1]>>3) & 0x1, (c.u8[1]>>2) & 0x1, c.u8[1] & 0x3);
-   ads1xUnpackCfg(&u, c.u8, 0);
-   printf("%x/%x %GV, %d/s C:%d\n", (u.mux>>4)&0xF, u.mux&0xF, u.gainFSV, u.rate, u.cmp);
-} // dumpCfg
+   printf("cfg= [%02x, %02x] = ", cfg[0], cfg[1]); // NB: Big Endian on-the-wire
+   printf(" OS%d MUX%d PGA%d M%d, ", (cfg[0]>>7) & 0x1, (cfg[0]>>4) & 0x7, (cfg[0]>>1) & 0x7, cfg[0] & 0x1);
+   printf(" DR%d CM%d CP%d CL%d CQ%d : ", (cfg[1]>>5) & 0x7, (cfg[1]>>4) & 0x1, (cfg[1]>>3) & 0x1, (cfg[1]>>2) & 0x1, cfg[1] & 0x3);
+   ads1xUnpackCfg(&u, cfg, x);
+   printf("%c/%c %GV, %d/s C:%d\n", muxCh(u.mux>>4), muxCh(u.mux&0xF), u.gainFSV, u.rate, u.cmp);
+} // ads1xDumpCfg
 
 void ads10GenCfg (U8 cfg[2], enum ADS1xMux mux, enum ADS1xGain gain, enum ADS10Rate rate, enum ADS1xCompare cmp)//=ADS1X_CD
 {
@@ -387,44 +418,55 @@ void ads10GenCfg (U8 cfg[2], enum ADS1xMux mux, enum ADS1xGain gain, enum ADS10R
 
 int testADS1015 (const LXI2CBusCtx *pC, const U16 dev)
 {
-   UU16 cfg={0}, cfg2={0}, dat={0xAAAA};
+   UU16 cfg={0}, cfgI={0};
+   UU64 dat={0xAAAAAAAAAAAAAAAA};
+   ADS1xUnpack u;
    const int i2cWait= ADS1X_TRANS_NCLK * 1E6 / pC->clk;
+   int convWait=0;
    int r;
-
+   float v, sv;
    //setup();
-   LOG("testADS1015() - i2cWait=%dus\n",i2cWait);
-   r= lxi2cTrans(pC, dev, I2C_M_RD, 2, cfg.u8, ADS1X_RC);
+   //LOG("testADS1015() - i2cWait=%dus\n",i2cWait);
+   r= lxi2cTrans(pC, dev, I2C_M_RD, 2, cfgI.u8, ADS1X_REG_CFG);
+   ads1xDumpCfg(cfgI.u8, 0);
+   //r= lxi2cTrans(pC, dev, I2C_M_RD, 8, dat.u8, 0); multi-register read unsupported
+   //ads1xDumpCfg(dat.u8+2);
    if (0 == r)
-   {  // default single shot, 1600sps => 625us
-      dumpCfg(cfg);
+   {
       gCtx.flags &= ~LX_I2C_FLAG_TRACE; // enough verbosity
       ads10GenCfg(cfg.u8, ADS1X_M0G, ADS1X_GFS_6V144, ADS10_R250, ADS1X_CMP_DISABLE);
-      printf("setting "); dumpCfg(cfg);
+      //printf("setting "); ads1xDumpCfg(cfg.u8, 0);
       // Change settings without starting
-      r= lxi2cTrans(pC, dev, I2C_M_WR, 2, cfg.u8, ADS1X_RC);
-      if (0 == r)
+      //r= lxi2cTrans(pC, dev, I2C_M_WR, 2, cfg.u8, ADS1X_REG_CFG);
+      r= i2cWrite(pC, dev, ADS1X_REG_CFG, cfg.u8, 2);
+      #if 0
+      if (r >= 0)
       {
-         r= lxi2cTrans(pC, dev, I2C_M_RD, 2, cfg2.u8, ADS1X_RC);
-         printf("verify: "); dumpCfg(cfg);
+         r= lxi2cTrans(pC, dev, I2C_M_RD, 2, cfgI.u8, ADS1X_REG_CFG);
+         printf("verify: "); ads1xDumpCfg(cfgI.u8, 0);
       }
-      //usleep(i2cWait);
+      #endif
+      convWait= convInterval(&u, cfg.u8, 0);
+      sv= u.gainFSV / ADS10_FSR;
       cfg.u8[0]|= ADS1X_FL0_OS; // Now enable conversion
-      if (0 == r)
+      if (r >= 0)
       {
-         int i, n= 0;
+         int raw, i, n= 0;
          do
-         {
-            r= lxi2cTrans(pC, dev, I2C_M_WR, 2, cfg.u8, ADS1X_RC); // start conversion
-            //usleep(i2cWait);
+         {  // start conversion
+            //r= lxi2cTrans(pC, dev, I2C_M_WR, 2, cfg.u8, ADS1X_REG_CFG);
+            r= i2cWrite(pC, dev, ADS1X_REG_CFG, cfg.u8, 2);
+            if (convWait > i2cWait) { usleep(convWait-i2cWait); }
             i= 0;
             do { // poll status
-               usleep(500);
-               r= lxi2cTrans(pC, dev, I2C_M_RD, 2, cfg2.u8, ADS1X_RC);
-               //printf("%d: ", i); dumpCfg(cfg2);
-            } while ((0 == r) && (++i < 5) && (0 == (cfg2.u8[0] & ADS1X_FL0_OS)));
+               r= lxi2cTrans(pC, dev, I2C_M_RD, 2, cfgI.u8, ADS1X_REG_CFG);
+               //printf("%d: ", i); ads1xDumpCfg(cfg2.u8, 0);
+            } while ((r >= 0) && (++i < 5) && (0 == (cfgI.u8[0] & ADS1X_FL0_OS)));
 
-            r= lxi2cTrans(pC, dev, I2C_M_RD, 2, dat.u8, ADS1X_RR); // read result
-            printf("data: 0x%x\n", rdnbe(dat.u8, 2));
+            r= lxi2cTrans(pC, dev, I2C_M_RD, 2, dat.u8, ADS1X_REG_RES); // read result
+            raw=  rdnbe(dat.u8, 2);
+            v= raw * sv;
+            printf("data: 0x%x -> %GV\n", raw, v);
          } while (++n < 10);
       }
    }

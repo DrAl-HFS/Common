@@ -24,10 +24,10 @@ extern "C" {
 
 enum ADS1xReg
 {  // Register address (in packet header)
-   ADS1X_RR=0, // Result
-   ADS1X_RC,   // Config
-   ADS1X_RL,   // Low and
-   ADS1X_RH=3, //  high compare thresholds
+   ADS1X_REG_RES=0, // Result
+   ADS1X_REG_CFG,   // Config
+   ADS1X_REG_CLO,   // Low and
+   ADS1X_REG_CHI=3, //  high compare thresholds
 }; // ADS1xReg, ADS10Reg, ADS11Reg
 
 /*
