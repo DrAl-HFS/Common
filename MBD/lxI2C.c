@@ -93,6 +93,70 @@ int lxi2cWriteRB (const LXI2CBusCtx *pBC, const U8 dev, const U8 regBytes[], con
    return ioctl(pBC->fd, I2C_RDWR, &d);
 } // lxi2cWriteRB
 
+#define MRBYTES (2 * sizeof(struct i2c_msg))
+int lxi2cReadMultiRB (const LXI2CBusCtx *pBC, const MemBuff *pWS, const U8 dev, U8 regBytes[], const U8 nRB, const U8 nM)
+{
+   int offset= 0, r= 0;
+   if (validMemBuff(pWS, nM * MRBYTES))
+   {
+      struct i2c_rdwr_ioctl_data d={ pWS->p, 2 * nM }; // NB: alignment assumed
+      for (int i= 0; i<nM; i++)
+      {
+         int j= 2*i;
+         d.msgs[j].addr=   dev;
+         d.msgs[j].flags=  I2C_M_WR;
+         d.msgs[j].len=    1;
+         d.msgs[j].buf=    regBytes+offset;
+
+         d.msgs[j+1].addr= dev;
+         d.msgs[j+1].flags= I2C_M_RD;
+         d.msgs[j+1].len=  nRB-1;
+         d.msgs[j+1].buf=  regBytes+offset+1;
+
+         offset+= nRB;
+      }
+      return ioctl(pBC->fd, I2C_RDWR, &d);
+   }
+   else
+   {
+      for (int i= 0; i<nM; i++)
+      {
+         r+= lxi2cReadRB(pBC, dev, regBytes+offset, nRB);
+         offset+= nRB;
+      }
+   }
+   return(r);
+} // lxi2cReadMultiRB
+
+#define MWBYTES sizeof(struct i2c_msg)
+int lxi2cWriteMultiRB (const LXI2CBusCtx *pBC, const MemBuff *pWS, const U8 dev, const U8 regBytes[], const U8 nRB, const U8 nM)
+{
+   int offset= 0, r=0;
+   if (validMemBuff(pWS, nM * MWBYTES))
+   {
+      struct i2c_rdwr_ioctl_data d={ pWS->p, nM }; // NB: alignment assumed
+      for (int i= 0; i<nM; i++)
+      {
+         d.msgs[i].addr=   dev;
+         d.msgs[i].flags=  I2C_M_WR;
+         d.msgs[i].len=    nRB;
+         d.msgs[i].buf=    (void*)(regBytes+offset);
+
+         offset+= nRB;
+      }
+      return ioctl(pBC->fd, I2C_RDWR, &d);
+   }
+   else
+   {
+      for (int i= 0; i<nM; i++)
+      {
+         r+= lxi2cWriteRB(pBC, dev, regBytes+offset, nRB);
+         offset+= nRB;
+      }
+   }
+   return(r);
+} // lxi2cWriteMultiRB
+
 // DEPRECATE: inital "transaction" design flawed but retained for compatibility...
 #define TRANS_WRITE_MAX 15
 int lxi2cTrans (const LXI2CBusCtx *pBC, const U16 dev, const U16 f, U16 nB, U8 *pB, U8 reg)
@@ -403,7 +467,7 @@ typedef struct
    U8 res[ADS1X_NRB], cfg[ADS1X_NRB], cLo[ADS1X_NRB], cHi[ADS1X_NRB];
 } ADS1xRB;
 
-int ads1xInitRB (ADS1xRB *pRB, const LXI2CBusCtx *pC, const U8 dev)
+int ads1xInitRB (ADS1xRB *pRB, const MemBuff *pWS, const LXI2CBusCtx *pC, const U8 dev)
 {
    pRB->res[0]= ADS1X_REG_RES;
    pRB->cfg[0]= ADS1X_REG_CFG;
@@ -411,36 +475,50 @@ int ads1xInitRB (ADS1xRB *pRB, const LXI2CBusCtx *pC, const U8 dev)
    pRB->cHi[0]= ADS1X_REG_CHI;
    if (pC && dev)
    {
+#if 1
+      lxi2cReadMultiRB(pC, pWS, dev, pRB->res, ADS1X_NRB, 4);
+#else
       lxi2cReadRB(pC, dev, pRB->res, ADS1X_NRB);
       lxi2cReadRB(pC, dev, pRB->cfg, ADS1X_NRB);
       lxi2cReadRB(pC, dev, pRB->cLo, ADS1X_NRB);
       lxi2cReadRB(pC, dev, pRB->cHi, ADS1X_NRB);
+#endif
    }
    return(0);
 } // ads1xInitRB
 
 U8 ads1xGetMux (const U8 cfg[2]) { return((cfg[0] >> ADS1X_SH0_MUX) & ADS1X_M_M); }
-U8 ads1xMuxToM4X4 (const U8 m)
+
+void ads1xSetMux (U8 cfg[2], const enum ADS1xMux mux) { cfg[0]= (cfg[0] & ~(ADS1X_M_M << ADS1X_SH0_MUX)) | (mux << ADS1X_SH0_MUX); }
+
+U8 ads1xMuxToM4X4 (const enum ADS1xMux mux)
 {
    static const U8 m4x4[]= {0x01, 0x03, 0x13, 0x23, 0x0F, 0x1F, 0x2F, 0x3F};
-   return m4x4[ m & 0x7 ];
+   return m4x4[ mux & 0x7 ];
 } // ads1xGetMux4X4
-
-void ads1xSetMux (U8 cfg[2], enum ADS1xMux mux) { cfg[0]= (cfg[0] & ~(ADS1X_M_M << ADS1X_SH0_MUX)) | (mux << ADS1X_SH0_MUX); }
-
 char muxCh (const U8 c) { if (c<=3) return('0'+c); else return('G'); }
 void printMux4x4 (const U8 m4x4) { printf("%c/%c", muxCh(m4x4 >> 4), muxCh(m4x4 & 0xF)); }
 
+F32 ads1xGainToFSV (const enum ADS1xGain g)
+{
+   static const F32 gfsv[]= { 6.144, 4.096, 2.048, 1.024, 0.512}; //, 0.256 };
+   if (g < ADS1X_GFS_0V256) return(gfsv[g]); else return(0.256);
+} // ads1xGainToFSV
+
+U16 adsx1RateToU (const U8 r, const U8 x)
+{
+static const U16 rate[2][8]=
+   {  {128,250,490,920,1600,2400,3300,3300},
+      {8,16,32,64,128,250,475,860} };
+   return( rate[ x & 1 ][ r & 0x7 ] );
+} // adsx1RateToI
+
 void ads1xUnpackCfg (ADS1xUnpack *pU, const U8 cfg[2], const U8 x)
 {
-static const U16 r[2][8]=
-{  {128,250,490,920,1600,2400,3300,3300},
-   {8,16,32,64,128,250,475,860} };
-static const F32 g[]= { 6.144, 4.096, 2.048, 1.024, 0.512, 0.256 };
+   pU->gainFSV= ads1xGainToFSV( (cfg[0] >> ADS1X_SH0_PGA) & ADS1X_GFS_M );
+   pU->rate= adsx1RateToU( (cfg[1] >> ADS1X_SH1_DR) & ADS10_R_M, x);
    pU->m4x4= ads1xMuxToM4X4(ads1xGetMux(cfg));
-   pU->gainFSV= g[ (cfg[0] >> ADS1X_SH0_PGA) & ADS1X_GFS_M ];
    pU->cmp= (((cfg[1] >> ADS1X_SH1_CQ) & ADS1X_CMP_M) + 1 ) & ADS1X_CMP_M;
-   pU->rate= r[x&1][ (cfg[1] >> ADS1X_SH1_DR) & ADS10_R_M ];
 } // adsExtCfg
 
 int convInterval (ADS1xUnpack *pU, const U8 cfg[2], const U8 x)
@@ -477,7 +555,7 @@ void ads10GenCfg (U8 cfg[2], enum ADS1xMux mux, enum ADS1xGain gain, enum ADS10R
 #define MODE_ROTMUX  (1<<4)
 #define MODE_VERBOSE (1<<0)
 
-int testADS1015 (const LXI2CBusCtx *pC, const U8 dev, const U8 mode)
+int testADS1015 (const LXI2CBusCtx *pC, const MemBuff *pWS, const U8 dev, const U8 mode)
 {
    ADS1xRB rb;
    ADS1xUnpack u;
@@ -487,7 +565,7 @@ int testADS1015 (const LXI2CBusCtx *pC, const U8 dev, const U8 mode)
    float sv;
    U8 cfgStatus[ADS1X_NRB];
 
-   r= ads1xInitRB(&rb, pC, dev);
+   r= ads1xInitRB(&rb, pWS, pC, dev);
    ads1xDumpCfg(rb.cfg+1, 0);
    if (r >= 0)
    {
@@ -574,8 +652,11 @@ int main (int argc, char *argv[])
 {
    if (lxi2cOpen(&gBusCtx, "/dev/i2c-1", 400))
    {
+      MemBuff ws={0,};
       //lxi2cDumpDevAddr(&gBusCtx, 0x00, 0xFF,0x00);
-      testADS1015(&gBusCtx, 0x48, MODE_VERIFY|MODE_SLEEP|MODE_POLL|MODE_ROTMUX);
+      allocMemBuff(&ws, 4<<10);
+      testADS1015(&gBusCtx, NULL, 0x48, MODE_VERIFY|MODE_SLEEP|MODE_POLL|MODE_ROTMUX);
+      releaseMemBuff(&ws);
       lxi2cClose(&gBusCtx);
    }
 
