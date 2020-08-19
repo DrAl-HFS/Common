@@ -391,7 +391,7 @@ typedef struct
 {
    F32 gainFSV;
    U16 rate;
-   U8 mux;
+   U8 m4x4;
    U8 cmp;
 } ADS1xUnpack;
 
@@ -417,11 +417,17 @@ int ads1xInitRB (ADS1xRB *pRB, const LXI2CBusCtx *pC, const U8 dev)
    return(0);
 } // ads1xInitRB
 
-U8 ads1xGetMux4X4 (const U8 cfg[2])
+U8 ads1xGetMux (const U8 cfg[2]) { return((cfg[0] >> ADS1X_SH0_MUX) & ADS1X_M_M); }
+U8 ads1xMuxToM4X4 (const U8 m)
 {
-   static const U8 m[]= {0x01, 0x03, 0x13, 0x23, 0x0F, 0x1F, 0x2F, 0x3F};
-   return m[ (cfg[0] >> ADS1X_SH0_MUX) & ADS1X_M_M ];
+   static const U8 m4x4[]= {0x01, 0x03, 0x13, 0x23, 0x0F, 0x1F, 0x2F, 0x3F};
+   return m4x4[ m & 0x7 ];
 } // ads1xGetMux4X4
+
+void ads1xSetMux (U8 cfg[2], enum ADS1xMux mux) { cfg[0]= (cfg[0] & ~(ADS1X_M_M << ADS1X_SH0_MUX)) | (mux << ADS1X_SH0_MUX); }
+
+char muxCh (const U8 c) { if (c<=3) return('0'+c); else return('G'); }
+void printMux4x4 (const U8 m4x4) { printf("%c/%c", muxCh(m4x4 >> 4), muxCh(m4x4 & 0xF)); }
 
 void ads1xUnpackCfg (ADS1xUnpack *pU, const U8 cfg[2], const U8 x)
 {
@@ -429,7 +435,7 @@ static const U16 r[2][8]=
 {  {128,250,490,920,1600,2400,3300,3300},
    {8,16,32,64,128,250,475,860} };
 static const F32 g[]= { 6.144, 4.096, 2.048, 1.024, 0.512, 0.256 };
-   pU->mux= ads1xGetMux4X4(cfg);
+   pU->m4x4= ads1xMuxToM4X4(ads1xGetMux(cfg));
    pU->gainFSV= g[ (cfg[0] >> ADS1X_SH0_PGA) & ADS1X_GFS_M ];
    pU->cmp= (((cfg[1] >> ADS1X_SH1_CQ) & ADS1X_CMP_M) + 1 ) & ADS1X_CMP_M;
    pU->rate= r[x&1][ (cfg[1] >> ADS1X_SH1_DR) & ADS10_R_M ];
@@ -445,8 +451,6 @@ int convInterval (ADS1xUnpack *pU, const U8 cfg[2], const U8 x)
    return(0);
 } // convInterval
 
-char muxCh (const U8 c) { if (c<=3) return('0'+c); else return('G'); }
-
 void ads1xDumpCfg (const U8 cfg[2], const U8 x)
 {
    ADS1xUnpack u;
@@ -454,7 +458,8 @@ void ads1xDumpCfg (const U8 cfg[2], const U8 x)
    printf(" OS%d MUX%d PGA%d M%d, ", (cfg[0]>>7) & 0x1, (cfg[0]>>4) & 0x7, (cfg[0]>>1) & 0x7, cfg[0] & 0x1);
    printf(" DR%d CM%d CP%d CL%d CQ%d : ", (cfg[1]>>5) & 0x7, (cfg[1]>>4) & 0x1, (cfg[1]>>3) & 0x1, (cfg[1]>>2) & 0x1, cfg[1] & 0x3);
    ads1xUnpackCfg(&u, cfg, x);
-   printf("%c/%c %GV, %d/s C:%d\n", muxCh(u.mux>>4), muxCh(u.mux&0xF), u.gainFSV, u.rate, u.cmp);
+   printMux4x4(u.m4x4);
+   printf(" %GV, %d/s C:%d\n",u.gainFSV, u.rate, u.cmp);
 } // ads1xDumpCfg
 
 void ads10GenCfg (U8 cfg[2], enum ADS1xMux mux, enum ADS1xGain gain, enum ADS10Rate rate, enum ADS1xCompare cmp)//=ADS1X_CD
@@ -463,59 +468,87 @@ void ads10GenCfg (U8 cfg[2], enum ADS1xMux mux, enum ADS1xGain gain, enum ADS10R
    cfg[1]= (rate << ADS1X_SH1_DR) | (cmp << ADS1X_SH1_CQ);
 } // ads10SetCfg
 
-void ads1xSetMux (U8 cfg[2], enum ADS1xMux mux) { cfg[0]= (cfg[0] & (ADS1X_M_M << ADS1X_SH0_MUX)) | (mux << ADS1X_SH0_MUX); }
-void printMux (const U8 cfg[2])
-{
-   U8 m= ads1xGetMux4X4(cfg);
-   printf("%c/%c", muxCh(m>>4), muxCh(m&0xF));
-} // printMux
 
-int testADS1015 (const LXI2CBusCtx *pC, const U8 dev)
+#define MODE_VERIFY  (1<<7)
+#define MODE_SLEEP   (1<<6)
+#define MODE_POLL    (1<<5)
+#define MODE_ROTMUX  (1<<4)
+#define MODE_VERBOSE (1<<0)
+
+int testADS1015 (const LXI2CBusCtx *pC, const U8 dev, const U8 mode)
 {
    ADS1xRB rb;
    ADS1xUnpack u;
    const int i2cWait= ADS1X_TRANS_NCLK * 1E6 / pC->clk;
-   int convWait=0;
+   int convWait=0, expectWait=0;
    int r;
    float sv;
-   U8 chkcfg[ADS1X_NRB];
+   U8 cfgStatus[ADS1X_NRB];
 
    r= ads1xInitRB(&rb, pC, dev);
    ads1xDumpCfg(rb.cfg+1, 0);
    if (r >= 0)
    {
-      memcpy(chkcfg, rb.cfg, ADS1X_NRB);
+      memcpy(cfgStatus, rb.cfg, ADS1X_NRB);
       ads10GenCfg(rb.cfg+1, ADS1X_M0G, ADS1X_GFS_6V144, ADS10_R250, ADS1X_CMP_DISABLE);
-      rb.cfg[1]|= ADS1X_FL0_OS; // Now enable conversion
+      rb.cfg[1]|= ADS1X_FL0_OS|ADS1X_FL0_MODE; // Now enable single-shot conversion
       printf("cfg: "); ads1xDumpCfg(rb.cfg+1, 0);
       convWait= convInterval(&u, rb.cfg+1, 0);
       sv= u.gainFSV / ADS10_FSR;
       if (r >= 0)
       {
-         const U8 muxSeq[4]={ADS1X_M0G, ADS1X_M1G, ADS1X_M2G, ADS1X_M3G};
-         int i, n= 0;
+         int n= 0;
          do
-         {  // start (single) conversion
-            rb.cfg[1]|= ADS1X_FL0_OS; // Always (re)enable conversion
-            r= lxi2cWriteRB(pC, dev, rb.cfg, ADS1X_NRB);
+         {
+            int i0= 0, i1= 0;
+            do
+            {
+               r= lxi2cWriteRB(pC, dev, rb.cfg, ADS1X_NRB);
+               if ((mode & MODE_VERIFY) && (r >= 0))
+               {
+                  r= lxi2cReadRB(pC, dev, cfgStatus, ADS1X_NRB);
+                  if (mode & MODE_VERBOSE)
+                  {
+                     printf("ver%d: ", i0); ads1xDumpCfg(cfgStatus+1, 0);
+                  }
+               }
+            } while ((mode & MODE_VERIFY) && ((r < 0) || (0 != memcmp(cfgStatus, rb.cfg, ADS1X_NRB))) && (++i0 < 10));
 
-            usleep(convWait+i2cWait);
-            //if (convWait > i2cWait) { usleep(convWait-i2cWait); }
+            if (mode & MODE_SLEEP)
+            {
+               usleep(convWait+i2cWait);
+               expectWait= (1+i0) * i2cWait;
+               if (convWait > expectWait); // { usleep(convWait-expectWait); }
+            }
 
-            i= 0;
-            do { // poll status
-               r= lxi2cReadRB(pC, dev, chkcfg, ADS1X_NRB);
-            } while ((r >= 0) && (0 == (chkcfg[1] & ADS1X_FL0_OS)) && (++i < 1));
+            if (mode & MODE_POLL)
+            {
+               do { // poll status
+                  r= lxi2cReadRB(pC, dev, cfgStatus, ADS1X_NRB);
+               } while (((r < 0) || (0 == (cfgStatus[1] & ADS1X_FL0_OS))) && (++i1 < 10));
+            }
 
             r= lxi2cReadRB(pC, dev, rb.res, ADS1X_NRB); // read result
             if (r >= 0)
             {
-               const int iNM= (1+n) & 0x3;
                int raw=  rdI16BE(rb.res+1);
                float v= raw * sv;
-               printMux(rb.cfg+1);
-               printf(" (%d) [%d] : 0x%x -> %GV {iNM=%d}\n", i, n, raw, v, iNM);
-               ads1xSetMux(rb.cfg+1, muxSeq[iNM]);
+               U8 m4x4= ads1xMuxToM4X4(ads1xGetMux(cfgStatus+1));
+               printMux4x4(m4x4);
+               printf(" (i=%d,%d) [%d] : 0x%x -> %GV\n", i0, i1, n, raw, v);
+               if (mode & MODE_ROTMUX)
+               {
+                  static const U8 muxRot[]= { ADS1X_M0G, ADS1X_M1G, ADS1X_M2G, ADS1X_M3G };
+                  const int iNM= (1+n) & 0x3;
+                  ads1xSetMux(rb.cfg+1, muxRot[iNM]);
+                  if (mode & MODE_VERBOSE)
+                  {
+                     m4x4= ads1xMuxToM4X4( muxRot[iNM] );
+                     printf("%d -> 0x%02x -> ", iNM, muxRot[iNM]); printMux4x4(m4x4); printf(" verify: ");
+                     m4x4= ads1xMuxToM4X4(ads1xGetMux(rb.cfg+1));
+                     printMux4x4(m4x4); printf("\n");
+                  }
+               }
             }
          } while (++n < 16);
       }
@@ -525,13 +558,10 @@ int testADS1015 (const LXI2CBusCtx *pC, const U8 dev)
 
 int main (int argc, char *argv[])
 {
-   char *busDevPath="/dev/i2c-1";
-   U8 devID= 0x48;
-
-   if (lxi2cOpen(&gBusCtx, busDevPath))
+   if (lxi2cOpen(&gBusCtx, "/dev/i2c-1"))
    {
-      //lxi2cDumpDevAddr(&gBusCtx, devID, 0xFF,0x00);
-      testADS1015(&gBusCtx,devID);
+      //lxi2cDumpDevAddr(&gBusCtx, 0x00, 0xFF,0x00);
+      testADS1015(&gBusCtx, 0x48, MODE_VERIFY|MODE_SLEEP|MODE_POLL|MODE_ROTMUX);
       lxi2cClose(&gBusCtx);
    }
 
