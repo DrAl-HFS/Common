@@ -28,7 +28,7 @@ typedef struct
 
 /***/
 
-extern Bool32 lxi2cOpen (LXI2CBusCtx *pBC, const char *path);
+extern Bool32 lxi2cOpen (LXI2CBusCtx *pBC, const char *path, const int clk);
 
 extern int lxi2cTrans (const LXI2CBusCtx *pBC, const U16 dev, const U16 f, U16 nB, U8 *pB, U8 reg);
 

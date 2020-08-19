@@ -34,7 +34,7 @@ static LXI2CCtx gCtx={LX_I2C_FLAG_TRACE, }; // {{0,-1},{0,-1}},0,0,};
 
 /***/
 
-Bool32 lxi2cOpen (LXI2CBusCtx *pBC, const char *path)
+Bool32 lxi2cOpen (LXI2CBusCtx *pBC, const char *path, const int clk)
 {
    struct stat st;
    int r= -1;
@@ -56,7 +56,9 @@ Bool32 lxi2cOpen (LXI2CBusCtx *pBC, const char *path)
             LX_TRC1("ioctl(.. I2C_FUNCS ..) -> %d\n", r);
             LX_TRC1("flags=0x%0X (%dbytes)\n", pBC->flags, sizeof(pBC->flags));
          }
-         pBC->clk= 100000; // default I2C clock rate - TODO: determine actual rate ???
+         if (clk < 1) { pBC->clk= 100000; } // standard/default I2C clock rate
+         else if (clk < 10000) { pBC->clk= clk*1000; } // assume kHz
+         else { pBC->clk= clk; }  // assume Hz
       }
       else { report(ERR0,"lxOpenI2C(.. %s)\n", path); }
    }
@@ -151,7 +153,7 @@ void lxi2cSleepm (U32 ms)
 Bool32 lxi2cOpenSMBUS (LXI2CBusCtx *pBC, const char *path, I8 devID)
 {
    int r=-1;
-   if (lxi2cOpen(pBC,path))
+   if (lxi2cOpen(pBC,path,0))
    {
       r= ioctl(pBC->fd, I2C_SLAVE, devID); // SMBUS address locked
       TRACE_CALL("(0x%X) I2C:0x%X - ioctl(..I2C_SLAVE..)->%d\n", devID, pBC->flags & I2C_FUNC_SMBUS_EMUL, r);
@@ -507,16 +509,18 @@ int testADS1015 (const LXI2CBusCtx *pC, const U8 dev, const U8 mode)
                if ((mode & MODE_VERIFY) && (r >= 0))
                {
                   r= lxi2cReadRB(pC, dev, cfgStatus, ADS1X_NRB);
-                  if (mode & MODE_VERBOSE)
+                  if (r >= 0)
                   {
-                     printf("ver%d: ", i0); ads1xDumpCfg(cfgStatus+1, 0);
+                     if (mode & MODE_VERBOSE) { printf("ver%d: ", i0); ads1xDumpCfg(cfgStatus+1, 0); }
+                     // Device goes busy (OS1->0) immediately on write, so merge back in for check
+                     cfgStatus[1] |= (rb.cfg[1] & ADS1X_FL0_OS);
                   }
                }
             } while ((mode & MODE_VERIFY) && ((r < 0) || (0 != memcmp(cfgStatus, rb.cfg, ADS1X_NRB))) && (++i0 < 10));
 
             if (mode & MODE_SLEEP)
             {
-               usleep(convWait+i2cWait);
+               usleep(convWait-i2cWait);
                expectWait= (1+i0) * i2cWait;
                if (convWait > expectWait); // { usleep(convWait-expectWait); }
             }
@@ -558,7 +562,7 @@ int testADS1015 (const LXI2CBusCtx *pC, const U8 dev, const U8 mode)
 
 int main (int argc, char *argv[])
 {
-   if (lxi2cOpen(&gBusCtx, "/dev/i2c-1"))
+   if (lxi2cOpen(&gBusCtx, "/dev/i2c-1", 400))
    {
       //lxi2cDumpDevAddr(&gBusCtx, 0x00, 0xFF,0x00);
       testADS1015(&gBusCtx, 0x48, MODE_VERIFY|MODE_SLEEP|MODE_POLL|MODE_ROTMUX);
