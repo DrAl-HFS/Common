@@ -456,7 +456,7 @@ int convInterval (ADS1xUnpack *pU, const U8 cfg[2], const U8 x)
 void ads1xDumpCfg (const U8 cfg[2], const U8 x)
 {
    ADS1xUnpack u;
-   printf("cfg= [%02x, %02x] = ", cfg[0], cfg[1]); // NB: Big Endian on-the-wire
+   printf("[%02x, %02x] = ", cfg[0], cfg[1]); // NB: Big Endian on-the-wire
    printf(" OS%d MUX%d PGA%d M%d, ", (cfg[0]>>7) & 0x1, (cfg[0]>>4) & 0x7, (cfg[0]>>1) & 0x7, cfg[0] & 0x1);
    printf(" DR%d CM%d CP%d CL%d CQ%d : ", (cfg[1]>>5) & 0x7, (cfg[1]>>4) & 0x1, (cfg[1]>>3) & 0x1, (cfg[1]>>2) & 0x1, cfg[1] & 0x3);
    ads1xUnpackCfg(&u, cfg, x);
@@ -492,14 +492,23 @@ int testADS1015 (const LXI2CBusCtx *pC, const U8 dev, const U8 mode)
    if (r >= 0)
    {
       memcpy(cfgStatus, rb.cfg, ADS1X_NRB);
-      ads10GenCfg(rb.cfg+1, ADS1X_M0G, ADS1X_GFS_6V144, ADS10_R250, ADS1X_CMP_DISABLE);
+      ads10GenCfg(rb.cfg+1, ADS1X_M0G, ADS1X_GFS_6V144, ADS10_R2400, ADS1X_CMP_DISABLE);
       rb.cfg[1]|= ADS1X_FL0_OS|ADS1X_FL0_MODE; // Now enable single-shot conversion
-      printf("cfg: "); ads1xDumpCfg(rb.cfg+1, 0);
       convWait= convInterval(&u, rb.cfg+1, 0);
       sv= u.gainFSV / ADS10_FSR;
+      printf("cfg: "); ads1xDumpCfg(rb.cfg+1, 0);
+      printf("Ivl: conv=%dus comm=%dus\n", convWait, i2cWait);
+      {
+         I16 v[3];
+         v[0]= rdI16BE(rb.res+1);
+         v[1]= rdI16BE(rb.cLo+1);
+         v[2]= rdI16BE(rb.cHi+1);
+         printf("res: %04x (%d) cmp: %04x %04x (%d %d)\n", v[0], v[0], v[1], v[2], v[1], v[2]);
+      }
       if (r >= 0)
       {
          int n= 0;
+         printf("***\n");
          do
          {
             int i0= 0, i1= 0;
@@ -554,7 +563,8 @@ int testADS1015 (const LXI2CBusCtx *pC, const U8 dev, const U8 mode)
                   }
                }
             }
-         } while (++n < 16);
+         } while (++n < 9);
+         printf("---\n");
       }
    }
    return(r);

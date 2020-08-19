@@ -22,7 +22,7 @@ typedef struct
 {
    UL   flags;
    int  fd;
-   int  clk;
+   int  clk; // bus clock rate used for transaction timing estimation
 } LXI2CBusCtx;
 
 
@@ -30,6 +30,10 @@ typedef struct
 
 extern Bool32 lxi2cOpen (LXI2CBusCtx *pBC, const char *path, const int clk);
 
+extern int lxi2cReadRB (const LXI2CBusCtx *pBC, const U8 dev, U8 regBytes[], const U8 nRB);
+extern int lxi2cWriteRB (const LXI2CBusCtx *pBC, const U8 dev, const U8 regBytes[], const U8 nRB);
+
+// DEPRECATE
 extern int lxi2cTrans (const LXI2CBusCtx *pBC, const U16 dev, const U16 f, U16 nB, U8 *pB, U8 reg);
 
 extern void lxi2cSleepm (U32 ms);
