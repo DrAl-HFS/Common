@@ -3,8 +3,8 @@
 // Licence: GPL V3
 // (c) Project Contributors Aug 2020
 
-#ifndef MBD_UTIL_H
-#define MBD_UTIL_H
+#ifndef MBD_DEF_H
+#define MBD_DEF_H
 
 /* #include <sys/types.h> */
 
@@ -33,4 +33,4 @@ typedef union { U16 u16; struct { U8 u8[2]; }; } UU16;
 } // extern "C"
 #endif
 
-#endif // MBD_UTIL_H
+#endif // MBD_DEF_H

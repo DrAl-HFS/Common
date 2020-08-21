@@ -4,7 +4,7 @@
 // (c) Project Contributors Aug 2020
 
 #include "ads1xUtil.h"
-
+#include <stdio.h> // -> report !
 /*
 typedef struct
 {
@@ -61,18 +61,18 @@ F32 ads1xGainToFSV (const enum ADS1xGain g)
    if (g < ADS1X_GFS_0V256) return(gfsv[g]); else return(0.256);
 } // ads1xGainToFSV
 
-U16 adsx1RateToU (const U8 r, const U8 x)
+U16 ads1xRateToU (const U8 r, const U8 x)
 {
 static const U16 rate[2][8]=
    {  {128,250,490,920,1600,2400,3300,3300},
       {8,16,32,64,128,250,475,860} };
    return( rate[ x & 1 ][ r & 0x7 ] );
-} // adsx1RateToI
+} // ads1xRateToU
 
 void ads1xUnpackCfg (ADS1xUnpack *pU, const U8 cfg[2], const U8 x)
 {
    pU->gainFSV= ads1xGainToFSV( (cfg[0] >> ADS1X_SH0_PGA) & ADS1X_GFS_M );
-   pU->rate= adsx1RateToU( (cfg[1] >> ADS1X_SH1_DR) & ADS10_R_M, x);
+   pU->rate= ads1xRateToU( (cfg[1] >> ADS1X_SH1_DR) & ADS10_R_M, x);
    pU->m4x4= ads1xMuxToM4X4(ads1xGetMux(cfg));
    pU->cmp= (((cfg[1] >> ADS1X_SH1_CQ) & ADS1X_CMP_M) + 1 ) & ADS1X_CMP_M;
 } // adsExtCfg
@@ -104,6 +104,9 @@ void ads10GenCfg (U8 cfg[2], enum ADS1xMux mux, enum ADS1xGain gain, enum ADS10R
    cfg[1]= (rate << ADS1X_SH1_DR) | (cmp << ADS1X_SH1_CQ);
 } // ads10SetCfg
 
+//#ifdef ADS1X_TEST
+
+//#include "lxI2C.h"
 
 #define MODE_VERIFY  (1<<7)
 #define MODE_SLEEP   (1<<6)
@@ -203,3 +206,5 @@ int testADS1015 (const LXI2CBusCtx *pC, const MemBuff *pWS, const U8 dev, const 
    }
    return(r);
 } // testADS1015
+
+//#endif // ADS1X_TEST

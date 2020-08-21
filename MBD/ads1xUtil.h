@@ -8,12 +8,13 @@
 
 #include "ads1x.h"
 #include "mbdUtil.h"
+#include "lxI2C.h" // temp ? for debug / flexibility
 
 typedef struct
 {
    F32 gainFSV;   // Volts
    U16 rate;   // samples/sec (Hz)
-   U8 m4x4; // two 4bit digits 
+   U8 m4x4; // two 4bit digits
    U8 cmp;
 } ADS1xUnpack;
 

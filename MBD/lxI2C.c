@@ -503,16 +503,21 @@ int main (int argc, char *argv[])
 {
    if (lxi2cOpen(&gBusCtx, "/dev/i2c-1", 400))
    {
-      #if 0
+      #if 1
+
       MemBuff ws={0,};
       //lxi2cDumpDevAddr(&gBusCtx, 0x00, 0xFF,0x00);
       allocMemBuff(&ws, 4<<10);
       testADS1015(&gBusCtx, NULL, 0x48, MODE_VERIFY|MODE_SLEEP|MODE_POLL|MODE_ROTMUX);
       releaseMemBuff(&ws);
+
       #else
+
       const U8 ag_m[]={0x6b,0x1e};
       testIMU(&gBusCtx, ag_m);
+
       #endif
+
       lxi2cClose(&gBusCtx);
    }
 
