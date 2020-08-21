@@ -66,7 +66,7 @@ extern "C" {
 #define LOG2I(x)     ((int)log2(x))
 
 #define BIT_MASK(n)        ((1<<(n))-1)
-#define BITS_TO_BYTES(b)   (((b)+7)>>3)
+#define BITS_TO_BYTES(b)   (((b)+7)>>3)   // Consider renaming to NBITS_...() for clarity
 #define BITS_TO_WRDSH(b,s) (((b)+BIT_MASK(s))>>s)
 
 // a/b round up with denominator check
@@ -88,16 +88,8 @@ typedef uint16_t U16;
 typedef uint32_t U32;
 typedef uint64_t U64;
 #else // _STDINT_H broken
-typedef signed char       I8;
-typedef signed short      I16;
-typedef signed int        I32;
-// Beware! sizeof(long)==8 under PGI!
-typedef signed long long I64;
-
-typedef unsigned char      U8;
-typedef unsigned short     U16;
-typedef unsigned int       U32;
-typedef unsigned long long U64;
+// Use old style homebrew (may need tweaking per platform)
+#include "mbdDef.h"
 #endif // _STDINT_H broken
 
 //typedef __fp16 F16; // gcc on ARM: -mfpu=neon-fp16 -mfp16-format=ieee (or -mfp16-format=alternative for no Inf/NaN)
