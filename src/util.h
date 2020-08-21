@@ -59,9 +59,11 @@ extern size_t fileSize (const char * const path);
 extern size_t loadBuff (void * const pB, const char * const path, const size_t bytes);
 extern size_t saveBuff (const void * const pB, const char * const path, const size_t bytes);
 
-// Read/write multi-byte quantities in little-endian order
-extern MBVal readBytesLE (const U8 * const pB, const size_t idx, const U8 nB);
-extern MBVal writeBytesLE (U8 * const pB, const size_t idx, const U8 nB, const MBVal v);
+// Read/write multi-byte quantities explicitly in little or big endian order
+extern MBVal readBytesLE (const U8 * const pB, const size_t idx, const int nB);
+extern MBVal writeBytesLE (U8 * const pB, const size_t idx, const int nB, const MBVal v);
+extern MBVal readBytesBE (const U8 * const pB, const size_t idx, const int nB);
+extern MBVal writeBytesBE (U8 * const pB, const size_t idx, const int nB, const MBVal v);
 
 // Timing
 extern SMVal deltaT (void);

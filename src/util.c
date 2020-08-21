@@ -109,20 +109,38 @@ size_t saveBuff (const void * const pB, const char * const path, const size_t by
    return(r);
 } // saveBuff
 
-MBVal readBytesLE (const U8 * const pB, const size_t idx, const U8 nB)
+MBVal readBytesLE (const U8 * const pB, const size_t idx, const int nB)
 {
-   MBVal v=0;
-   U8 s= 0;
-   for (int i=0; i<nB; i++) { v|= pB[idx+i] << s; s+= 8; }
-   return(v);
+   if (nB > 0)
+   {
+      MBVal v= pB[idx];
+      U8 s= 8;
+      for (int i=1; i<nB; i++) { v|= pB[idx+i] << s; s+= 8; }
+      return(v);
+   }
+   return(0);
 } // readBytesLE
 
-MBVal writeBytesLE (U8 * const pB, const size_t idx, const U8 nB, const MBVal v)
+MBVal writeBytesLE (U8 * const pB, const size_t idx, const int nB, const MBVal v)
 {
    U8 s= 0;
    for (int i=0; i<nB; i++) { pB[idx+i]= v >> s; s+= 8; }
    return(v);
 } // writeBytesLE
+
+MBVal readBytesBE (const U8 * const pB, const size_t idx, const int nB)
+{
+   MBVal v=0;
+   for (int i=0; i<nB; i++) { v|= pB[idx+i]; v<<= 8; }
+   return(v);
+} // readBytesBE
+
+MBVal writeBytesBE (U8 * const pB, const size_t idx, const int nB, const MBVal v)
+{
+   U8 s= 0;
+   for (int i=nB-1; i>=0; i--) { pB[idx+i]= v >> s; s+= 8; }
+   return(v);
+} // writeBytesBE
 
 SMVal deltaT (void)
 {
