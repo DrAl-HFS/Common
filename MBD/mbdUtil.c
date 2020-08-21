@@ -5,15 +5,14 @@
 
 #include "mbdUtil.h"
 
-/* Endian handling - displace to where ?
-typedef union { U64 u64; struct { U8 u8[8]; }; } UU64;
-typedef union { U32 u32; struct { U8 u8[4]; }; } UU32;
-typedef union { U16 u16; struct { U8 u8[2]; }; } UU16;
-*/
+#ifndef INLINE
+
 I16 rdI16BE (const U8 b[2]) { return((b[0] << 8) | b[1]); }
 I16 rdI16LE (const U8 b[2]) { return((b[1] << 8) | b[0]); }
 
-// Read n bytes big-endian
+#endif // INLINE
+
+/* DEPRECATED Read n bytes big-endian
 int rdnbe (const U8 b[], const int n)
 {
    int r= b[0];
@@ -25,4 +24,4 @@ void wrnbe (U8 b[], int x, const int n)
 {
    for (int i= n-1; i>0; i--) { b[i]= x & 0xFF; x>>= 8; }
 } // rdnbe
-
+*/

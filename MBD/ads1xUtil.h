@@ -28,30 +28,41 @@ typedef struct
 
 extern int ads1xInitRB (ADS1xRB *pRB, const MemBuff *pWS, const LXI2CBusCtx *pC, const U8 dev);
 
-extern U8 ads1xGetMux (const U8 cfg[2]);
+extern enum ADS1xMux ads1xGetMux (const U8 cfg[2]);
+extern enum ADS1xGain ads1xGetGain(const U8 cfg[2]);
+extern U8 ads1xGetRate (const U8 cfg[2]);
+
 extern void ads1xSetMux (U8 cfg[2], const enum ADS1xMux mux);
+//void ads1xSetGain
+//void ads1xSetRate
+
+extern void ads10GenCfg (U8 cfg[2], enum ADS1xMux mux, enum ADS1xGain gain, enum ADS10Rate rate, enum ADS1xCompare cmp);
+
 extern U8 ads1xMuxToM4X4 (const enum ADS1xMux mux);
 extern char muxCh (const U8 c);
 extern void printMux4x4 (const U8 m4x4);
 
-F32 ads1xGainToFSV (const enum ADS1xGain g);
+extern F32 ads1xGainToFSV (const enum ADS1xGain g);
 
-U16 adsx1RateToU (const U8 r, const U8 x);
+extern U16 adsx1RateToU (const U8 r, const U8 x);
 
-void ads1xUnpackCfg (ADS1xUnpack *pU, const U8 cfg[2], const U8 x);
-int convInterval (ADS1xUnpack *pU, const U8 cfg[2], const U8 x);
+extern void ads1xUnpackCfg (ADS1xUnpack *pU, const U8 cfg[2], const U8 x);
+
+extern int ads1xConvIvl (const U8 cfg[2], const U8 x);
+extern F32 ads1xGainScaleV (const U8 cfg[2], const U8 x);
 
 extern void ads1xDumpCfg (const U8 cfg[2], const U8 x);
 
-extern void ads10GenCfg (U8 cfg[2], enum ADS1xMux mux, enum ADS1xGain gain, enum ADS10Rate rate, enum ADS1xCompare cmp);
+//#ifdef ADS1X_TEST
+#define ADS1X_TEST_MODE_VERIFY  (1<<7)
+#define ADS1X_TEST_MODE_SLEEP   (1<<6)
+#define ADS1X_TEST_MODE_POLL    (1<<5)
+#define ADS1X_TEST_MODE_ROTMUX  (1<<4)
+#define ADS1X_TEST_MODE_TUNE    (1<<3)
+#define ADS1X_TEST_MODE_VERBOSE (1<<0)
 
-//#ifdef TEST
-#define MODE_VERIFY  (1<<7)
-#define MODE_SLEEP   (1<<6)
-#define MODE_POLL    (1<<5)
-#define MODE_ROTMUX  (1<<4)
-#define MODE_VERBOSE (1<<0)
+extern int testADS1015 (const LXI2CBusCtx *pC, const MemBuff *pWS, const U8 dev, const U8 mode, const U8 maxIter);
 
-extern int testADS1015 (const LXI2CBusCtx *pC, const MemBuff *pWS, const U8 dev, const U8 mode);
+//#endif // ADS1X_TEST
 
 #endif // ADS1X_UTIL_H

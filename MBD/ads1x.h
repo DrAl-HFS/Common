@@ -134,11 +134,6 @@ enum ADS11Rate
    ADS11_R_M= 0x7   // mask
 }; // ADS11Rate
 
-// Map (endian converted) ADC reading to Volts
-//extern float ads1xRVF (int r, enum ADS1xGain g, float fsrs); // fsrs= 1.0/ADS10_FSR or 1.0/ADS11_FSR
-//static const float gainV[]={6.144, 4.096, 2.048, 1.024, 0.512, 0.256};
-//return(r * gainV[g] * fsrs);
-
 #ifdef __cplusplus
 } // extern "C"
 #endif

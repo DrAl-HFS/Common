@@ -12,6 +12,8 @@
 extern "C" {
 #endif
 
+#ifndef UTIL_H
+
 // Cannot rely on <sys/types.h> etc. being available so just homebrew the necessities.
 typedef signed char       I8;
 typedef signed short      I16;
@@ -23,6 +25,8 @@ typedef unsigned char      U8;
 typedef unsigned short     U16;
 typedef unsigned int       U32;
 typedef unsigned long long U64;
+
+#endif // UTIL_H
 
 // Types to support endian twiddling/debug
 typedef union { U64 u64; struct { U8 u8[8]; }; } UU64;

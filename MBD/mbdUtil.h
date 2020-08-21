@@ -27,10 +27,10 @@ extern I16 rdI16LE (const U8 b[2]);
 
 #endif
 
-// DEPRECATE: implemet as <util.h> versions
+// DEPRECATED: use <util.h> versions
 // Read/write n bytes big-endian
-extern int rdnbe (const U8 b[], const int n);
-extern void wrnbe (U8 b[], int x, const int n);
+//extern int rdnbe (const U8 b[], const int n);
+//extern void wrnbe (U8 b[], int x, const int n);
 
 #ifdef __cplusplus
 } // extern "C"

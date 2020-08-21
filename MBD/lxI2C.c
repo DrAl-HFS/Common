@@ -16,6 +16,8 @@
 
 /***/
 
+#define I2C_BYTES_NCLK(b) ((1+(b)) * 9 + 1)
+
 #define LX_I2C_TRANS_NM (2) // number of i2c_msg blocks per transaction
 #define LX_I2C_FLAG_TRACE (1<<4)
 
@@ -503,20 +505,27 @@ int main (int argc, char *argv[])
 {
    if (lxi2cOpen(&gBusCtx, "/dev/i2c-1", 400))
    {
-      #if 1
+#if 0
+      {
+         LSMAccM16RegFrames frm;
+         int n= I2C_BYTES_NCLK(sizeof(frm.ang)) * 3;
+         printf("testIMU() - peak rate= %G full data frames per sec\n", gBusCtx.clk * 1.0 / n);
+      }
+#endif
+#if 1
 
       MemBuff ws={0,};
       //lxi2cDumpDevAddr(&gBusCtx, 0x00, 0xFF,0x00);
-      allocMemBuff(&ws, 4<<10);
-      testADS1015(&gBusCtx, NULL, 0x48, MODE_VERIFY|MODE_SLEEP|MODE_POLL|MODE_ROTMUX);
+      allocMemBuff(&ws, 4<<10);//
+      testADS1015(&gBusCtx, NULL, 0x48, ADS1X_TEST_MODE_VERIFY|ADS1X_TEST_MODE_SLEEP|ADS1X_TEST_MODE_POLL|ADS1X_TEST_MODE_ROTMUX, 100);
       releaseMemBuff(&ws);
 
-      #else
+#else
 
       const U8 ag_m[]={0x6b,0x1e};
       testIMU(&gBusCtx, ag_m);
 
-      #endif
+#endif
 
       lxi2cClose(&gBusCtx);
    }
