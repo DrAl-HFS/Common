@@ -57,10 +57,10 @@ enum LSMMagV16RegID
 // Displace structures up to next level of abstraction ?
 typedef struct // I2C packet/frames for 16b measures
 {                // X,Y,Z register tuple can be read as single block
-   U8 temp[3]; // 0x15:16
+   U8 temp[3]; // 0x15:16 - temperature in +-1/16ths Celcius offset from 25C
    U8 ang[7]; // X,Y,Z -> 0x18:19, 1A:1B, 1C:1D
    U8 lin[7]; // X,Y,Z -> 0x28:29, 2A:2B, 2C:2D
-} LSMAccM16RegFrames;
+} LSMAccValI16RegFrames;
 
 typedef struct
 {
@@ -74,7 +74,7 @@ typedef struct
 {
    U8 offs[7];
    U8 mag[7];
-} LSMMagV16RegFrames;
+} LSMMagValI16RegFrames;
 
 typedef struct
 {

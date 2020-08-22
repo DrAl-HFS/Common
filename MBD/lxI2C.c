@@ -442,59 +442,76 @@ LXI2CBusCtx gBusCtx={0,-1};
 
 typedef struct
 {
-   LSMAccM16RegFrames   a16;
-   LSMAccCtrlRegFrames  actrl;
-   LSMMagV16RegFrames   m16;
+   LSMAccValI16RegFrames   avI16;
+   LSMAccCtrlRegFrames     actrl;
+   LSMMagValI16RegFrames   mvI16;
+   LSMMagCtrlRegFrames     mctrl;
 } IMUFrames;
 
 void initFrames (IMUFrames *pR)
 {
    memset(pR, 0, sizeof(*pR));
 
-   pR->a16.temp[0]= LSM_REG_TEMP;
-   pR->a16.ang[0]= LSM_REG_ANG_X;
-   pR->a16.lin[0]= LSM_REG_LIN_X;
+   pR->avI16.temp[0]= LSM_REG_TEMP;
+   pR->avI16.ang[0]= LSM_REG_ANG_X;
+   pR->avI16.lin[0]= LSM_REG_LIN_X;
 
    pR->actrl.ang[0]= LSM_REG_CTRL_ANG1;
    pR->actrl.lin[0]= LSM_REG_CTRL_LIN5;
 
    pR->actrl.r8_10[0]= LSM_REG_CTRL08;
 
-   pR->actrl.r4[0]= LSM_REG_CTRL08;
+   pR->actrl.r4[0]= LSM_REG_CTRL04;
 
-   pR->m16.offs[0]= LSM_REG_MAG_OFFSX;
-   pR->m16.mag[0]= LSM_REG_MAG_X;
+   pR->mvI16.offs[0]= LSM_REG_MAG_OFFSX;
+   pR->mvI16.mag[0]= LSM_REG_MAG_X;
 } // initFrames
+
+int lsmIdentify (const LXI2CBusCtx *pC, const U8 dev[2])
+{
+   int r;
+   U8 regID[2][2]={{0x0F,0},{0x0F,0}};
+   r= lxi2cReadRB(pC, dev[0], regID[0], 2); if (r < 0) { regID[0][0]= 0; }
+   r= lxi2cReadRB(pC, dev[1], regID[1], 2); if (r < 0) { regID[1][0]= 0; }
+   printf("ID:%02X%02X,%02X%02X\n", regID[0][0],regID[0][1], regID[1][0],regID[1][1]);
+   return((regID[0][1] == 0x68) + (regID[1][1] == 0x3D));
+} // lsmIdentify
 
 int testIMU (const LXI2CBusCtx *pC, const U8 dev[2])
 {
    IMUFrames frm;
-   int r;
+   int r=-1;
 
-   initFrames(&frm);
-   // Accelerometer
-   r= lxi2cReadRB(pC, dev[0], frm.a16.temp, sizeof(frm.a16.temp));
-   r= lxi2cReadMultiRB(pC, NULL, dev[0], frm.a16.ang, sizeof(frm.a16.ang), 2);
-   if (r >= 0)
+   //r= I2C_BYTES_NCLK(sizeof(frm.a16.ang)) * 3;
+   //printf("testIMU() - peak rate= %G full data frames per sec\n", gBusCtx.clk * 1.0 / n);
+   if (lsmIdentify(pC,dev) > 0)
    {
-      I16 rawT= rdI16LE(frm.a16.temp+1);
-      printf("T= %d -> %GC\n", rawT, 25.0 + rawT * 1.0 / 16);
-      printf("ang= (%d, %d, %d)\n", rdI16LE(frm.a16.ang+1), rdI16LE(frm.a16.ang+3), rdI16LE(frm.a16.ang+5));
-      printf("lin= (%d, %d, %d)\n", rdI16LE(frm.a16.lin+1), rdI16LE(frm.a16.lin+3), rdI16LE(frm.a16.lin+5));
-   }
-   r= lxi2cReadMultiRB(pC, NULL, dev[0], frm.actrl.ang, sizeof(frm.actrl.ang), 3);
-   if (r >= 0)
-   {
-      printf("ang ctrl= 0x%X\n", readBytesLE(frm.actrl.ang, 1, sizeof(frm.actrl.ang)-1));
-      printf("lin ctrl= 0x%X\n", readBytesLE(frm.actrl.lin, 1, sizeof(frm.actrl.lin)-1));
-      printf("lin r8_10= 0x%X\n", readBytesLE(frm.actrl.r8_10, 1, sizeof(frm.actrl.r8_10)-1));
-   }
-   // Magnetometer
-   r= lxi2cReadMultiRB(pC, NULL, dev[1], frm.m16.offs, sizeof(frm.m16.offs), 2);
-   if (r >= 0)
-   {
-      printf("mag.offs= (%d, %d, %d)\n", rdI16LE(frm.m16.offs+1), rdI16LE(frm.m16.offs+3), rdI16LE(frm.m16.offs+5));
-      printf("mag= (%d, %d, %d)\n", rdI16LE(frm.m16.mag+1), rdI16LE(frm.m16.mag+3), rdI16LE(frm.m16.mag+5));
+      initFrames(&frm);
+
+      // Accelerometer
+      r= lxi2cReadRB(pC, dev[0], frm.avI16.temp, sizeof(frm.avI16.temp));
+      r= lxi2cReadMultiRB(pC, NULL, dev[0], frm.avI16.ang, sizeof(frm.avI16.ang), 2);
+      if (r >= 0)
+      {
+         I16 rawT= rdI16LE(frm.avI16.temp+1);
+         printf("T= %d -> %GC\n", rawT, 25.0 + rawT * 1.0 / 16);
+         printf("ang= (%d, %d, %d)\n", rdI16LE(frm.avI16.ang+1), rdI16LE(frm.avI16.ang+3), rdI16LE(frm.avI16.ang+5));
+         printf("lin= (%d, %d, %d)\n", rdI16LE(frm.avI16.lin+1), rdI16LE(frm.avI16.lin+3), rdI16LE(frm.avI16.lin+5));
+      }
+      r= lxi2cReadMultiRB(pC, NULL, dev[0], frm.actrl.ang, sizeof(frm.actrl.ang), 3);
+      if (r >= 0)
+      {
+         printf("ang ctrl= 0x%X\n", readBytesLE(frm.actrl.ang, 1, sizeof(frm.actrl.ang)-1));
+         printf("lin ctrl= 0x%X\n", readBytesLE(frm.actrl.lin, 1, sizeof(frm.actrl.lin)-1));
+         printf("lin r8_10= 0x%X\n", readBytesLE(frm.actrl.r8_10, 1, sizeof(frm.actrl.r8_10)-1));
+      }
+      // Magnetometer
+      r= lxi2cReadMultiRB(pC, NULL, dev[1], frm.mvI16.offs, sizeof(frm.mvI16.offs), 2);
+      if (r >= 0)
+      {
+         printf("mag.offs= (%d, %d, %d)\n", rdI16LE(frm.mvI16.offs+1), rdI16LE(frm.mvI16.offs+3), rdI16LE(frm.mvI16.offs+5));
+         printf("mag= (%d, %d, %d)\n", rdI16LE(frm.mvI16.mag+1), rdI16LE(frm.mvI16.mag+3), rdI16LE(frm.mvI16.mag+5));
+      }
    }
    return(r);
 } // testIMU
@@ -505,27 +522,14 @@ int main (int argc, char *argv[])
 {
    if (lxi2cOpen(&gBusCtx, "/dev/i2c-1", 400))
    {
-#if 0
-      {
-         LSMAccM16RegFrames frm;
-         int n= I2C_BYTES_NCLK(sizeof(frm.ang)) * 3;
-         printf("testIMU() - peak rate= %G full data frames per sec\n", gBusCtx.clk * 1.0 / n);
-      }
-#endif
-#if 1
+      const U8 ag_m[]={0x6b,0x1e};
+      testIMU(&gBusCtx, ag_m);
 
       MemBuff ws={0,};
       //lxi2cDumpDevAddr(&gBusCtx, 0x00, 0xFF,0x00);
       allocMemBuff(&ws, 4<<10);//
       testADS1015(&gBusCtx, NULL, 0x48, ADS1X_TEST_MODE_VERIFY|ADS1X_TEST_MODE_SLEEP|ADS1X_TEST_MODE_POLL|ADS1X_TEST_MODE_ROTMUX, 100);
       releaseMemBuff(&ws);
-
-#else
-
-      const U8 ag_m[]={0x6b,0x1e};
-      testIMU(&gBusCtx, ag_m);
-
-#endif
 
       lxi2cClose(&gBusCtx);
    }
