@@ -16,7 +16,7 @@ typedef struct
    U16 rate;   // samples/sec (Hz)
    U8 m4x4; // two 4bit digits
    U8 cmp;
-} ADS1xUnpack;
+} ADS1xUnpack; // Translation (rename needed)
 
 #define ADS1X_NRB (3)
 typedef struct
@@ -46,7 +46,7 @@ extern F32 ads1xGainToFSV (const enum ADS1xGain g);
 
 extern U16 adsx1RateToU (const U8 r, const U8 x);
 
-extern void ads1xUnpackCfg (ADS1xUnpack *pU, const U8 cfg[2], const U8 x);
+extern void ads1xTranslateCfg (ADS1xUnpack *pU, const U8 cfg[2], const U8 x);
 
 extern int ads1xConvIvl (const U8 cfg[2], const U8 x);
 extern F32 ads1xGainScaleV (const U8 cfg[2], const U8 x);

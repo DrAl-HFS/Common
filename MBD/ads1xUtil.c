@@ -5,21 +5,7 @@
 
 #include "ads1xUtil.h"
 #include <stdio.h> // -> report !
-/*
-typedef struct
-{
-   F32 gainFSV;
-   U16 rate;
-   U8 m4x4;
-   U8 cmp;
-} ADS1xUnpack;
 
-#define ADS1X_NRB (3)
-typedef struct
-{
-   U8 res[ADS1X_NRB], cfg[ADS1X_NRB], cLo[ADS1X_NRB], cHi[ADS1X_NRB];
-} ADS1xRB;
-*/
 
 /***/
 
@@ -72,16 +58,17 @@ U16 ads1xRateToU (const U8 r, const U8 x)
 static const U16 rate[2][8]=
    {  {128,250,490,920,1600,2400,3300,3300},
       {8,16,32,64,128,250,475,860} };
-   return( rate[ x & 1 ][ r & 0x7 ] );
+   if (((x & 1) != x) || ((r & 0x7) != r)) { return(0); } //else
+   return( rate[ x ][ r ] );
 } // ads1xRateToU
 
-void ads1xUnpackCfg (ADS1xUnpack *pU, const U8 cfg[2], const U8 x)
+void ads1xTranslateCfg (ADS1xUnpack *pU, const U8 cfg[2], const U8 x)
 {
    pU->gainFSV= ads1xGainToFSV( ads1xGetGain(cfg) );
    pU->rate= ads1xRateToU( ads1xGetRate(cfg), x);
    pU->m4x4= ads1xMuxToM4X4( ads1xGetMux(cfg) );
    pU->cmp= (((cfg[1] >> ADS1X_SH1_CQ) & ADS1X_CMP_M) + 1 ) & ADS1X_CMP_M; // rotate by +1 so 0->off
-} // adsExtCfg
+} // ads1xTranslateCfg
 
 // Conversion interval (us)
 int ads1xConvIvl (const U8 cfg[2], const U8 x)
@@ -101,7 +88,7 @@ void ads1xDumpCfg (const U8 cfg[2], const U8 x)
    printf("[%02x, %02x] = ", cfg[0], cfg[1]); // NB: Big Endian on-the-wire
    printf(" OS%d MUX%d PGA%d M%d, ", (cfg[0]>>7) & 0x1, (cfg[0]>>4) & 0x7, (cfg[0]>>1) & 0x7, cfg[0] & 0x1);
    printf(" DR%d CM%d CP%d CL%d CQ%d : ", (cfg[1]>>5) & 0x7, (cfg[1]>>4) & 0x1, (cfg[1]>>3) & 0x1, (cfg[1]>>2) & 0x1, cfg[1] & 0x3);
-   ads1xUnpackCfg(&u, cfg, x);
+   ads1xTranslateCfg(&u, cfg, x);
    printMux4x4(u.m4x4);
    printf(" %GV, %d/s C:%d\n",u.gainFSV, u.rate, u.cmp);
 } // ads1xDumpCfg
