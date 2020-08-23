@@ -118,9 +118,9 @@ int testADS1015 (const LXI2CBusCtx *pC, const MemBuff *pWS, const U8 dev, const 
    U8 cfgStatus[ADS1X_NRB];
 
    r= ads1xInitRB(&rb, pWS, pC, dev);
-   ads1xDumpCfg(rb.cfg+1, 0);
    if (r >= 0)
    {
+      ads1xDumpCfg(rb.cfg+1, 0);
       memcpy(cfgStatus, rb.cfg, ADS1X_NRB);
       ads10GenCfg(rb.cfg+1, ADS1X_M0G, ADS1X_GFS_6V144, ADS10_R2400, ADS1X_CMP_DISABLE);
       rb.cfg[1]|= ADS1X_FL0_OS|ADS1X_FL0_MODE; // Now enable single-shot conversion
