@@ -494,15 +494,48 @@ int scaleNI16LEtoF32 (F32 r[], U8 b[], const int nb, const F32 s)
    return(i>>1);
 } // scaleNI16LEtoF32
 
+/*typedef struct
+{
+} LSMAccUnpack;*/
+
+typedef struct
+{
+   F32 rate, scale;
+} LSMMagCfgTrans;
+
+void lsmTranslateMagCfg (LSMMagCfgTrans *pU, const U8 cfg[5])
+{
+   static const float ratef[]={0.625, 1.25, 2.5, 5, 10, 20, 40, 80};
+   static const U8 scale[]={4, 8, 12, 16};
+   U8 rid= (cfg[0] >> 2) & 0x7;
+   U8 sid= (cfg[1] >> 5) & 0x3;
+   pU->rate=   ratef[rid];
+   pU->scale=  scale[sid];
+} // lsmTranslateMagCfg
+
+enum MagMode
+{
+   CONTINUOUS=0,
+   SINGLE=1,
+   //OFF=2,
+   OFF=3
+};
+
+void lsmMagSetMode (U8 cfg[5], enum MagMode m)
+{
+   cfg[2]= (cfg[2] & ~0x3) | m;
+} // lsmMagSetMode
+
 int testIMU (const LXI2CBusCtx *pC, const U8 dev[2])
 {
-   IMUFrames frm;
    int r=-1;
 
    //r= I2C_BYTES_NCLK(sizeof(frm.a16.ang)) * 3;
    //printf("testIMU() - peak rate= %G full data frames per sec\n", gBusCtx.clk * 1.0 / n);
    if (lsmIdentify(pC,dev) > 0)
    {
+      IMUFrames frm;
+      LSMMagCfgTrans mt={0,};
       F32 v3f[3];
 
       initFrames(&frm);
@@ -538,6 +571,15 @@ int testIMU (const LXI2CBusCtx *pC, const U8 dev[2])
       {
          report(LOG0,"mctrl.r1_5= ");
          reportBytes(LOG0,frm.mctrl.r1_5+1, sizeof(frm.mctrl.r1_5)-1);
+
+         lsmTranslateMagCfg(&mt, frm.mctrl.r1_5+1);
+         LOG("rate=%G, scale=%G\n", mt.rate, mt.scale);
+
+         lsmMagSetMode(frm.mctrl.r1_5+1, SINGLE);
+         r= lxi2cWriteRB(pC, dev[1], frm.mctrl.r1_5, sizeof(frm.mctrl.r1_5));
+         int ivl= 1000000 / mt.rate;
+         LOG("Mag ON, sleeping %dus\n", 2 * ivl);
+         usleep(2 * ivl);
       }
 
       r= lxi2cReadMultiRB(pC, NULL, dev[1], frm.mvI16.offs, sizeof(frm.mvI16.offs), 2);
@@ -545,9 +587,11 @@ int testIMU (const LXI2CBusCtx *pC, const U8 dev[2])
       {
          scaleNI16LEtoF32(v3f, frm.mvI16.offs+1, 6, 1.0);
          LOG("mag.offs= (%G, %G, %G)\n", v3f[0], v3f[1], v3f[2]);
-         scaleNI16LEtoF32(v3f, frm.mvI16.mag+1, 6, 1.0);
+         scaleNI16LEtoF32(v3f, frm.mvI16.mag+1, 6, mt.scale / 0x7FFF);
          LOG("mag= (%G, %G, %G)\n", v3f[0], v3f[1], v3f[2]);
       }
+      lsmMagSetMode(frm.mctrl.r1_5+1, OFF);
+      r= lxi2cWriteRB(pC, dev[1], frm.mctrl.r1_5, sizeof(frm.mctrl.r1_5));
 
       report(LOG0,"\n---\n");
    }
