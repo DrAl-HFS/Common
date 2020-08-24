@@ -28,6 +28,9 @@ enum LSMAccM16RegID
 
 enum LSMAccCtrlRegID // Control registers (8b)
 {
+   LSM_REG_ACTRL_ACT1=0x04,
+   LSM_REG_ACTRL_ACT9=0x0D,
+
    LSM_REG_ACTRL_ANG1=0x10,
    LSM_REG_ACTRL_ANG2=0x11,
    LSM_REG_ACTRL_ANG3=0x12,
@@ -85,6 +88,7 @@ typedef struct // I2C packet/frames for 16b acc. & temperature measurement
 
 typedef struct // I2C packet/frames for acc. control registers
 {
+   U8 actInt[10]; // 0x04..0D activity/interrupt control
    U8 ang[4]; // 0x10..12
    U8 lin[4];  // 0x1F..21
    U8 r8_10[4]; // 0x22..24

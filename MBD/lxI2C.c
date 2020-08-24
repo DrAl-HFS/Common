@@ -456,6 +456,8 @@ void initFrames (IMUFrames *pR)
    pR->avI16.ang[0]= LSM_REG_ANG_X;
    pR->avI16.lin[0]= LSM_REG_LIN_X;
 
+   pR->actrl.actInt[0]= LSM_REG_ACTRL_ACT1;
+
    pR->actrl.ang[0]= LSM_REG_ACTRL_ANG1;
    pR->actrl.lin[0]= LSM_REG_ACTRL_LIN5;
 
@@ -503,14 +505,14 @@ typedef struct
    F32 rate, scale;
 } LSMMagCfgTrans;
 
-void lsmTranslateMagCfg (LSMMagCfgTrans *pU, const U8 cfg[5])
+void lsmTranslateMagCfg (LSMMagCfgTrans *pMCT, const U8 cfg[5])
 {
-   static const float ratef[]={0.625, 1.25, 2.5, 5, 10, 20, 40, 80};
-   static const U8 scale[]={4, 8, 12, 16};
-   U8 rid= (cfg[0] >> 2) & 0x7;
-   U8 sid= (cfg[1] >> 5) & 0x3;
-   pU->rate=   ratef[rid];
-   pU->scale=  scale[sid];
+   //static const F32 rate[]={ 0.625, 1.25, 2.5, 5, 10, 20, 40, 80 }; // 5 * 2^(n-3)
+   //static const U8 scale[]={ 4, 8, 12, 16 }; // 4 * (n+1)
+   const U8 rn= (cfg[0] >> 2) & 0x7;
+   const U8 sn= (cfg[1] >> 5) & 0x3;
+   pMCT->rate=   5 * pow(2,rn-3);  // rate[rn];
+   pMCT->scale=  4 * (sn+1);        // scale[sn];
 } // lsmTranslateMagCfg
 
 enum MagMode
@@ -536,17 +538,17 @@ F32 mag2NF32 (const F32 v[], const int n)
 F32 magV3F32 (const F32 v[3]) { return sqrtf( mag2NF32(v,3) ); }
 
 F32 bearingV2F32 (const F32 v[2])
-{
-   F32 degYX= atan2(v[1], v[0]) * 180.0/M_PI; // NB: transpose x,y
+{  // NB: transpose x,y to move reference from East (+X) to North (+Y)
+   F32 degYX= atan2(v[1], v[0]) * 180.0/M_PI;
    if (degYX<0) degYX+= 360.0;
    return(degYX);
 } // bearingV2F32
 
-void dumpV (const char hdr[], const U8 raw[6], const F32 s)
+void dumpV (const char hdr[], const U8 raw[6], const F32 s, const char ftr[])
 {
    F32 v3f[3];
    scaleNI16LEtoF32(v3f, raw, 6, s);
-   LOG("%s= (%G, %G, %G)\n", hdr, v3f[0], v3f[1], v3f[2]);
+   LOG("%s= (%G, %G, %G)%s", hdr, v3f[0], v3f[1], v3f[2], ftr);
 } // dumpMagV
 
 void dumpMagV (const U8 raw[6], const LSMMagCfgTrans *pMCT)
@@ -560,12 +562,12 @@ void dumpMagV (const U8 raw[6], const LSMMagCfgTrans *pMCT)
 void magTest (const LXI2CBusCtx *pC, const U8 dev, IMUFrames *pF, const U8 maxIter)
 {
    LSMMagCfgTrans mct={0,};
-   int r; // read interval
+   int r;
 
    r= lxi2cReadMultiRB(pC, NULL, dev, pF->mvI16.offs, sizeof(pF->mvI16.offs), 2);
    if (r >= 0)
    {
-      dumpV("offset", pF->mvI16.offs+1, 1);
+      dumpV("offset", pF->mvI16.offs+1, 1, "\n");
       dumpMagV(pF->mvI16.mag+1, &mct);
    }
 
@@ -582,8 +584,7 @@ void magTest (const LXI2CBusCtx *pC, const U8 dev, IMUFrames *pF, const U8 maxIt
 
       for (U8 i=0; i<maxIter; i++)
       {
-         //usleep(ivl);
-         sleep(1);
+         usleep(250000); //ivl);
          r= lxi2cReadRB(pC, dev, pF->mvI16.mag, sizeof(pF->mvI16.mag));
          if (r >= 0) { dumpMagV(pF->mvI16.mag+1, &mct); }
       }
@@ -591,6 +592,77 @@ void magTest (const LXI2CBusCtx *pC, const U8 dev, IMUFrames *pF, const U8 maxIt
       r= lxi2cWriteRB(pC, dev, pF->mctrl.r1_5, sizeof(pF->mctrl.r1_5));
    }
 } // magTest
+
+typedef struct
+{
+   F32 angRate, angFSD;
+   F32 linRate, linFSG;
+} LSMAccCfgTrans;
+
+void lsmAccSetMode (U8 ang[4], U8 lin[4], const U8 m)
+{
+   ang[0]= (ang[0] & 0x1F) | (m<<5); // ODR: 0, 14.9, 59.5...
+   lin[1]= (lin[1] & 0x1F) | (m<<5); // ODR: 0, 10, 50..
+} // lsmMagSetMode
+
+void lsmTranslateAccCfg (LSMAccCfgTrans *pACT, const U8 ang[4], const U8 lin[4])
+{
+   static const F32 angr[]={ 0, 14.9, 59.5, 119, 238, 476, 952, 0 };
+   static const U16 linr[]={ 0, 10, 50, 119, 238, 476, 952, 0 };
+   static const U16 afsd[]={ 245, 500, 0, 2000 }; // degrees-per-second
+   static const U8 lfsg[]={ 2, 16, 4, 8 }; // g=9.81 bizarre order
+   const U8 nag= (lin[1] >> 3) & 0x3; // r20
+   const U8 nar= (ang[0] >> 5) & 0x7;
+   const U8 nlg= (lin[1] >> 3) & 0x3; // r20
+   const U8 nlr= (lin[1] >> 5) & 0x7;
+   pACT->angFSD= afsd[nag]; // FSR= FSD * M_PI / 180;
+   pACT->angRate= angr[nar];
+   pACT->linFSG= lfsg[nlg];
+   pACT->linRate= linr[nlr];
+} // lsmTranslateAccCfg
+
+void accTest (const LXI2CBusCtx *pC, const U8 dev, IMUFrames *pF, const U8 maxIter)
+{
+   LSMAccCfgTrans act={0,};
+   int r;
+   r= lxi2cReadRB(pC, dev, pF->avI16.temp, sizeof(pF->avI16.temp));
+   if (r >= 0)
+   {
+      I16 rawT= rdI16LE(pF->avI16.temp+1);
+      LOG("T= %d -> %GC\n", rawT, 25.0 + rawT * 1.0 / 16);
+   }
+   r= lxi2cReadMultiRB(pC, NULL, dev, pF->avI16.ang, sizeof(pF->avI16.ang), 2);
+   if (r >= 0)
+   {
+      dumpV("ang",pF->avI16.ang+1, 1.0, " ");
+      dumpV("lin", pF->avI16.lin+1, 1.0, "\n");
+   }
+   lsmAccSetMode(pF->actrl.ang+1, pF->actrl.lin+1, 1); // 14.9 / 10 Hz
+   r= lxi2cWriteMultiRB(pC, NULL, dev, pF->actrl.ang, sizeof(pF->actrl.ang), 2);
+
+   lsmTranslateAccCfg(&act, pF->actrl.ang+1, pF->actrl.lin+1);
+   LOG("rate: A=%G, L=%G\n", act.angRate, act.linRate);
+   LOG("FS  : A=%G deg/s, L=%G g\n", act.angFSD, act.linFSG);
+
+   if (r >= 0)
+   {
+      const F32 sA= act.angFSD / 0x7FFF;
+      const F32 sL= act.linFSG / 0x7FFF;
+      for (U8 i=0; i<maxIter; i++)
+      {
+         usleep(100000); //ivl);
+         r= lxi2cReadMultiRB(pC, NULL, dev, pF->avI16.ang, sizeof(pF->avI16.ang), 2);
+         if (r >= 0)
+         {
+            dumpV("ang",pF->avI16.ang+1, sA, " ");
+            dumpV("lin", pF->avI16.lin+1, sL, "\n");
+         }
+      }
+   }
+
+   lsmAccSetMode(pF->actrl.ang+1, pF->actrl.lin+1, 0); // off
+   r= lxi2cWriteMultiRB(pC, NULL, dev, pF->actrl.ang, sizeof(pF->actrl.ang), 2);
+} // accTest
 
 int testIMU (const LXI2CBusCtx *pC, const U8 dev[2], const U8 maxIter)
 {
@@ -614,27 +686,18 @@ int testIMU (const LXI2CBusCtx *pC, const U8 dev[2], const U8 maxIter)
          LOG("%s.%s= ", "actrl", "r8_10");
          reportBytes(LOG0,frm.actrl.r8_10+1, sizeof(frm.actrl.r8_10)-1);
       }
-
-      r= lxi2cReadRB(pC, dev[0], frm.avI16.temp, sizeof(frm.avI16.temp));
-      r= lxi2cReadMultiRB(pC, NULL, dev[0], frm.avI16.ang, sizeof(frm.avI16.ang), 2);
-      if (r >= 0)
-      {
-         I16 rawT= rdI16LE(frm.avI16.temp+1);
-         LOG("T= %d -> %GC\n", rawT, 25.0 + rawT * 1.0 / 16);
-         dumpV("ang",frm.avI16.ang+1,11);
-         dumpV("lin", frm.avI16.lin+1, 1);
-      }
+      accTest(pC, dev[0], &frm, maxIter);
+      LOG("\n%s\n", "---");
 
       // Magnetometer: control & measure
       r= lxi2cReadRB(pC, dev[1], frm.mctrl.r1_5, sizeof(frm.mctrl.r1_5));
       if (r >= 0)
       {
-         report(LOG0,"mctrl.r1_5= ");
-         reportBytes(LOG0,frm.mctrl.r1_5+1, sizeof(frm.mctrl.r1_5)-1);
+         LOG("%s.%s= ", "mctrl", "r1_5");
+         reportBytes(LOG0, frm.mctrl.r1_5+1, sizeof(frm.mctrl.r1_5)-1);
       }
       magTest(pC, dev[1], &frm, maxIter);
-
-      report(LOG0,"\n---\n");
+      LOG("\n%s\n", "---");
    }
    return(r);
 } // testIMU
@@ -647,7 +710,7 @@ int main (int argc, char *argv[])
    {
       //lxi2cDumpDevAddr(&gBusCtx, 0x00, 0xFF,0x00);
       const U8 ag_m[]={0x6b,0x1e};
-      testIMU(&gBusCtx, ag_m, 20);
+      testIMU(&gBusCtx, ag_m, 5);
 #if 0
       MemBuff ws={0,};
       allocMemBuff(&ws, 4<<10);//
