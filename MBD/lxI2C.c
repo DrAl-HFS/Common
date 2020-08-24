@@ -542,13 +542,55 @@ F32 bearingV2F32 (const F32 v[2])
    return(degYX);
 } // bearingV2F32
 
+void dumpV (const char hdr[], const U8 raw[6], const F32 s)
+{
+   F32 v3f[3];
+   scaleNI16LEtoF32(v3f, raw, 6, s);
+   LOG("%s= (%G, %G, %G)\n", hdr, v3f[0], v3f[1], v3f[2]);
+} // dumpMagV
+
 void dumpMagV (const U8 raw[6], const LSMMagCfgTrans *pMCT)
 {
    F32 v3f[3];
    scaleNI16LEtoF32(v3f, raw, 6, pMCT->scale / 0x7FFF);
-   LOG("magV= (%G, %G, %G) ", v3f[0], v3f[1], v3f[2]);
+   LOG("mag= (%G, %G, %G) ", v3f[0], v3f[1], v3f[2]);
    LOG("thetaXY= %.1f deg mag= %.3f Gs\n", bearingV2F32(v3f), magV3F32(v3f));
 } // dumpMagV
+
+void magTest (const LXI2CBusCtx *pC, const U8 dev, IMUFrames *pF, const U8 maxIter)
+{
+   LSMMagCfgTrans mct={0,};
+   int r; // read interval
+
+   r= lxi2cReadMultiRB(pC, NULL, dev, pF->mvI16.offs, sizeof(pF->mvI16.offs), 2);
+   if (r >= 0)
+   {
+      dumpV("offset", pF->mvI16.offs+1, 1);
+      dumpMagV(pF->mvI16.mag+1, &mct);
+   }
+
+   lsmTranslateMagCfg(&mct, pF->mctrl.r1_5+1);
+   LOG("rate=%G, scale=%G\n", mct.rate, mct.scale);
+
+   if (mct.rate > 0)
+   {
+      int ivl= 1000000 / mct.rate;
+
+      lsmMagSetMode(pF->mctrl.r1_5+1, CONTINUOUS);
+      r= lxi2cWriteRB(pC, dev, pF->mctrl.r1_5, sizeof(pF->mctrl.r1_5));
+      LOG("Mag ON, interval %dus\n", ivl);
+
+      for (U8 i=0; i<maxIter; i++)
+      {
+         //usleep(ivl);
+         sleep(1);
+         r= lxi2cReadRB(pC, dev, pF->mvI16.mag, sizeof(pF->mvI16.mag));
+         if (r >= 0) { dumpMagV(pF->mvI16.mag+1, &mct); }
+      }
+      lsmMagSetMode(pF->mctrl.r1_5+1, OFF);
+      r= lxi2cWriteRB(pC, dev, pF->mctrl.r1_5, sizeof(pF->mctrl.r1_5));
+   }
+} // magTest
 
 int testIMU (const LXI2CBusCtx *pC, const U8 dev[2], const U8 maxIter)
 {
@@ -559,10 +601,6 @@ int testIMU (const LXI2CBusCtx *pC, const U8 dev[2], const U8 maxIter)
    if (lsmIdentify(pC,dev) > 0)
    {
       IMUFrames frm;
-      LSMMagCfgTrans mct={0,};
-      F32 v3f[3];
-      int ivl=0; // read interval
-
       initFrames(&frm);
 
       // Accelerometer: control & measure
@@ -583,11 +621,8 @@ int testIMU (const LXI2CBusCtx *pC, const U8 dev[2], const U8 maxIter)
       {
          I16 rawT= rdI16LE(frm.avI16.temp+1);
          LOG("T= %d -> %GC\n", rawT, 25.0 + rawT * 1.0 / 16);
-
-         scaleNI16LEtoF32(v3f, frm.avI16.ang+1, 6, 1.0);
-         LOG("ang= (%G, %G, %G)\n", v3f[0], v3f[1], v3f[2]);
-         scaleNI16LEtoF32(v3f, frm.avI16.lin+1, 6, 1.0);
-         LOG("lin= (%G, %G, %G)\n", v3f[0], v3f[1], v3f[2]);
+         dumpV("ang",frm.avI16.ang+1,11);
+         dumpV("lin", frm.avI16.lin+1, 1);
       }
 
       // Magnetometer: control & measure
@@ -596,36 +631,8 @@ int testIMU (const LXI2CBusCtx *pC, const U8 dev[2], const U8 maxIter)
       {
          report(LOG0,"mctrl.r1_5= ");
          reportBytes(LOG0,frm.mctrl.r1_5+1, sizeof(frm.mctrl.r1_5)-1);
-
-         lsmTranslateMagCfg(&mct, frm.mctrl.r1_5+1);
-         LOG("rate=%G, scale=%G\n", mct.rate, mct.scale);
-
-         if (mct.rate > 0) { ivl= 1000000 / mct.rate; }
       }
-      // Inital measures (assumed OFF)
-      r= lxi2cReadMultiRB(pC, NULL, dev[1], frm.mvI16.offs, sizeof(frm.mvI16.offs), 2);
-      if (r >= 0)
-      {
-         scaleNI16LEtoF32(v3f, frm.mvI16.offs+1, 6, 1.0);
-         LOG("mag.offsV= (%G, %G, %G)\n", v3f[0], v3f[1], v3f[2]);
-         dumpMagV(frm.mvI16.mag+1, &mct);
-      }
-      if (ivl > 0)
-      {
-         lsmMagSetMode(frm.mctrl.r1_5+1, CONTINUOUS);
-         r= lxi2cWriteRB(pC, dev[1], frm.mctrl.r1_5, sizeof(frm.mctrl.r1_5));
-         LOG("Mag ON, interval %dus\n", ivl);
-
-         for (U8 i=0; i<maxIter; i++)
-         {
-            //usleep(ivl);
-            sleep(1);
-            r= lxi2cReadRB(pC, dev[1], frm.mvI16.mag, sizeof(frm.mvI16.mag));
-            if (r >= 0) { dumpMagV(frm.mvI16.mag+1, &mct); }
-         }
-      }
-      lsmMagSetMode(frm.mctrl.r1_5+1, OFF);
-      r= lxi2cWriteRB(pC, dev[1], frm.mctrl.r1_5, sizeof(frm.mctrl.r1_5));
+      magTest(pC, dev[1], &frm, maxIter);
 
       report(LOG0,"\n---\n");
    }
@@ -639,13 +646,12 @@ int main (int argc, char *argv[])
    if (lxi2cOpen(&gBusCtx, "/dev/i2c-1", 400))
    {
       //lxi2cDumpDevAddr(&gBusCtx, 0x00, 0xFF,0x00);
-#if 1
       const U8 ag_m[]={0x6b,0x1e};
       testIMU(&gBusCtx, ag_m, 20);
-#else
+#if 0
       MemBuff ws={0,};
       allocMemBuff(&ws, 4<<10);//
-      testADS1015(&gBusCtx, NULL, 0x48, ADS1X_TEST_MODE_VERIFY|ADS1X_TEST_MODE_SLEEP|ADS1X_TEST_MODE_POLL|ADS1X_TEST_MODE_ROTMUX, 20);
+      testADS1x15(&gBusCtx, NULL, 0x48, 1, ADS1X_TEST_MODE_VERIFY|ADS1X_TEST_MODE_SLEEP|ADS1X_TEST_MODE_POLL|ADS1X_TEST_MODE_ROTMUX, 4);
       releaseMemBuff(&ws);
 #endif
       lxi2cClose(&gBusCtx);
