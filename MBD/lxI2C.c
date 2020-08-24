@@ -487,7 +487,7 @@ int lsmIdentify (const LXI2CBusCtx *pC, const U8 dev[2])
    return(r);
 } // lsmIdentify
 
-int scaleNI16LEtoF32 (F32 r[], U8 b[], const int nb, const F32 s)
+int scaleNI16LEtoF32 (F32 r[], const U8 b[], const int nb, const F32 s)
 {
    int i;
    for (i=0; i<nb; i+= 2) { r[i>>1]= rdI16LE(b+i) * s; }
@@ -526,7 +526,31 @@ void lsmMagSetMode (U8 cfg[5], enum MagMode m)
    cfg[2]= (cfg[2] & ~0x3) | m;
 } // lsmMagSetMode
 
-int testIMU (const LXI2CBusCtx *pC, const U8 dev[2])
+F32 mag2NF32 (const F32 v[], const int n)
+{
+   F32 m2= 0;
+   for (int i=0; i<n; i++) { m2+= v[i] * v[i]; }
+   return(m2);
+} // mag2NF32
+
+F32 magV3F32 (const F32 v[3]) { return sqrtf( mag2NF32(v,3) ); }
+
+F32 bearingV2F32 (const F32 v[2])
+{
+   F32 degYX= atan2(v[1], v[0]) * 180.0/M_PI; // NB: transpose x,y
+   if (degYX<0) degYX+= 360.0;
+   return(degYX);
+} // bearingV2F32
+
+void dumpMagV (const U8 raw[6], const LSMMagCfgTrans *pMCT)
+{
+   F32 v3f[3];
+   scaleNI16LEtoF32(v3f, raw, 6, pMCT->scale / 0x7FFF);
+   LOG("magV= (%G, %G, %G) ", v3f[0], v3f[1], v3f[2]);
+   LOG("thetaXY= %.1f deg mag= %.3f Gs\n", bearingV2F32(v3f), magV3F32(v3f));
+} // dumpMagV
+
+int testIMU (const LXI2CBusCtx *pC, const U8 dev[2], const U8 maxIter)
 {
    int r=-1;
 
@@ -535,8 +559,9 @@ int testIMU (const LXI2CBusCtx *pC, const U8 dev[2])
    if (lsmIdentify(pC,dev) > 0)
    {
       IMUFrames frm;
-      LSMMagCfgTrans mt={0,};
+      LSMMagCfgTrans mct={0,};
       F32 v3f[3];
+      int ivl=0; // read interval
 
       initFrames(&frm);
 
@@ -572,23 +597,32 @@ int testIMU (const LXI2CBusCtx *pC, const U8 dev[2])
          report(LOG0,"mctrl.r1_5= ");
          reportBytes(LOG0,frm.mctrl.r1_5+1, sizeof(frm.mctrl.r1_5)-1);
 
-         lsmTranslateMagCfg(&mt, frm.mctrl.r1_5+1);
-         LOG("rate=%G, scale=%G\n", mt.rate, mt.scale);
+         lsmTranslateMagCfg(&mct, frm.mctrl.r1_5+1);
+         LOG("rate=%G, scale=%G\n", mct.rate, mct.scale);
 
-         lsmMagSetMode(frm.mctrl.r1_5+1, SINGLE);
-         r= lxi2cWriteRB(pC, dev[1], frm.mctrl.r1_5, sizeof(frm.mctrl.r1_5));
-         int ivl= 1000000 / mt.rate;
-         LOG("Mag ON, sleeping %dus\n", 2 * ivl);
-         usleep(2 * ivl);
+         if (mct.rate > 0) { ivl= 1000000 / mct.rate; }
       }
-
+      // Inital measures (assumed OFF)
       r= lxi2cReadMultiRB(pC, NULL, dev[1], frm.mvI16.offs, sizeof(frm.mvI16.offs), 2);
       if (r >= 0)
       {
          scaleNI16LEtoF32(v3f, frm.mvI16.offs+1, 6, 1.0);
-         LOG("mag.offs= (%G, %G, %G)\n", v3f[0], v3f[1], v3f[2]);
-         scaleNI16LEtoF32(v3f, frm.mvI16.mag+1, 6, mt.scale / 0x7FFF);
-         LOG("mag= (%G, %G, %G)\n", v3f[0], v3f[1], v3f[2]);
+         LOG("mag.offsV= (%G, %G, %G)\n", v3f[0], v3f[1], v3f[2]);
+         dumpMagV(frm.mvI16.mag+1, &mct);
+      }
+      if (ivl > 0)
+      {
+         lsmMagSetMode(frm.mctrl.r1_5+1, CONTINUOUS);
+         r= lxi2cWriteRB(pC, dev[1], frm.mctrl.r1_5, sizeof(frm.mctrl.r1_5));
+         LOG("Mag ON, interval %dus\n", ivl);
+
+         for (U8 i=0; i<maxIter; i++)
+         {
+            //usleep(ivl);
+            sleep(1);
+            r= lxi2cReadRB(pC, dev[1], frm.mvI16.mag, sizeof(frm.mvI16.mag));
+            if (r >= 0) { dumpMagV(frm.mvI16.mag+1, &mct); }
+         }
       }
       lsmMagSetMode(frm.mctrl.r1_5+1, OFF);
       r= lxi2cWriteRB(pC, dev[1], frm.mctrl.r1_5, sizeof(frm.mctrl.r1_5));
@@ -604,15 +638,16 @@ int main (int argc, char *argv[])
 {
    if (lxi2cOpen(&gBusCtx, "/dev/i2c-1", 400))
    {
-      const U8 ag_m[]={0x6b,0x1e};
-      testIMU(&gBusCtx, ag_m);
-
-      MemBuff ws={0,};
       //lxi2cDumpDevAddr(&gBusCtx, 0x00, 0xFF,0x00);
+#if 1
+      const U8 ag_m[]={0x6b,0x1e};
+      testIMU(&gBusCtx, ag_m, 20);
+#else
+      MemBuff ws={0,};
       allocMemBuff(&ws, 4<<10);//
-      testADS1015(&gBusCtx, NULL, 0x48, ADS1X_TEST_MODE_VERIFY|ADS1X_TEST_MODE_SLEEP|ADS1X_TEST_MODE_POLL|ADS1X_TEST_MODE_ROTMUX, 100);
+      testADS1015(&gBusCtx, NULL, 0x48, ADS1X_TEST_MODE_VERIFY|ADS1X_TEST_MODE_SLEEP|ADS1X_TEST_MODE_POLL|ADS1X_TEST_MODE_ROTMUX, 20);
       releaseMemBuff(&ws);
-
+#endif
       lxi2cClose(&gBusCtx);
    }
 
