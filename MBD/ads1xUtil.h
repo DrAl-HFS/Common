@@ -61,7 +61,7 @@ extern void ads1xDumpCfg (const U8 cfg[2], const U8 x);
 #define ADS1X_TEST_MODE_TUNE    (1<<3)
 #define ADS1X_TEST_MODE_VERBOSE (1<<0)
 
-extern int testADS1015 (const LXI2CBusCtx *pC, const MemBuff *pWS, const U8 dev, const U8 mode, const U8 maxIter);
+extern int testADS1x15 (const LXI2CBusCtx *pC, const MemBuff *pWS, const U8 dev, const U8 x, const U8 mode, const U8 maxIter);
 
 //#endif // ADS1X_TEST
 

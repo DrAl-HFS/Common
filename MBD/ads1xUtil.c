@@ -79,7 +79,8 @@ int ads1xConvIvl (const U8 cfg[2], const U8 x)
 F32 ads1xGainScaleV (const U8 cfg[2], const U8 x)
 {
    static const F32 rawFS[]= { 1.0 / ADS10_FSR, 1.0 / ADS11_FSR };
-   return ads1xGainToFSV( ads1xGetGain(cfg) ) * rawFS[x & 1];
+   if ((x & 1) != x) { return(0); } //else
+   return ads1xGainToFSV( ads1xGetGain(cfg) ) * rawFS[x];
 } // ads1xGainScaleV
 
 void ads1xDumpCfg (const U8 cfg[2], const U8 x)
@@ -95,7 +96,7 @@ void ads1xDumpCfg (const U8 cfg[2], const U8 x)
 
 //#ifdef ADS1X_TEST
 
-int testADS1015 (const LXI2CBusCtx *pC, const MemBuff *pWS, const U8 dev, const U8 mode, const U8 maxIter)
+int testADS1x15 (const LXI2CBusCtx *pC, const MemBuff *pWS, const U8 dev, const U8 x, const U8 mode, const U8 maxIter)
 {
    ADS1xRB rb;
    const int i2cWait= ADS1X_TRANS_NCLK * 1E6 / pC->clk;
@@ -104,16 +105,19 @@ int testADS1015 (const LXI2CBusCtx *pC, const MemBuff *pWS, const U8 dev, const 
    float sv;
    U8 cfgStatus[ADS1X_NRB];
 
+   if ((x & 1) != x) { return(0); }
    r= ads1xInitRB(&rb, pWS, pC, dev);
    if (r >= 0)
    {
+      const U8 xRate[]={ADS10_R920, ADS11_R860};
+
       ads1xDumpCfg(rb.cfg+1, 0);
       memcpy(cfgStatus, rb.cfg, ADS1X_NRB);
-      ads10GenCfg(rb.cfg+1, ADS1X_M0G, ADS1X_GFS_6V144, ADS10_R2400, ADS1X_CMP_DISABLE);
+      ads10GenCfg(rb.cfg+1, ADS1X_M0G, ADS1X_GFS_6V144, xRate[x], ADS1X_CMP_DISABLE);
       rb.cfg[1]|= ADS1X_FL0_OS|ADS1X_FL0_MODE; // Now enable single-shot conversion
-      convWait= ads1xConvIvl(rb.cfg+1, 0);
-      sv= ads1xGainScaleV(rb.cfg+1, 0);
-      printf("cfg: "); ads1xDumpCfg(rb.cfg+1, 0);
+      convWait= ads1xConvIvl(rb.cfg+1, x);
+      sv= ads1xGainScaleV(rb.cfg+1, x);
+      printf("cfg: "); ads1xDumpCfg(rb.cfg+1, x);
       printf("Ivl: conv=%dus comm=%dus\n", convWait, i2cWait);
       if (mode & ADS1X_TEST_MODE_SLEEP)
       {
@@ -144,7 +148,7 @@ int testADS1015 (const LXI2CBusCtx *pC, const MemBuff *pWS, const U8 dev, const 
                   r= lxi2cReadRB(pC, dev, cfgStatus, ADS1X_NRB);
                   if (r >= 0)
                   {
-                     if (mode & ADS1X_TEST_MODE_VERBOSE) { printf("ver%d: ", i0); ads1xDumpCfg(cfgStatus+1, 0); }
+                     if (mode & ADS1X_TEST_MODE_VERBOSE) { printf("ver%d: ", i0); ads1xDumpCfg(cfgStatus+1, x); }
                      // Device goes busy (OS1->0) immediately on write, so merge back in for check
                      cfgStatus[1] |= (rb.cfg[1] & ADS1X_FL0_OS);
                   }
@@ -198,6 +202,6 @@ int testADS1015 (const LXI2CBusCtx *pC, const MemBuff *pWS, const U8 dev, const 
       }
    }
    return(r);
-} // testADS1015
+} // testADS1x15
 
 //#endif // ADS1X_TEST
