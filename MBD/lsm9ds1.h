@@ -99,8 +99,9 @@ typedef struct // I2C packet/frames for acc. control registers
 
 typedef struct // I2C packet/frames for 16b mag. calibration/measurement
 {
-   U8 offs[7];
-   U8 mag[7];
+   U8 offs[7]; // 0x05..
+   //U8 statMag[8]; // 0x27combined status byte & mag output?
+   U8 mag[7]; // 0x28..
 } LSMMagValI16RegFrames;
 
 typedef struct // I2C packet/frames for mag. control registers
