@@ -537,27 +537,37 @@ F32 mag2NF32 (const F32 v[], const int n)
 
 F32 magV3F32 (const F32 v[3]) { return sqrtf( mag2NF32(v,3) ); }
 
-F32 bearingV2F32 (const F32 v[2])
+F32 bearingDegV2F32 (const F32 v[2])
 {  // NB: transpose x,y to move reference from East (+X) to North (+Y)
    F32 degYX= atan2(v[1], v[0]) * 180.0/M_PI;
    if (degYX<0) degYX+= 360.0;
    return(degYX);
-} // bearingV2F32
+} // bearingDegV2F32
+
+F32 tiltDeg2F32 (const F32 opp, const F32 adj) { return atan2(opp, adj) * 180.0/M_PI; } // tiltDeg2F32
 
 void dumpV (const char hdr[], const U8 raw[6], const F32 s, const char ftr[])
 {
    F32 v3f[3];
    scaleNI16LEtoF32(v3f, raw, 6, s);
-   LOG("%s= (%G, %G, %G)%s", hdr, v3f[0], v3f[1], v3f[2], ftr);
+   LOG("%s(%.3f, %.3f, %.3f)%s", hdr, v3f[0], v3f[1], v3f[2], ftr);
 } // dumpMagV
 
-void dumpMagV (const U8 raw[6], const LSMMagCfgTrans *pMCT)
+void dumpMagTiltV (const char hdr[], const U8 raw[6], const F32 s, const char ftr[])
+{
+   F32 v3f[3];
+   scaleNI16LEtoF32(v3f, raw, 6, s);
+   LOG("%s(%.3f, %.3f, %.3f)", hdr, v3f[0], v3f[1], v3f[2]);
+   LOG("\t|XYZ|= %.3f\ttilt:XZ,YZ= %.3f, %.3f (deg.)%s", magV3F32(v3f), tiltDeg2F32(v3f[0],v3f[2]), tiltDeg2F32(v3f[1],v3f[2]), ftr);
+} // dumpMagTiltV
+
+void dumpMagBearV (const char hdr[], const U8 raw[6], const LSMMagCfgTrans *pMCT, const char ftr[])
 {
    F32 v3f[3];
    scaleNI16LEtoF32(v3f, raw, 6, pMCT->scale / 0x7FFF);
-   LOG("mag= (%G, %G, %G) ", v3f[0], v3f[1], v3f[2]);
-   LOG("thetaXY= %.1f deg mag= %.3f Gs\n", bearingV2F32(v3f), magV3F32(v3f));
-} // dumpMagV
+   LOG("%s(%.3f, %.3f, %.3f)", hdr, v3f[0], v3f[1], v3f[2]);
+   LOG("\t|XYZ|= %.3f\tbearXY= %.1f (deg.)%s", magV3F32(v3f), bearingDegV2F32(v3f), ftr);
+} // dumpMagBearV
 
 void magTest (const LXI2CBusCtx *pC, const U8 dev, IMUFrames *pF, const U8 maxIter)
 {
@@ -568,7 +578,7 @@ void magTest (const LXI2CBusCtx *pC, const U8 dev, IMUFrames *pF, const U8 maxIt
    if (r >= 0)
    {
       dumpV("offset", pF->mvI16.offs+1, 1, "\n");
-      dumpMagV(pF->mvI16.mag+1, &mct);
+      dumpMagBearV("magnetic= ", pF->mvI16.mag+1, &mct, "\n");
    }
 
    lsmTranslateMagCfg(&mct, pF->mctrl.r1_5+1);
@@ -586,7 +596,7 @@ void magTest (const LXI2CBusCtx *pC, const U8 dev, IMUFrames *pF, const U8 maxIt
       {
          usleep(250000); //ivl);
          r= lxi2cReadRB(pC, dev, pF->mvI16.mag, sizeof(pF->mvI16.mag));
-         if (r >= 0) { dumpMagV(pF->mvI16.mag+1, &mct); }
+         if (r >= 0) { dumpMagBearV("mag= ", pF->mvI16.mag+1, &mct, "\n"); }
       }
       lsmMagSetMode(pF->mctrl.r1_5+1, OFF);
       r= lxi2cWriteRB(pC, dev, pF->mctrl.r1_5, sizeof(pF->mctrl.r1_5));
@@ -634,8 +644,8 @@ void accTest (const LXI2CBusCtx *pC, const U8 dev, IMUFrames *pF, const U8 maxIt
    r= lxi2cReadMultiRB(pC, NULL, dev, pF->avI16.ang, sizeof(pF->avI16.ang), 2);
    if (r >= 0)
    {
-      dumpV("ang",pF->avI16.ang+1, 1.0, " ");
-      dumpV("lin", pF->avI16.lin+1, 1.0, "\n");
+      dumpV("RAW: angVel= ",pF->avI16.ang+1, 1.0, "\t");
+      dumpMagTiltV("linAcc= ", pF->avI16.lin+1, 1.0, "\n");
    }
    lsmAccSetMode(pF->actrl.ang+1, pF->actrl.lin+1, 1); // 14.9 / 10 Hz
    r= lxi2cWriteMultiRB(pC, NULL, dev, pF->actrl.ang, sizeof(pF->actrl.ang), 2);
@@ -654,8 +664,8 @@ void accTest (const LXI2CBusCtx *pC, const U8 dev, IMUFrames *pF, const U8 maxIt
          r= lxi2cReadMultiRB(pC, NULL, dev, pF->avI16.ang, sizeof(pF->avI16.ang), 2);
          if (r >= 0)
          {
-            dumpV("ang",pF->avI16.ang+1, sA, " ");
-            dumpV("lin", pF->avI16.lin+1, sL, "\n");
+            dumpV("angVel= ",pF->avI16.ang+1, sA, "\t");
+            dumpMagTiltV("linAcc= ", pF->avI16.lin+1, sL, "\n");
          }
       }
    }
@@ -708,15 +718,13 @@ int main (int argc, char *argv[])
 {
    if (lxi2cOpen(&gBusCtx, "/dev/i2c-1", 400))
    {
+      //MemBuff ws={0,};
+      //allocMemBuff(&ws, 4<<10);//
+      testADS1x15(&gBusCtx, NULL, 0x48, 1, ADS1X_TEST_MODE_VERIFY|ADS1X_TEST_MODE_SLEEP|ADS1X_TEST_MODE_POLL|ADS1X_TEST_MODE_ROTMUX, 4);
+      //releaseMemBuff(&ws);
       //lxi2cDumpDevAddr(&gBusCtx, 0x00, 0xFF,0x00);
       const U8 ag_m[]={0x6b,0x1e};
       testIMU(&gBusCtx, ag_m, 5);
-#if 0
-      MemBuff ws={0,};
-      allocMemBuff(&ws, 4<<10);//
-      testADS1x15(&gBusCtx, NULL, 0x48, 1, ADS1X_TEST_MODE_VERIFY|ADS1X_TEST_MODE_SLEEP|ADS1X_TEST_MODE_POLL|ADS1X_TEST_MODE_ROTMUX, 4);
-      releaseMemBuff(&ws);
-#endif
       lxi2cClose(&gBusCtx);
    }
 
