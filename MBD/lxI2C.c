@@ -503,16 +503,12 @@ int vaddNI16LEtoI32 (I32 r[], const U8 b[], const int nb)
    return(i>>1);
 } // vaddNI16LEtoI32
 
-/*typedef struct
-{
-} LSMAccUnpack;*/
-
 typedef struct
 {
    F32 magSR, magFS;
 } LSMMagCfgTrans;
 
-void lsmTranslateMagCfg (LSMMagCfgTrans *pMCT, const U8 cfg[5])
+void lsmTransMagCfg (LSMMagCfgTrans *pMCT, const U8 cfg[5])
 {
    //static const F32 rate[]={ 0.625, 1.25, 2.5, 5, 10, 20, 40, 80 }; // 5 * 2^(n-3)
    //static const U8 scale[]={ 4, 8, 12, 16 }; // 4 * (n+1)
@@ -520,7 +516,7 @@ void lsmTranslateMagCfg (LSMMagCfgTrans *pMCT, const U8 cfg[5])
    const U8 sn= (cfg[1] >> 5) & 0x3;
    pMCT->magSR=   5 * pow(2,rn-3);  // rate[rn];
    pMCT->magFS=  4 * (sn+1);        // scale[sn];
-} // lsmTranslateMagCfg
+} // lsmTransMagCfg
 
 enum MagMode
 {
@@ -537,7 +533,7 @@ int lsmMagSetRateMode (U8 cfg[], U8 rate, enum MagMode m)
    cfg[0]= (cfg[0] & ~(0x7<<2)) | rate<<2;
    cfg[2]= (cfg[2] & ~0x3) | m;
    return(3);
-} // lsmMagSetMode
+} // lsmMagSetRateMode
 
 F32 mag2NF32 (const F32 v[], const int n)
 {
@@ -557,35 +553,55 @@ F32 bearingDegV2F32 (const F32 v[2])
    return(bd);
 } // bearingDegV2F32
 
-void dumpV (const char hdr[], const U8 raw[6], const F32 s, const char ftr[])
+void dumpNIVD (const I32 v[], const int n, const int d, const char ftr[])
+{
+   char buf[64];
+   int nCh, j= 0;
+   buf[0]='(';
+   while (j < n)
+   {
+      nCh= 1+snprintf(buf+1, sizeof(buf)-1, "%d", v[j]);
+      for (int i= 1; i<d; i++)
+      {
+         nCh+= snprintf(buf+nCh, sizeof(buf)-nCh, ",%d", v[j+i]);
+      }
+      j+= d;
+      if (n == j) { LOG("%s)%s",buf,ftr); }
+      else { LOG("%s) ",buf); }
+   }
+} // dumpNIVD
+
+void setScaleV3I (I32 v[3], const F32 x, const F32 y, const F32 z, const F32 s) { v[0]= x * s; v[1]= y * s; v[2]= z * s; }
+
+void dumpRawV (const char hdr[], const U8 raw[6], const F32 s, const char ftr[])
 {
    F32 v3f[3];
    vscaleNI16LEtoF32(v3f, raw, 6, s);
    LOG("%s(%.3f, %.3f, %.3f)%s", hdr, v3f[0], v3f[1], v3f[2], ftr);
-} // dumpMagV
+} // dumpRawV
 
-void dumpOffsetV (const char hdr[], const U8 raw[6], I32 o[3], const F32 s, const char ftr[])
+void dumpOffsetRawV (const char hdr[], const U8 raw[6], I32 o[3], const F32 s, const char ftr[])
 {
    I32 v3i[3]={o[0], o[1], o[2]};
    vaddNI16LEtoI32(v3i, raw, 6);
    LOG("%s(%.3f, %.3f, %.3f)%s", hdr, v3i[0]*s, v3i[1]*s, v3i[2]*s, ftr);
-} // dumpMagV
+} // dumpOffsetRawV
 
-void dumpMagTiltV (const char hdr[], const U8 raw[6], const F32 s, const char ftr[])
+void dumpMagTiltRawV (const char hdr[], const U8 raw[6], const F32 s, const char ftr[])
 {
    F32 v3f[3];
    vscaleNI16LEtoF32(v3f, raw, 6, s);
    LOG("%s(%.3f, %.3f, %.3f)", hdr, v3f[0], v3f[1], v3f[2]);
    LOG("\t|XYZ|= %.3f\ttilt:XZ,YZ= %.3f, %.3f (deg.)%s", magV3F32(v3f), tiltDeg2F32(v3f[0],v3f[2]), tiltDeg2F32(v3f[1],v3f[2]), ftr);
-} // dumpMagTiltV
+} // dumpMagTiltRawV
 
-void dumpMagBearV (const char hdr[], const U8 raw[6], const F32 s, const char ftr[])
+void dumpMagBearRawV (const char hdr[], const U8 raw[6], const F32 s, const char ftr[])
 {
    F32 v3f[3];
    vscaleNI16LEtoF32(v3f, raw, 6, s);
    LOG("%s(%.3f, %.3f, %.3f)", hdr, v3f[0], v3f[1], v3f[2]);
    LOG("\t|XYZ|= %.3f\tbearXY= %.1f (deg.)%s", magV3F32(v3f), bearingDegV2F32(v3f), ftr);
-} // dumpMagBearV
+} // dumpMagBearRawV
 
 void magTest (const LXI2CBusCtx *pC, const U8 dev, IMURegFrames *pF, const U8 maxIter)
 {
@@ -595,14 +611,14 @@ void magTest (const LXI2CBusCtx *pC, const U8 dev, IMURegFrames *pF, const U8 ma
    r= lxi2cReadMultiRB(pC, NULL, dev, pF->mvI16.offs, sizeof(pF->mvI16.offs), 2);
    if (r >= 0)
    {
-      dumpV("RAW: offset", pF->mvI16.offs+1, 1.0, "\n");
-      dumpMagBearV("magnetic= ", pF->mvI16.mag+1, 1.0, "\n");
+      dumpRawV("RAW: offset", pF->mvI16.offs+1, 1.0, "\n");
+      dumpMagBearRawV("magnetic= ", pF->mvI16.mag+1, 1.0, "\n");
    }
 
    lsmMagSetRateMode(pF->mctrl.r1_5+1, 7, CONTINUOUS);
    r= lxi2cWriteRB(pC, dev, pF->mctrl.r1_5, sizeof(pF->mctrl.r1_5));
 
-   lsmTranslateMagCfg(&mct, pF->mctrl.r1_5+1);
+   lsmTransMagCfg(&mct, pF->mctrl.r1_5+1);
    LOG("rate=%G, scale=%G\n", mct.magSR, mct.magFS);
 
    if (mct.magSR > 0)
@@ -618,7 +634,7 @@ void magTest (const LXI2CBusCtx *pC, const U8 dev, IMURegFrames *pF, const U8 ma
          r= lxi2cReadRB(pC, dev, pF->mctrl.stat, sizeof(pF->mctrl.stat));
          if (r > 0) { LOG("S%02x\t", pF->mctrl.stat[1]); }
          r= lxi2cReadRB(pC, dev, pF->mvI16.mag, sizeof(pF->mvI16.mag));
-         if (r >= 0) { dumpMagBearV("mag= ", pF->mvI16.mag+1, mS, "\n"); }
+         if (r >= 0) { dumpMagBearRawV("mag= ", pF->mvI16.mag+1, mS, "\n"); }
          //r= lxi2cReadRB(pC, dev, pF->mctrl.stat, sizeof(pF->mctrl.stat));
          //if (r > 0) { LOG("S%02x\n", pF->mctrl.stat[1]); }
       }
@@ -639,7 +655,7 @@ void lsmAccSetMode (U8 ang[4], U8 lin[4], const U8 m)
    lin[1]= (lin[1] & 0x1F) | (m<<5); // ODR: 0, 10, 50..
 } // lsmAccSetMode
 
-void lsmTranslateAccCfg (LSMAccCfgTrans *pACT, const U8 ang[4], const U8 lin[4], const U8 angUnit)
+void lsmTransAccCfg (LSMAccCfgTrans *pACT, const U8 ang[4], const U8 lin[4], const U8 angUnit)
 {
    static const F32 angr[]={ 0, 14.9, 59.5, 119, 238, 476, 952, 0 };
    static const U16 linr[]={ 0, 10, 50, 119, 238, 476, 952, 0 };
@@ -654,12 +670,20 @@ void lsmTranslateAccCfg (LSMAccCfgTrans *pACT, const U8 ang[4], const U8 lin[4],
    pACT->angRate= angr[nar];
    pACT->linFSG= lfsg[nlg];
    pACT->linRate= linr[nlr];
-} // lsmTranslateAccCfg
+} // lsmTransAccCfg
+
+typedef struct
+{
+   I32 aSM[3], lSM[3];
+} CalDat;
 
 void accTest (const LXI2CBusCtx *pC, const U8 dev, IMURegFrames *pF, const U8 maxIter, const U8 maxCal)
 {
+   CalDat cal={{2775, 6053, -278},{-460, 246, 16203}};
    LSMAccCfgTrans act={0,};
    int r, ivl=0;
+
+   LOG("%s","Predef. cal. - "); dumpNIVD((void*)&cal, 6, 3, "\n");
    r= lxi2cReadRB(pC, dev, pF->avI16.temp, sizeof(pF->avI16.temp));
    if (r >= 0)
    {
@@ -670,54 +694,59 @@ void accTest (const LXI2CBusCtx *pC, const U8 dev, IMURegFrames *pF, const U8 ma
    lsmAccSetMode(pF->actrl.ang+1, pF->actrl.lin+1, 1); // ON: 14.9 / 10 Hz
    r= lxi2cWriteMultiRB(pC, NULL, dev, pF->actrl.ang, sizeof(pF->actrl.ang), 2);
 
-   lsmTranslateAccCfg(&act, pF->actrl.ang+1, pF->actrl.lin+1, 1);
+   lsmTransAccCfg(&act, pF->actrl.ang+1, pF->actrl.lin+1, 1);
    LOG("rate: A=%G, L=%G\n", act.angRate, act.linRate);
    LOG("FS  : A=%G deg/s, L=%G g\n", act.angFSD, act.linFSG);
    ivl= 1000000 / MIN(act.angRate, act.linRate); // sync to slowest
+   const F32 sA= act.angFSD / 0x7FFF;
+   const F32 sL= act.linFSG / 0x7FFF;
 
    if (ivl > 0)
    {
-      I32 nSM= 0, aSM[3]={0,}, lSM[3]={0,};
+      I32 nSM= 0;
 
       LOG("Acc ON, interval %dus\n", ivl);
-
-      for (U8 i=0; i<maxCal; i++)
+      if (maxCal > 0)
       {
-         usleep(ivl);
-
-         r= lxi2cReadMultiRB(pC, NULL, dev, pF->avI16.ang, sizeof(pF->avI16.ang), 2);
-         if (r >= 0)
-         {
-            vaddNI16LEtoI32(aSM, pF->avI16.ang+1, 6);
-            vaddNI16LEtoI32(lSM, pF->avI16.lin+1, 6);
-            nSM++;
-         }
-      }
-      if (nSM > 0)
-      {  // Sums to means
-         for (int i= 0; i<3; i++)
-         {
-            aSM[i]= -aSM[i] / nSM;
-            lSM[i]/= nSM;
-         }
-         LOG("Calibration:\nRAW means:\tang=(%d, %d, %d)\tlin=(%d, %d, %d)\n\n", aSM[0], aSM[1], aSM[2], lSM[0], lSM[1], lSM[2]);
-         //dumpV("RAW: angVel= ", pF->avI16.ang+1, 1.0, "\t");
-         //dumpMagTiltV("linAcc= ", pF->avI16.lin+1, 1.0, "\n");
-      }
-      if (r >= 0)
-      {
-         const F32 sA= act.angFSD / 0x7FFF;
-         const F32 sL= act.linFSG / 0x7FFF;
-
-         for (U8 i=0; i<maxIter; i++)
+         memset(&cal, 0, sizeof(cal));
+         for (U8 i=0; i<maxCal; i++)
          {
             usleep(ivl);
+
             r= lxi2cReadMultiRB(pC, NULL, dev, pF->avI16.ang, sizeof(pF->avI16.ang), 2);
             if (r >= 0)
             {
-               dumpOffsetV("angVel= ",pF->avI16.ang+1, aSM, sA, "\t");
-               dumpMagTiltV("linAcc= ", pF->avI16.lin+1, sL, "\n");
+               vaddNI16LEtoI32(cal.aSM, pF->avI16.ang+1, 6);
+               vaddNI16LEtoI32(cal.lSM, pF->avI16.lin+1, 6);
+               nSM++;
             }
+         }
+         if (nSM > 1)
+         {  // Sums to means
+            F32 s= 1.0 / nSM;
+            for (int i= 0; i<3; i++)
+            {
+               cal.aSM[i]= -cal.aSM[i] * s;
+               cal.lSM[i]= -cal.lSM[i] * s;
+            }
+            LOG("%s","New cal. - "); dumpNIVD(cal.aSM+0, 6, 3, "\n");
+            //LOG("ang->(%f,%f,%f)\n", cal.aSM[0] * sA, cal.aSM[1] * sA, cal.aSM[2] * sA);
+            //LOG("lin->(%f,%f,%f)\n", cal.lSM[0] * sL, cal.lSM[1] * sL, cal.lSM[2] * sL);
+            {
+               I32 eps[3];
+               setScaleV3I(eps, -0.449, -1.024, 0.037, 1.0 / sA);
+               LOG("%s: ", "eps"); dumpNIVD(eps, 3, 3, "\n");
+            }
+         }
+      }
+      for (U8 i=0; i<maxIter; i++)
+      {
+         usleep(ivl);
+         r= lxi2cReadMultiRB(pC, NULL, dev, pF->avI16.ang, sizeof(pF->avI16.ang), 2);
+         if (r >= 0)
+         {
+            dumpOffsetRawV("angVel= ",pF->avI16.ang+1, cal.aSM, sA, "\t");
+            dumpMagTiltRawV("linAcc= ", pF->avI16.lin+1, sL, "\n");
          }
       }
    }
