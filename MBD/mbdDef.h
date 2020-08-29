@@ -26,6 +26,9 @@ typedef unsigned short     U16;
 typedef unsigned int       U32;
 typedef unsigned long long U64;
 
+typedef float F32;
+typedef double F64;
+
 #endif // UTIL_H
 
 // Types to support endian twiddling/debug

@@ -33,7 +33,8 @@ extern Bool32 lxi2cOpen (LXI2CBusCtx *pBC, const char *path, const int clk);
 extern int lxi2cReadRB (const LXI2CBusCtx *pBC, const U8 dev, U8 regBytes[], const U8 nRB);
 extern int lxi2cWriteRB (const LXI2CBusCtx *pBC, const U8 dev, const U8 regBytes[], const U8 nRB);
 
-// Multi-message-block transfer (uniform block size and single device only) versions for efficiency/convenience
+// Multi-message-block transfer (uniform block size to/from single device only) versions
+// for efficiency/convenience
 extern int lxi2cReadMultiRB
 (
    const LXI2CBusCtx *pBC, // bus info
@@ -42,6 +43,15 @@ extern int lxi2cReadMultiRB
    U8 regBytes[], // array of data blocks
    const U8 nRB,  // bytes per message block (must be uniform)
    const U8 nM    // Number of message blocks
+);
+extern int lxi2cWriteMultiRB  // ditto
+(
+   const LXI2CBusCtx *pBC,
+   const MemBuff *pWS,
+   const U8 dev,
+   const U8 regBytes[],
+   const U8 nRB,
+   const U8 nM
 );
 
 // DEPRECATE
