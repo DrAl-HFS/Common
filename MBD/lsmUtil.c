@@ -20,6 +20,7 @@
 typedef struct // I2C packet/frames for 16b acc. & temperature measurement
 {                // X,Y,Z register tuple can be read as single block
    U8 temp[3]; // 0x15:16 - temperature in +-1/16ths Celcius offset from 25C
+   //U8 statAng[8]; // 0x17 combined status byte & angular output
    U8 ang[7]; // X,Y,Z -> 0x18:19, 1A:1B, 1C:1D
    U8 lin[7]; // X,Y,Z -> 0x28:29, 2A:2B, 2C:2D
 } LSMAccValI16RegFrames;
@@ -62,6 +63,7 @@ void initFrames (IMURegFrames *pR)
    memset(pR, 0, sizeof(*pR));
    // accel.
    pR->avI16.temp[0]= LSM_REG_TEMP;
+   //pR->avI16.statAng[0]= LSM_REG_ASTAT;
    pR->avI16.ang[0]= LSM_REG_ANG_X;
    pR->avI16.lin[0]= LSM_REG_LIN_X;
 
@@ -78,6 +80,7 @@ void initFrames (IMURegFrames *pR)
 
    // mag.
    pR->mvI16.offs[0]= LSM_REG_MAG_OFFSX;
+   //pR->mvI16.statMag[0]= LSM_REG_MSTAT; 
    pR->mvI16.mag[0]= LSM_REG_MAG_X;
 
    pR->mctrl.r1_5[0]= LSM_REG_MCTRL01; // 0x20...

@@ -35,6 +35,8 @@ enum LSMAccCtrlRegID // Control registers (8b)
    LSM_REG_ACTRL_ANG2=0x11,
    LSM_REG_ACTRL_ANG3=0x12,
 
+   LSM_REG_ASTAT=0x17, // contiguous with 16b angular measurement
+
    LSM_REG_ACTRL04=0x1E, // gyro output, interrupt modes
 
    LSM_REG_ACTRL_LIN5=0x1F, // output
