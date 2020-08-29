@@ -16,8 +16,6 @@
 
 /***/
 
-#define I2C_BYTES_NCLK(b) ((1+(b)) * 9 + 1)
-
 #define LX_I2C_TRANS_NM (2) // number of i2c_msg blocks per transaction
 #define LX_I2C_FLAG_TRACE (1<<4)
 
@@ -436,10 +434,6 @@ LXI2CBusCtx gBusCtx={0,-1};
 
 #include "ads1xUtil.h"
 #include "lsmUtil.h"
-
-
-
-/*---*/
 
 int main (int argc, char *argv[])
 {

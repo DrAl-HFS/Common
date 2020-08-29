@@ -14,6 +14,9 @@
 extern "C" {
 #endif
 
+// I2C clock cycles for nb byte message
+#define I2C_BYTES_NCLK(nb) ((1+(nb)) * 9 + 1)
+
 #define I2C_M_WR  (0x0)   // Dummy for code readability
 
 typedef unsigned long UL;

@@ -1,15 +1,19 @@
 // Common/MBD/lsmUtil.c - utility code for STMicro. lsm9ds1 IMU
 // https://github.com/DrAl-HFS/Common.git
 // Licence: GPL V3
-// (c) Project Contributors Feb 2018 - Aug 2020
+// (c) Project Contributors Aug 2020
 
-// Hardware Ref: https://www.st.com/resource/datasheet/lsm9ds1.pdf
+// HW Ref: https://www.st.com/resource/datasheet/lsm9ds1.pdf
 
 
 /* IMU test hacks */
 
 #include "lsmUtil.h"
 
+// LSM9DS1 iNEMO is a dual device package having two I2C/SPI interfaces: one
+// each for the accelerometer and magnetometer. There are a signifiant number
+// of control and data registers within each interface - still considering
+// how to make this more manageable without introducing gross inefficiencies...
 
 // Register frames for I2C / SPI interfacing - each includes leading register
 // address byte for simple message handling
@@ -34,7 +38,7 @@ typedef struct // I2C packet/frames for acc. control registers
 typedef struct // I2C packet/frames for 16b mag. calibration/measurement
 {
    U8 offs[7]; // 0x05..
-   //U8 statMag[8]; // 0x27combined status byte & mag output?
+   //U8 statMag[8]; // 0x27 combined status byte & mag output?
    U8 mag[7]; // 0x28..
 } LSMMagValI16RegFrames;
 
@@ -248,19 +252,43 @@ void magTest (const LXI2CBusCtx *pC, const U8 dev, IMURegFrames *pF, const U8 ma
    }
 } // magTest
 
+enum AngUnit
+{
+   ANG_RAD=0,
+   ANG_DEG=1
+}; // AngUnit
+
+enum LSMLinAngRate
+{
+   LAR_OFF= 0, // Sample rate (Hz)
+   LAR_1XX= 1, // L 10 / A 14.9
+   LAR_5XX= 2, // L 50 / A 59.5
+   LAR_119= 3,
+   LAR_238= 4,
+   LAR_476= 5,
+   LAR_952= 6
+}; // LSMLinAngRate
+
 typedef struct
 {
    F32 angRate, angFSD;
    F32 linRate, linFSG;
 } LSMAccCfgTrans;
 
-void lsmAccSetMode (U8 ang[4], U8 lin[4], const U8 m)
+typedef struct
+{
+   I32 aSM[3], lSM[3];
+} CalDat;
+
+void lsmAccSetMode (U8 ang[4], U8 lin[4], const enum LSMLinAngRate m)
 {
    ang[0]= (ang[0] & 0x1F) | (m<<5); // ODR: 0, 14.9, 59.5...
+   ang[2]= 1<<7; // HP_EN
+
    lin[1]= (lin[1] & 0x1F) | (m<<5); // ODR: 0, 10, 50..
 } // lsmAccSetMode
 
-void lsmTransAccCfg (LSMAccCfgTrans *pACT, const U8 ang[4], const U8 lin[4], const U8 angUnit)
+void lsmTransAccCfg (LSMAccCfgTrans *pACT, const U8 ang[4], const U8 lin[4], const enum AngUnit u)
 {
    static const F32 angr[]={ 0, 14.9, 59.5, 119, 238, 476, 952, 0 };
    static const U16 linr[]={ 0, 10, 50, 119, 238, 476, 952, 0 };
@@ -271,18 +299,21 @@ void lsmTransAccCfg (LSMAccCfgTrans *pACT, const U8 ang[4], const U8 lin[4], con
    const U8 nlg= (lin[1] >> 3) & 0x3; // r20
    const U8 nlr= (lin[1] >> 5) & 0x7;
    pACT->angFSD= afsd[nag];
-   if (0 == angUnit) { pACT->angFSD*= M_PI / 180; }
+   if (ANG_RAD == u) { pACT->angFSD*= M_PI / 180; }
    pACT->angRate= angr[nar];
    pACT->linFSG= lfsg[nlg];
    pACT->linRate= linr[nlr];
 } // lsmTransAccCfg
 
-typedef struct
-{
-   I32 aSM[3], lSM[3];
-} CalDat;
-
-void accTest (const LXI2CBusCtx *pC, const U8 dev, IMURegFrames *pF, const U8 maxIter, const U8 maxCal)
+void accTest
+(
+   const LXI2CBusCtx *pC,
+   const U8          dev,
+   IMURegFrames      *pF,
+   const enum LSMLinAngRate lar,
+   const U8            maxIter,
+   const U8            maxCal
+)
 {
    CalDat cal={{2775, 6053, -278},{-460, 246, 16203}};
    LSMAccCfgTrans act={0,};
@@ -296,10 +327,10 @@ void accTest (const LXI2CBusCtx *pC, const U8 dev, IMURegFrames *pF, const U8 ma
       LOG("T= %d -> %GC\n", rawT, 25.0 + rawT * 1.0 / 16);
    }
 
-   lsmAccSetMode(pF->actrl.ang+1, pF->actrl.lin+1, 1); // ON: 14.9 / 10 Hz
+   lsmAccSetMode(pF->actrl.ang+1, pF->actrl.lin+1, lar);
    r= lxi2cWriteMultiRB(pC, NULL, dev, pF->actrl.ang, sizeof(pF->actrl.ang), 2);
 
-   lsmTransAccCfg(&act, pF->actrl.ang+1, pF->actrl.lin+1, 1);
+   lsmTransAccCfg(&act, pF->actrl.ang+1, pF->actrl.lin+1, ANG_DEG);
    LOG("rate: A=%G, L=%G\n", act.angRate, act.linRate);
    LOG("FS  : A=%G deg/s, L=%G g\n", act.angFSD, act.linFSG);
    ivl= 1000000 / MIN(act.angRate, act.linRate); // sync to slowest
@@ -363,12 +394,13 @@ int testIMU (const LXI2CBusCtx *pC, const U8 dev[2], const U8 maxIter)
 {
    int r=-1;
 
-   //r= I2C_BYTES_NCLK(sizeof(frm.a16.ang)) * 3;
-   //printf("testIMU() - peak rate= %G full data frames per sec\n", gBusCtx.clk * 1.0 / n);
    if (lsmIdentify(pC,dev) > 0)
    {
       IMURegFrames frm;
       initFrames(&frm);
+
+      r= I2C_BYTES_NCLK(sizeof(frm.avI16.ang)) * 3;
+      LOG("testIMU() - Clk%d, pkt.len=%d, max rate= %d pkt/sec\n", pC->clk, r, pC->clk / r);
 
       // Accelerometer: control & measure
       r= lxi2cReadMultiRB(pC, NULL, dev[0], frm.actrl.ang, sizeof(frm.actrl.ang), 3);
@@ -381,7 +413,11 @@ int testIMU (const LXI2CBusCtx *pC, const U8 dev[2], const U8 maxIter)
          LOG("%s.%s= ", "actrl", "r8_10");
          reportBytes(LOG0,frm.actrl.r8_10+1, sizeof(frm.actrl.r8_10)-1);
       }
-      accTest(pC, dev[0], &frm, maxIter, 20);
+      for (enum LSMLinAngRate lar= LAR_119; lar <= LAR_952; lar++) // LAR_119 LAR_238; LAR_952)
+      {
+         accTest(pC, dev[0], &frm, lar, maxIter, 0);
+         LOG("\n%s\n", "-");
+      }
       LOG("\n%s\n", "---");
 
       // Magnetometer: control & measure

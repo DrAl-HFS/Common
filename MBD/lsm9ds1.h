@@ -3,7 +3,7 @@
 // Licence: GPL V3
 // (c) Project Contributors Aug 2020
 
-// HW Ref:  http://?.?.?/? lsm9ds1.pdf
+// HW Ref: https://www.st.com/resource/datasheet/lsm9ds1.pdf
 
 #ifndef LSM9DS1_H
 #define LSM9DS1_H
