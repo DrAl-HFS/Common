@@ -432,24 +432,27 @@ void setup (void)
 
 LXI2CBusCtx gBusCtx={0,-1};
 
-#include "ads1xUtil.h"
 #include "lsmUtil.h"
 
 int main (int argc, char *argv[])
 {
+   U8 dev=0x48, payload[]={0x00};
+   int r= -1;
+
    if (lxi2cOpen(&gBusCtx, "/dev/i2c-1", 400))
    {
-      //MemBuff ws={0,};
-      //allocMemBuff(&ws, 4<<10);//
-      testADS1x15(&gBusCtx, NULL, 0x48, 1, ADS1X_TEST_MODE_VERIFY|ADS1X_TEST_MODE_SLEEP|ADS1X_TEST_MODE_POLL|ADS1X_TEST_MODE_ROTMUX, 4);
-      //releaseMemBuff(&ws);
-      //lxi2cDumpDevAddr(&gBusCtx, 0x00, 0xFF,0x00);
-      const U8 ag_m[]={0x6b,0x1e};
-      testIMU(&gBusCtx, ag_m, 30);
+      // lxi2cDumpDevAddr(&gBusCtx, 0x48, 0xFF,0x00);
+      // Hacky "ping"
+//      struct i2c_msg m= { .addr= dev,  .flags= I2C_M_WR,  .len= sizeof(payload),  .buf= payload };
+      struct i2c_msg m= { .addr= dev,  .flags= I2C_M_WR,  .len= 0,  .buf= payload };
+      struct i2c_rdwr_ioctl_data d={ &m, 1 };
+      r= ioctl(gBusCtx.fd, I2C_RDWR, &d);
+      printf("i2c-ping: dev=%02X, r=%d\n", dev, r);
       lxi2cClose(&gBusCtx);
+      if (1 == r) { return(0); }
    }
 
-   return(0);
+   return(-1);
 } // main
 
 #endif // LX_I2C_MAIN

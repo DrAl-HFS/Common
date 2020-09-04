@@ -9,19 +9,6 @@
 
 /***/
 
-int ads1xInitRB (ADS1xRB *pRB, const MemBuff *pWS, const LXI2CBusCtx *pC, const U8 dev)
-{  // setup i2c-reg id's in frames
-   pRB->res[0]= ADS1X_REG_RES;
-   pRB->cfg[0]= ADS1X_REG_CFG;
-   pRB->cLo[0]= ADS1X_REG_CLO;
-   pRB->cHi[0]= ADS1X_REG_CHI;
-   if (pC && dev)
-   {  // Get actual device data if possible
-      return lxi2cReadMultiRB(pC, pWS, dev, pRB->res, ADS1X_NRB, 4);
-   }
-   return(0);
-} // ads1xInitRB
-
 /*- Suitable for inlining  -*/
 enum ADS1xMux ads1xGetMux (const U8 cfg[2]) { return((cfg[0] >> ADS1X_SH0_MUX) & ADS1X_M_M); }
 enum ADS1xGain ads1xGetGain (const U8 cfg[2]) { return((cfg[0] >> ADS1X_SH0_PGA) & ADS1X_GFS_M); }
@@ -44,8 +31,6 @@ U8 ads1xMuxToM4X4 (const enum ADS1xMux mux)
    static const U8 m4x4[]= {0x01, 0x03, 0x13, 0x23, 0x0F, 0x1F, 0x2F, 0x3F};
    return m4x4[ mux & 0x7 ];
 } // ads1xGetMux4X4
-char muxCh (const U8 c) { if (c<=3) return('0'+c); else return('G'); }
-void printMux4x4 (const U8 m4x4) { printf("%c/%c", muxCh(m4x4 >> 4), muxCh(m4x4 & 0xF)); }
 
 F32 ads1xGainToFSV (const enum ADS1xGain g)
 {
@@ -83,6 +68,11 @@ F32 ads1xGainScaleV (const U8 cfg[2], const U8 x)
    return ads1xGainToFSV( ads1xGetGain(cfg) ) * rawFS[x];
 } // ads1xGainScaleV
 
+// DEBUG & TEST
+char muxCh (const U8 c) { if (c<=3) return('0'+c); else return('G'); }
+
+void printMux4x4 (const U8 m4x4) { printf("%c/%c", muxCh(m4x4 >> 4), muxCh(m4x4 & 0xF)); }
+
 void ads1xDumpCfg (const U8 cfg[2], const U8 x)
 {
    ADS1xUnpack u;
@@ -94,9 +84,33 @@ void ads1xDumpCfg (const U8 cfg[2], const U8 x)
    printf(" %GV, %d/s C:%d\n",u.gainFSV, u.rate, u.cmp);
 } // ads1xDumpCfg
 
-//#ifdef ADS1X_TEST
+#ifdef LX_I2C_H
 
-int testADS1x15 (const LXI2CBusCtx *pC, const MemBuff *pWS, const U8 dev, const U8 x, const U8 mode, const U8 maxIter)
+int ads1xInitRB (ADS1xRB *pRB, const MemBuff *pWS, const LXI2CBusCtx *pC, const U8 dev)
+{  // setup i2c-reg id's in frames
+   pRB->res[0]= ADS1X_REG_RES;
+   pRB->cfg[0]= ADS1X_REG_CFG;
+   pRB->cLo[0]= ADS1X_REG_CLO;
+   pRB->cHi[0]= ADS1X_REG_CHI;
+   if (pC && dev)
+   {  // Get actual device data if possible
+      return lxi2cReadMultiRB(pC, pWS, dev, pRB->res, ADS1X_NRB, 4);
+   }
+   return(0);
+} // ads1xInitRB
+
+// Consider factoring main/test? out to another module
+#ifdef ADS1X_TEST
+
+int testADS1x15
+(
+   const LXI2CBusCtx *pC,
+   const MemBuff *pWS,
+   const U8 dev,
+   const U8 x,
+   const U8 mode,
+   const U8 maxIter
+)
 {
    ADS1xRB rb;
    const int i2cWait= ADS1X_TRANS_NCLK * 1E6 / pC->clk;
@@ -109,7 +123,8 @@ int testADS1x15 (const LXI2CBusCtx *pC, const MemBuff *pWS, const U8 dev, const 
    r= ads1xInitRB(&rb, pWS, pC, dev);
    if (r >= 0)
    {
-      const U8 xRate[]={ADS10_R920, ADS11_R860};
+      //const U8 xRate[]={ADS10_R920, ADS11_R860};
+      const U8 xRate[]={ADS10_R128, ADS11_R8};
 
       ads1xDumpCfg(rb.cfg+1, 0);
       memcpy(cfgStatus, rb.cfg, ADS1X_NRB);
@@ -204,4 +219,45 @@ int testADS1x15 (const LXI2CBusCtx *pC, const MemBuff *pWS, const U8 dev, const 
    return(r);
 } // testADS1x15
 
-//#endif // ADS1X_TEST
+#endif // ADS1X_TEST
+
+#ifdef ADS1X_MAIN
+
+LXI2CBusCtx gBusCtx={0,-1};
+
+int main (int argc, char *argv[])
+{
+   if (lxi2cOpen(&gBusCtx, "/dev/i2c-1", 400))
+   {
+      const U8 adcHWV=0, adcMF= ADS1X_TEST_MODE_VERIFY|ADS1X_TEST_MODE_SLEEP|ADS1X_TEST_MODE_POLL|ADS1X_TEST_MODE_ROTMUX;
+
+      //MemBuff ws={0,};
+      //allocMemBuff(&ws, 4<<10);//
+      testADS1x15(&gBusCtx, NULL, 0x48, adcHWV, adcMF, 100);
+      //releaseMemBuff(&ws);
+      lxi2cClose(&gBusCtx);
+   }
+
+   return(0);
+} // main
+
+#endif // ADS1X_MAIN
+
+#else // LX_I2C_H
+
+// No alternative transport routines available
+#ifdef ADS1X_TEST
+#error "ADS1X_TEST unsupported"
+#define ADS1X_UNSUPPORTED_ERROR
+#endif // ADS1X_TEST
+
+#ifdef ADS1X_MAIN
+#error "ADS1X_MAIN unsupported"
+#define ADS1X_UNSUPPORTED_ERROR
+#endif // ADS1X_MAIN
+
+#ifdef ADS1X_UNSUPPORTED_ERROR
+#error " - because LX_I2C_H undefined: no alternative transport available"
+#endif
+
+#endif // LX_I2C_H

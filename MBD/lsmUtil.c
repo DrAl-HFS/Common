@@ -80,7 +80,7 @@ void initFrames (IMURegFrames *pR)
 
    // mag.
    pR->mvI16.offs[0]= LSM_REG_MAG_OFFSX;
-   //pR->mvI16.statMag[0]= LSM_REG_MSTAT; 
+   //pR->mvI16.statMag[0]= LSM_REG_MSTAT;
    pR->mvI16.mag[0]= LSM_REG_MAG_X;
 
    pR->mctrl.r1_5[0]= LSM_REG_MCTRL01; // 0x20...
@@ -435,5 +435,24 @@ int testIMU (const LXI2CBusCtx *pC, const U8 dev[2], const U8 maxIter)
    }
    return(r);
 } // testIMU
+
+#ifdef LSM_MAIN
+
+LXI2CBusCtx gBusCtx={0,-1};
+
+int main (int argc, char *argv[])
+{
+   if (lxi2cOpen(&gBusCtx, "/dev/i2c-1", 400))
+   {
+      const U8 ag_m[]={0x6b,0x1e};
+      testIMU(&gBusCtx, ag_m, 30);
+
+      lxi2cClose(&gBusCtx);
+   }
+
+   return(0);
+} // main
+
+#endif // LSM_MAIN
 
 
