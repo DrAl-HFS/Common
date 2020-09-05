@@ -1,9 +1,9 @@
-// Common/MBD/ads1xTest.c - test & debug code for TI I2C ADC devices (ADS1xxx series)
+// Common/MBD/ads1xDev.c - development, test & debug code for TI I2C ADC devices (ADS1xxx series)
 // https://github.com/DrAl-HFS/Common.git
 // Licence: GPL V3
 // (c) Project Contributors Sept 2020
 
-#include "ads1xTest.h"
+#include "ads1xDev.h"
 #include <stdio.h> // -> REPORT !
 
 
@@ -58,6 +58,8 @@ int ads1xInitRB (ADS1xRB *pRB, const MemBuff *pWS, const LXI2CBusCtx *pC, const 
    }
    return(0);
 } // ads1xInitRB
+
+#ifdef ADS1X_TEST
 
 int testADS1x15
 (
@@ -175,6 +177,8 @@ int testADS1x15
    }
    return(r);
 } // testADS1x15
+
+#endif // ADS1X_TEST
 
 #ifdef ADS1X_MAIN
 
