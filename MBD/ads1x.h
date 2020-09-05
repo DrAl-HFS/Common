@@ -37,6 +37,8 @@ enum ADS1xReg
 * byte boundary :)
 */
 
+// TODO : address naming inconsistencies between shifts, masks and values
+
 // Alignment shifts within bytes
 
 enum ADS1xShift0

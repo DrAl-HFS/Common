@@ -10,6 +10,8 @@
 I16 rdI16BE (const U8 b[2]) { return((b[0] << 8) | b[1]); }
 I16 rdI16LE (const U8 b[2]) { return((b[1] << 8) | b[0]); }
 
+U8 setMaskU8 (U8 b, U8 m, U8 v, U8 s) { return((b & ~(m << s)) | (v << s)); }
+
 #endif // INLINE
 
 /* DEPRECATED Read n bytes big-endian
