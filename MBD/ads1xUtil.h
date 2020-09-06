@@ -22,6 +22,7 @@ extern void ads1xSetMux (U8 cfg[2], const enum ADS1xMux mux);
 
 extern void ads10GenCfg (U8 cfg[2], enum ADS1xMux mux, enum ADS1xGain gain, enum ADS10Rate rate, enum ADS1xCompare cmp);
 
+// Convert hardware code to hi:lo nybble channel indices (0 1, 2, 3, Gnd)
 extern U8 ads1xMuxToM4X4 (const enum ADS1xMux mux);
 
 extern F32 ads1xGainToFSV (const enum ADS1xGain g);

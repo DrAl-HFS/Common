@@ -1,4 +1,4 @@
-// Common/MBD/ads1x.h - Definitions (& utils?) for TI I2C ADC devices (ADS1xxx series)
+// Common/MBD/ads1x.h - Minimal register definitions for TI I2C ADC devices (ADS1xxx series)
 // https://github.com/DrAl-HFS/Common.git
 // Licence: GPL V3
 // (c) Project Contributors Aug 2020
@@ -45,13 +45,13 @@ enum ADS1xShift0
 {  // Shifts within byte 0 (Big-Endian 16b MSB)
    ADS1X_SH0_OS=   7, // 1b see ADS1xFlag0 below
    ADS1X_SH0_MUX=  4, // 3b see ADS1xMux below
-   ADS1X_SH0_PGA=  1, // 3b see ADS1xGain below
+   ADS1X_SH0_GAIN=  1, // 3b see ADS1xGain below
    ADS1X_SH0_MODE= 0 // 1b see ADS1xFlag0 below
 }; // ADS1xShift0
 
 enum ADS1xShift1
 {  // Shifts within byte 1 (Big-Endian 16b LSB)
-   ADS1X_SH1_DR= 5, // 3b (Data Rate) see ADS10SampleRate below
+   ADS1X_SH1_DR= 5, // 3b (Data Rate) see ADS1*Rate below
    ADS1X_SH1_CM= 4, // 1b see ADS1xFlag1 below
    ADS1X_SH1_CP= 3, // "
    ADS1X_SH1_CL= 2, // "
@@ -76,27 +76,27 @@ enum ADS1xFlag1
 
 enum ADS1xMux
 {  // Input multiplexing, 4 double + 4 single ended modes
-   ADS1X_M01=0, // default
-   ADS1X_M03,  // Double ended (differential)
-   ADS1X_M13,
-   ADS1X_M23,
-   ADS1X_M0G,  // Single ended (Ground relative)
-   ADS1X_M1G,
-   ADS1X_M2G,
-   ADS1X_M3G=7,
-   ADS1X_M_M= 0x7   // mask
+   ADS1X_MUX01=0, // default
+   ADS1X_MUX03,  // Double ended (differential)
+   ADS1X_MUX13,
+   ADS1X_MUX23,
+   ADS1X_MUX0G,  // Single ended (Ground relative)
+   ADS1X_MUX1G,
+   ADS1X_MUX2G,
+   ADS1X_MUX3G=7,
+   ADS1X_MUX_M= 0x7   // mask
 }; // ADS1xMux, ADS10Mux, ADS11Mux
 
 enum ADS1xGain
 {  // Gain specified as Volts Full Scale (based on internal reference, independant of supply ?)
-   ADS1X_GFS_6V144=0,
-   ADS1X_GFS_4V096,
-   ADS1X_GFS_2V048, // default= 2.048V
-   ADS1X_GFS_1V024,
-   ADS1X_GFS_0V512,
-   ADS1X_GFS_0V256=5,
+   ADS1X_GAIN_6V144=0,
+   ADS1X_GAIN_4V096,
+   ADS1X_GAIN_2V048, // default= 2.048V
+   ADS1X_GAIN_1V024,
+   ADS1X_GAIN_0V512,
+   ADS1X_GAIN_0V256=5,
    //ADS1X_GFS_0V256=6,7
-   ADS1X_GFS_M= 0x7   // mask
+   ADS1X_GAIN_M= 0x7   // mask
 }; // ADS1xGain, ADS10Gain, ADS11Gain
 
 enum ADS1xCompare
@@ -109,31 +109,35 @@ enum ADS1xCompare
 }; // ADS1xCompare, ADS10Compare, ADS11Compare
 
 // NB: 12b & 16b precision sub-families have distict sample rates
+enum ADS1xRate
+{
+   ADS1X_DR_M= 0x7   // mask
+}; // ADS1xRate
 
 enum ADS10Rate
-{  // Sample rates (samples per second)
-   ADS10_R128=0,
-   ADS10_R250,
-   ADS10_R490,
-   ADS10_R920,
-   ADS10_R1600, // default
-   ADS10_R2400,
-   ADS10_R3300=6,
-   //,ADS10_S3300=7
-   ADS10_R_M= 0x7   // mask
+{  // Data (sample) rates (samples per second)
+   ADS10_DR128=0,
+   ADS10_DR250,
+   ADS10_DR490,
+   ADS10_DR920,
+   ADS10_DR1600, // default
+   ADS10_DR2400,
+   ADS10_DR3300=6,
+   //ADS10_DR3300=7
+   ADS10_DR_M= 0x7   // mask
 }; // ADS10Rate
 
 enum ADS11Rate
-{  // Sample rates (samples per second)
-   ADS11_R8=0,
-   ADS11_R16,
-   ADS11_R32,
-   ADS11_R64,
-   ADS11_R128, // default
-   ADS11_R250,
-   ADS11_R475,
-   ADS11_R860=7,
-   ADS11_R_M= 0x7   // mask
+{  // Data (sample) rates (samples per second)
+   ADS11_DR8=0,
+   ADS11_DR16,
+   ADS11_DR32,
+   ADS11_DR64,
+   ADS11_DR128, // default
+   ADS11_DR250,
+   ADS11_DR475,
+   ADS11_DR860=7,
+   ADS11_DR_M= 0x7   // mask
 }; // ADS11Rate
 
 #ifdef __cplusplus

@@ -82,12 +82,12 @@ int testADS1x15
    r= ads1xInitRB(&rb, pWS, pC, dev);
    if (r >= 0)
    {
-      //const U8 xRate[]={ADS10_R920, ADS11_R860};
-      const U8 xRate[]={ADS10_R128, ADS11_R8};
+      //const U8 xRate[]={ADS10_DR920, ADS11_DR860};
+      const U8 xRate[]={ADS10_DR128, ADS11_DR8};
 
       ads1xDumpCfg(rb.cfg+1, 0);
       memcpy(cfgStatus, rb.cfg, ADS1X_NRB);
-      ads10GenCfg(rb.cfg+1, ADS1X_M0G, ADS1X_GFS_6V144, xRate[x], ADS1X_CMP_DISABLE);
+      ads10GenCfg(rb.cfg+1, ADS1X_MUX0G, ADS1X_GAIN_6V144, xRate[x], ADS1X_CMP_DISABLE);
       rb.cfg[1]|= ADS1X_FL0_OS|ADS1X_FL0_MODE; // Now enable single-shot conversion
       convWait= ads1xConvIvl(rb.cfg+1, x);
       sv= ads1xGainScaleV(rb.cfg+1, x);
@@ -148,7 +148,7 @@ int testADS1x15
                printf(" (i=%d,%d) W%d [%d] : 0x%x -> %GV\n", i0, i1, expectWait, n, raw, v);
                if (mode & ADS1X_TEST_MODE_ROTMUX)
                {
-                  static const U8 muxRot[]= { ADS1X_M0G, ADS1X_M1G, ADS1X_M2G, ADS1X_M3G };
+                  static const U8 muxRot[]= { ADS1X_MUX0G, ADS1X_MUX1G, ADS1X_MUX2G, ADS1X_MUX3G };
                   const int iNM= (1+n) & 0x3;
                   ads1xSetMux(rb.cfg+1, muxRot[iNM]);
                   if (mode & ADS1X_TEST_MODE_VERBOSE)
