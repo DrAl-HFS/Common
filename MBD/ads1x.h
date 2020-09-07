@@ -42,7 +42,7 @@ enum ADS1xReg
 // Alignment shifts within bytes
 
 enum ADS1xShift0
-{  // Shifts within byte 0 (Big-Endian 16b MSB)
+{  // Shifts (bit number) within byte 0 (Big-Endian 16b MSB)
    ADS1X_SH0_OS=   7, // 1b see ADS1xFlag0 below
    ADS1X_SH0_MUX=  4, // 3b see ADS1xMux below
    ADS1X_SH0_GAIN=  1, // 3b see ADS1xGain below
@@ -50,7 +50,7 @@ enum ADS1xShift0
 }; // ADS1xShift0
 
 enum ADS1xShift1
-{  // Shifts within byte 1 (Big-Endian 16b LSB)
+{  // Shifts (bit number) within byte 1 (Big-Endian 16b LSB)
    ADS1X_SH1_DR= 5, // 3b (Data Rate) see ADS1*Rate below
    ADS1X_SH1_CM= 4, // 1b see ADS1xFlag1 below
    ADS1X_SH1_CP= 3, // "
@@ -99,7 +99,7 @@ enum ADS1xGain
    ADS1X_GAIN_M= 0x7   // mask
 }; // ADS1xGain, ADS10Gain, ADS11Gain
 
-enum ADS1xCompare
+enum ADS1xCompare // see also ADS1xFlag1 above
 {  // Compare signal assertion modes
    ADS1X_CMP_1=0, // 1 conversion
    ADS1X_CMP_2,
@@ -110,11 +110,6 @@ enum ADS1xCompare
 
 // NB: 12b & 16b precision sub-families have distict sample rates
 enum ADS1xRate
-{
-   ADS1X_DR_M= 0x7   // mask
-}; // ADS1xRate
-
-enum ADS10Rate
 {  // Data (sample) rates (samples per second)
    ADS10_DR128=0,
    ADS10_DR250,
@@ -124,6 +119,28 @@ enum ADS10Rate
    ADS10_DR2400,
    ADS10_DR3300=6,
    //ADS10_DR3300=7
+
+   ADS11_DR8=0,
+   ADS11_DR16,
+   ADS11_DR32,
+   ADS11_DR64,
+   ADS11_DR128, // default
+   ADS11_DR250,
+   ADS11_DR475,
+   ADS11_DR860=7,
+
+   ADS1X_DR_M= 0x7   // mask
+}; // ADS1xRate
+/*
+enum ADS10Rate
+{  // Data (sample) rates (samples per second)
+   ADS10_DR128=0,
+   ADS10_DR250,
+   ADS10_DR490,
+   ADS10_DR920,
+   ADS10_DR1600, // default
+   ADS10_DR2400,
+   ADS10_DR3300=6,
    ADS10_DR_M= 0x7   // mask
 }; // ADS10Rate
 
@@ -139,6 +156,7 @@ enum ADS11Rate
    ADS11_DR860=7,
    ADS11_DR_M= 0x7   // mask
 }; // ADS11Rate
+*/
 
 #ifdef __cplusplus
 } // extern "C"

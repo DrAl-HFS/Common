@@ -17,7 +17,7 @@ typedef struct
 {
    F32 gainFSV;   // Volts
    U16 rate;   // samples/sec (Hz)
-   U8 m4x4; // two 4bit digits
+   U8 m4x4; // DEPRECATE? two 4bit digits
    U8 cmp;
 } ADS1xTrans;
 
