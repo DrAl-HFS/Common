@@ -1,4 +1,6 @@
-// Common/MBD/ads1x.h - Minimal register definitions for TI I2C ADC devices (ADS1xxx series)
+// Common/MBD/ads1x.h - Minimal definitions for selected TI ADC devices.
+// NB: Targets ADS1015 & ADS1115, many other ADS1xxx series with I2C use
+// compatible register map except: ADS1119, (?)
 // https://github.com/DrAl-HFS/Common.git
 // Licence: GPL V3
 // (c) Project Contributors Aug 2020
@@ -37,9 +39,15 @@ enum ADS1xReg
 * byte boundary :)
 */
 
-// TODO : address naming inconsistencies between shifts, masks and values
+// Done : naming inconsistencies between shifts, masks and values fixed
 
 // Alignment shifts within bytes
+
+typedef enum ads1x_hwid
+{  // Hardware ID: only concerned with second digit of series number
+   ADS10=0,
+   ADS11=1
+} ADS1xHWID;
 
 enum ADS1xShift0
 {  // Shifts (bit number) within byte 0 (Big-Endian 16b MSB)
@@ -85,7 +93,7 @@ enum ADS1xMux
    ADS1X_MUX2G,
    ADS1X_MUX3G=7,
    ADS1X_MUX_M= 0x7   // mask
-}; // ADS1xMux, ADS10Mux, ADS11Mux
+}; // ADS1xMux;
 
 enum ADS1xGain
 {  // Gain specified as Volts Full Scale (based on internal reference, independant of supply ?)

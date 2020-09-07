@@ -20,13 +20,11 @@ extern void ads1xSetMux (U8 cfg[2], const enum ADS1xMux mux);
 extern void ads1xSetGain (U8 cfg[2], const enum ADS1xGain gain);
 extern void ads1xSetRate (U8 cfg[2], const enum ADS1xRate rate);
 
-extern void ads10GenCfg (U8 cfg[2], enum ADS1xMux mux, enum ADS1xGain gain, enum ADS1xRate rate, enum ADS1xCompare cmp);
+// Overwrite everything (NB: all flags -> zero)
+extern void ads1xGenCfg (U8 cfg[2], enum ADS1xMux mux, enum ADS1xGain gain, enum ADS1xRate rate, enum ADS1xCompare cmp);
 
-// DEPRECATE Convert hardware code to hi:lo nybble channel indices (0 1, 2, 3, Gnd)
-extern U8 ads1xMuxToM4X4 (const enum ADS1xMux mux);
+extern F32 ads1xGainToFSV (enum ADS1xGain gain);
 
-extern F32 ads1xGainToFSV (const enum ADS1xGain gain);
-
-extern U16 ads1xRateToU (const enum ADS1xRate rate, const U8 x);
+extern U16 ads1xRateToU (enum ADS1xRate rate, ADS1xHWID id);
 
 #endif // ADS1X_UTIL_H

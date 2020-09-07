@@ -17,7 +17,6 @@ typedef struct
 {
    F32 gainFSV;   // Volts
    U16 rate;   // samples/sec (Hz)
-   U8 m4x4; // DEPRECATE? two 4bit digits
    U8 cmp;
 } ADS1xTrans;
 
@@ -36,14 +35,14 @@ typedef struct // i2c "packet" bytes for ADS1x registers
 
 
 /***/
-extern void ads1xTranslateCfg (ADS1xTrans *pT, const U8 cfg[2], const U8 x);
+extern void ads1xTranslateCfg (ADS1xTrans *pT, const U8 cfg[2], const ADS1xHWID id);
 
 extern char muxCh (const U8 c);
 extern void printMux4x4 (const U8 m4x4);
-extern void ads1xDumpCfg (const U8 cfg[2], const U8 x);
+extern void ads1xDumpCfg (const U8 cfg[2], const ADS1xHWID id);
 
 extern int ads1xInitRB (ADS1xRB *pRB, const MemBuff *pWS, const LXI2CBusCtx *pC, const U8 dev);
 
-extern int testADS1x15 (const LXI2CBusCtx *pC, const MemBuff *pWS, const U8 dev, const U8 x, const U8 mode, const U8 maxIter);
+extern int testADS1x15 (const LXI2CBusCtx *pC, const MemBuff *pWS, const U8 dev, const ADS1xHWID id, const U8 mode, const U8 maxIter);
 
 #endif // ADS1X_DEV_H

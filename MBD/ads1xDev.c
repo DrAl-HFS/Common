@@ -9,21 +9,20 @@
 
 /***/
 
-void ads1xTranslateCfg (ADS1xTrans *pT, const U8 cfg[2], const U8 x)
+void ads1xTranslateCfg (ADS1xTrans *pT, const U8 cfg[2], const ADS1xHWID id)
 {
    pT->gainFSV= ads1xGainToFSV( ads1xGetGain(cfg) );
-   pT->rate= ads1xRateToU( ads1xGetRate(cfg), x);
-   pT->m4x4= ads1xMuxToM4X4( ads1xGetMux(cfg) );
+   pT->rate= ads1xRateToU( ads1xGetRate(cfg), id);
    pT->cmp= (((cfg[1] >> ADS1X_SH1_CQ) & ADS1X_CMP_M) + 1 ) & ADS1X_CMP_M; // rotate by +1 so 0->off
 } // ads1xTranslateCfg
 
 // Conversion interval (us)
-int ads1xConvIvl (const U8 cfg[2], const U8 x)
+int ads1xConvIvl (const U8 cfg[2], const ADS1xHWID id)
 {
-   return(1000000 / ads1xRateToU( ads1xGetRate(cfg), x));
+   return(1000000 / ads1xRateToU( ads1xGetRate(cfg), id));
 } // ads1xConvIvl
 
-F32 ads1xGainScaleV (const U8 cfg[2], const U8 x)
+F32 ads1xGainScaleV (const U8 cfg[2], const ADS1xHWID x)
 {
    static const F32 rawFS[]= { 1.0 / ADS10_FSR, 1.0 / ADS11_FSR };
    if ((x & 1) != x) { return(0); } //else
@@ -40,15 +39,16 @@ const char * ads1xMuxStr (const enum ADS1xMux m)
    return muxStr[ m ];
 } // ads1xMuxStr
 
-void ads1xDumpCfg (const U8 cfg[2], const U8 x)
+void ads1xDumpCfg (const U8 cfg[2], const ADS1xHWID id)
 {
    ADS1xTrans t;
-   printf("[%02x, %02x] = ", cfg[0], cfg[1]); // NB: Big Endian on-the-wire
-   printf(" OS%d MUX%d PGA%d M%d, ", (cfg[0]>>7) & 0x1, (cfg[0]>>4) & 0x7, (cfg[0]>>1) & 0x7, cfg[0] & 0x1);
-   printf(" DR%d CM%d CP%d CL%d CQ%d : ", (cfg[1]>>5) & 0x7, (cfg[1]>>4) & 0x1, (cfg[1]>>3) & 0x1, (cfg[1]>>2) & 0x1, cfg[1] & 0x3);
-   ads1xTranslateCfg(&t, cfg, x);
-   //printMux4x4(t.m4x4);
-   printf("%s %GV, %d/s C:%d\n", ads1xMuxStr(ads1xGetMux(cfg)), t.gainFSV, t.rate, t.cmp);
+   LOG("cfg= [%02x, %02x] = ", cfg[0], cfg[1]); // NB: Big Endian on-the-wire
+   // Evil magic numbers left for insanity check...
+   LOG(" OS%d MUX%d PGA%d M%d, ", (cfg[0]>>7) & 0x1, (cfg[0]>>4) & 0x7, (cfg[0]>>1) & 0x7, cfg[0] & 0x1);
+   LOG(" DR%d CM%d CP%d CL%d CQ%d : ", (cfg[1]>>5) & 0x7, (cfg[1]>>4) & 0x1, (cfg[1]>>3) & 0x1, (cfg[1]>>2) & 0x1, cfg[1] & 0x3);
+   //
+   ads1xTranslateCfg(&t, cfg, id);
+   LOG("%s %GV, %d/s C:%d\n", ads1xMuxStr(ads1xGetMux(cfg)), t.gainFSV, t.rate, t.cmp);
 } // ads1xDumpCfg
 
 int ads1xInitRB (ADS1xRB *pRB, const MemBuff *pWS, const LXI2CBusCtx *pC, const U8 dev)
@@ -71,7 +71,7 @@ int testADS1x15
    const LXI2CBusCtx *pC,
    const MemBuff *pWS,
    const U8 dev,
-   const U8 x,
+   const ADS1xHWID id,
    const U8 mode,
    const U8 maxIter
 )
@@ -83,22 +83,21 @@ int testADS1x15
    float sv;
    U8 cfgStatus[ADS1X_NRB];
 
-   if ((x & 1) != x) { return(0); }
    r= ads1xInitRB(&rb, pWS, pC, dev);
    if (r >= 0)
    {
-      //const U8 xRate[]={ADS10_DR920, ADS11_DR860};
-      const U8 xRate[]={ADS10_DR128, ADS11_DR8};
+      //const ADS1xRate idRate[]={ADS10_DR920, ADS11_DR860};
+      const enum ADS1xRate idRate[]={ADS10_DR128, ADS11_DR8};
 
       ads1xDumpCfg(rb.cfg+1, 0);
       memcpy(cfgStatus, rb.cfg, ADS1X_NRB);
-      ads10GenCfg(rb.cfg+1, ADS1X_MUX0G, ADS1X_GAIN_6V144, xRate[x], ADS1X_CMP_DISABLE);
+      ads1xGenCfg(rb.cfg+1, ADS1X_MUX0G, ADS1X_GAIN_6V144, idRate[id], ADS1X_CMP_DISABLE);
       rb.cfg[1]|= ADS1X_FL0_OS|ADS1X_FL0_MODE; // Now enable single-shot conversion
       // NB: Config packet written to device in loop that follows
-      convWait= ads1xConvIvl(rb.cfg+1, x);
-      sv= ads1xGainScaleV(rb.cfg+1, x);
-      printf("cfg: "); ads1xDumpCfg(rb.cfg+1, x);
-      printf("Ivl: conv=%dus comm=%dus\n", convWait, i2cWait);
+      convWait= ads1xConvIvl(rb.cfg+1, id);
+      sv= ads1xGainScaleV(rb.cfg+1, id);
+      ads1xDumpCfg(rb.cfg+1, id);
+      LOG("Ivl: conv=%dus comm=%dus\n", convWait, i2cWait);
       if (mode & ADS1X_TEST_MODE_SLEEP)
       {
          int nDelay= 1+bitCountZ(mode & (ADS1X_TEST_MODE_VERIFY|ADS1X_TEST_MODE_POLL));
@@ -111,12 +110,12 @@ int testADS1x15
          v[0]= rdI16BE(rb.res+1);
          v[1]= rdI16BE(rb.cLo+1);
          v[2]= rdI16BE(rb.cHi+1);
-         printf("res: %04x (%d) cmp: %04x %04x (%d %d)\n", v[0], v[0], v[1], v[2], v[1], v[2]);
+         LOG("res: %04x (%d) cmp: %04x %04x (%d %d)\n", v[0], v[0], v[1], v[2], v[1], v[2]);
       }
       if (r >= 0)
       {
          U8 n= 0;
-         printf("***\n");
+         LOG("%s\n","***");
          do
          {
             int iR0= 0, iR1= 0; // retry counters
@@ -128,11 +127,10 @@ int testADS1x15
                {
                   r= lxi2cReadRB(pC, dev, cfgStatus, ADS1X_NRB);
                   if (r >= 0)
-                  {
-                     cfgVer= (0 == memcmp(cfgStatus, rb.cfg, ADS1X_NRB));
-                     if (mode & ADS1X_TEST_MODE_VERBOSE) { printf("ver%d: ", iR0); ads1xDumpCfg(cfgStatus+1, x); }
-                     // Device goes busy (OS1->0) immediately on write, so merge back in for check
+                  {  // Device goes busy (OS1->0) immediately on write, so merge back in for check
                      cfgStatus[1] |= (rb.cfg[1] & ADS1X_FL0_OS);
+                     cfgVer= (0 == memcmp(cfgStatus, rb.cfg, ADS1X_NRB));
+                     if (mode & ADS1X_TEST_MODE_VERBOSE) { LOG("ver%d=%d: ", iR0, cfgVer); ads1xDumpCfg(cfgStatus+1, id); }
                   }
                }
             } while ((mode & ADS1X_TEST_MODE_VERIFY) && ((r < 0) || !cfgVer) && (++iR0 < 10));
@@ -155,15 +153,15 @@ int testADS1x15
                enum ADS1xMux m;
                if (cfgVer) { m= ads1xGetMux(cfgStatus+1); }
                else { m= ads1xGetMux(rb.cfg+1); }
-               printf("%s%c (i=%d,%d) W%d [%d] : 0x%x -> %GV\n", ads1xMuxStr(m), muxVerCh[cfgVer], iR0, iR1, expectWait, n, raw, v);
+               LOG("%s (%c) (i=%d,%d) W%d [%d] : 0x%x -> %GV\n", ads1xMuxStr(m), muxVerCh[cfgVer], iR0, iR1, expectWait, n, raw, v);
                if (mode & ADS1X_TEST_MODE_ROTMUX)
                {
                   static const U8 muxRot[]= { ADS1X_MUX0G, ADS1X_MUX1G, ADS1X_MUX2G, ADS1X_MUX3G };
                   const int iNM= (1+n) & 0x3;
-                  ads1xSetMux(rb.cfg+1, muxRot[iNM]);
+                  ads1xSetMux(rb.cfg+1, muxRot[iNM]); // 99999999);
                   if (mode & ADS1X_TEST_MODE_VERBOSE)
                   {
-                     printf("%d -> 0x%02x -> %s chk: %s\n", iNM, muxRot[iNM], ads1xMuxStr(muxRot[iNM]), ads1xMuxStr(ads1xGetMux(rb.cfg+1)));
+                     LOG("%d -> 0x%02x -> %s chk: %s\n", iNM, muxRot[iNM], ads1xMuxStr(muxRot[iNM]), ads1xMuxStr(ads1xGetMux(rb.cfg+1)));
                   }
                }
             }
@@ -179,7 +177,7 @@ int testADS1x15
                }
             }
          } while (++n < maxIter);
-         printf("---\n");
+         LOG("%s\n","---");
       }
    }
    return(r);
@@ -195,12 +193,13 @@ int main (int argc, char *argv[])
 {
    if (lxi2cOpen(&gBusCtx, "/dev/i2c-1", 400))
    {
-      const U8 adcHWV=0, adcMF= ADS1X_TEST_MODE_VERIFY|ADS1X_TEST_MODE_SLEEP|ADS1X_TEST_MODE_POLL|ADS1X_TEST_MODE_ROTMUX;
+      U8 adcMF= ADS1X_TEST_MODE_VERIFY|ADS1X_TEST_MODE_SLEEP|ADS1X_TEST_MODE_POLL|ADS1X_TEST_MODE_ROTMUX;
+      //adcMF|= ADS1X_TEST_MODE_VERBOSE;
 
       // Paranoid enum check: for (int i=ADS11_DR8; i<=ADS11_DR860; i++) { printf("%d -> %d\n", i, ads1xRateToU(i,1) ); }
       //MemBuff ws={0,};
       //allocMemBuff(&ws, 4<<10);//
-      testADS1x15(&gBusCtx, NULL, 0x48, adcHWV, adcMF, 100);
+      testADS1x15(&gBusCtx, NULL, 0x48, ADS10, adcMF, 100);
       //releaseMemBuff(&ws);
       lxi2cClose(&gBusCtx);
    }
