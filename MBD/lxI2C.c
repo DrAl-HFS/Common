@@ -436,20 +436,37 @@ LXI2CBusCtx gBusCtx={0,-1};
 
 int main (int argc, char *argv[])
 {
-   U8 dev=0x48, payload[]={0x00};
-   int r= -1;
+   U8 dev=0x48, payload[]={0x02};
+   int r= -1, err=0, max= 1000, msIvl=200;
+   int t[2]= {0};
 
    if (lxi2cOpen(&gBusCtx, "/dev/i2c-1", 400))
    {
       // lxi2cDumpDevAddr(&gBusCtx, 0x48, 0xFF,0x00);
       // Hacky "ping"
-//      struct i2c_msg m= { .addr= dev,  .flags= I2C_M_WR,  .len= sizeof(payload),  .buf= payload };
-      struct i2c_msg m= { .addr= dev,  .flags= I2C_M_WR,  .len= 0,  .buf= payload };
+      struct i2c_msg m= { .addr= dev,  .flags= I2C_M_WR,  .len= sizeof(payload),  .buf= payload };
+//      struct i2c_msg m= { .addr= dev,  .flags= I2C_M_WR,  .len= 0,  .buf= payload };
       struct i2c_rdwr_ioctl_data d={ &m, 1 };
-      r= ioctl(gBusCtx.fd, I2C_RDWR, &d);
-      printf("i2c-ping: dev=%02X, r=%d\n", dev, r);
+
+      printf("i2c-ping: dev.addr=0x%02X, pkt.len=%d\n\t", dev, 1+m.len);
+      for (int i=0; i<max; i++)
+      {
+         r= ioctl(gBusCtx.fd, I2C_RDWR, &d);
+         err+= (1 != r);
+         if (msIvl > 0)
+         {
+            if ((t[1] - t[0]) >= 1000)
+            {
+               printf("%d / %d -> %d\n", i, max, r);
+               t[0]= t[1];
+            }
+            usleep(msIvl*1000);
+         }
+         t[1]+= msIvl;
+      }
       lxi2cClose(&gBusCtx);
-      if (1 == r) { return(0); }
+      printf("\n\t%d errors\n", err);
+      if (0 == err) { return(0); }
    }
 
    return(-1);
