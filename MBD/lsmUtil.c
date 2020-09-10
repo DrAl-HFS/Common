@@ -443,8 +443,8 @@ LXI2CBusCtx gBusCtx={0,-1};
 int main (int argc, char *argv[])
 {
    if (lxi2cOpen(&gBusCtx, "/dev/i2c-1", 400))
-   {
-      const U8 ag_m[]={0x6b,0x1e};
+   {  // I2C addr: AG= 6B/6A
+      const U8 ag_m[]={0x6a,0x1e};
       testIMU(&gBusCtx, ag_m, 30);
 
       lxi2cClose(&gBusCtx);
@@ -454,5 +454,3 @@ int main (int argc, char *argv[])
 } // main
 
 #endif // LSM_MAIN
-
-

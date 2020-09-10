@@ -19,6 +19,13 @@ extern "C" {
 // Used along with bus clock rate to determine wait duration
 #define ADS1X_TRANS_NCLK (1 + 4 * (8+1))
 
+// Typedef vs. enum-tag : no difference in type enforcement...
+typedef enum ads1x_hwid
+{  // Hardware ID: only concerned with second digit of series number
+   ADS10=0,
+   ADS11=1
+} ADS1xHWID;
+
 // Full scale positive readings (ignoring 2's complement sign)
 // as obtained from conversion result register
 #define ADS10_FSR (((1<<11)-1)<<4) // NB: 12b "left aligned" to 16b
@@ -42,12 +49,6 @@ enum ADS1xReg
 // Done : naming inconsistencies between shifts, masks and values fixed
 
 // Alignment shifts within bytes
-
-typedef enum ads1x_hwid
-{  // Hardware ID: only concerned with second digit of series number
-   ADS10=0,
-   ADS11=1
-} ADS1xHWID;
 
 enum ADS1xShift0
 {  // Shifts (bit number) within byte 0 (Big-Endian 16b MSB)

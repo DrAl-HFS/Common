@@ -86,8 +86,8 @@ int testADS1x15
    r= ads1xInitRB(&rb, pWS, pC, dev);
    if (r >= 0)
    {
-      //const ADS1xRate idRate[]={ADS10_DR920, ADS11_DR860};
-      const enum ADS1xRate idRate[]={ADS10_DR128, ADS11_DR8};
+      const enum ADS1xRate idRate[]={ADS10_DR920, ADS11_DR860};
+      //const enum ADS1xRate idRate[]={ADS10_DR128, ADS11_DR8};
 
       ads1xDumpCfg(rb.cfg+1, 0);
       memcpy(cfgStatus, rb.cfg, ADS1X_NRB);
@@ -199,7 +199,7 @@ int main (int argc, char *argv[])
       // Paranoid enum check: for (int i=ADS11_DR8; i<=ADS11_DR860; i++) { printf("%d -> %d\n", i, ads1xRateToU(i,1) ); }
       //MemBuff ws={0,};
       //allocMemBuff(&ws, 4<<10);//
-      testADS1x15(&gBusCtx, NULL, 0x48, ADS10, adcMF, 100);
+      testADS1x15(&gBusCtx, NULL, 0x48, ADS11, adcMF, 100);
       //releaseMemBuff(&ws);
       lxi2cClose(&gBusCtx);
    }
