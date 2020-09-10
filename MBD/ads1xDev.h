@@ -20,11 +20,18 @@ typedef struct
    U8 cmp;
 } ADS1xTrans;
 
+// i2c "packet" bytes for ADS1x registers
 #define ADS1X_NRB (3)
-typedef struct // i2c "packet" bytes for ADS1x registers
-{
-   U8 res[ADS1X_NRB], cfg[ADS1X_NRB], cLo[ADS1X_NRB], cHi[ADS1X_NRB];
-} ADS1xRB;
+typedef struct
+{  // Result & config registers (minimum required)
+   U8 res[ADS1X_NRB], cfg[ADS1X_NRB];
+} ADS1xRCPB;
+
+typedef struct
+{  // Full register set with compare values
+   ADS1xRCPB rc;
+   U8 cLo[ADS1X_NRB], cHi[ADS1X_NRB];
+} ADS1xFullPB;
 
 #define ADS1X_TEST_MODE_VERIFY  (1<<7)
 #define ADS1X_TEST_MODE_SLEEP   (1<<6)
@@ -41,7 +48,7 @@ extern char muxCh (const U8 c);
 extern void printMux4x4 (const U8 m4x4);
 extern void ads1xDumpCfg (const U8 cfg[2], const ADS1xHWID id);
 
-extern int ads1xInitRB (ADS1xRB *pRB, const MemBuff *pWS, const LXI2CBusCtx *pC, const U8 dev);
+extern int ads1xInitRB (ADS1xFullPB *pFPB, const MemBuff *pWS, const LXI2CBusCtx *pC, const U8 dev);
 
 extern int testADS1x15 (const LXI2CBusCtx *pC, const MemBuff *pWS, const U8 dev, const ADS1xHWID id, const U8 mode, const U8 maxIter);
 

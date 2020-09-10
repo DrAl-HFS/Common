@@ -51,18 +51,44 @@ void ads1xDumpCfg (const U8 cfg[2], const ADS1xHWID id)
    LOG("%s %GV, %d/s C:%d\n", ads1xMuxStr(ads1xGetMux(cfg)), t.gainFSV, t.rate, t.cmp);
 } // ads1xDumpCfg
 
-int ads1xInitRB (ADS1xRB *pRB, const MemBuff *pWS, const LXI2CBusCtx *pC, const U8 dev)
-{  // setup i2c-reg id's in frames
-   pRB->res[0]= ADS1X_REG_RES;
-   pRB->cfg[0]= ADS1X_REG_CFG;
-   pRB->cLo[0]= ADS1X_REG_CLO;
-   pRB->cHi[0]= ADS1X_REG_CHI;
+int ads1xInitRB (ADS1xFullPB *pFPB, const MemBuff *pWS, const LXI2CBusCtx *pC, const U8 dev)
+{  // setup i2c-reg id's in "packet" frames
+   pFPB->rc.res[0]= ADS1X_REG_RES;
+   pFPB->rc.cfg[0]= ADS1X_REG_CFG;
+   pFPB->cLo[0]=  ADS1X_REG_CLO;
+   pFPB->cHi[0]=  ADS1X_REG_CHI;
    if (pC && dev)
    {  // Get actual device data if possible
-      return lxi2cReadMultiRB(pC, pWS, dev, pRB->res, ADS1X_NRB, 4);
+      return lxi2cReadMultiRB(pC, pWS, dev, pFPB->rc.res, ADS1X_NRB, 4);
    }
    return(0);
 } // ads1xInitRB
+
+int readAutoADS1x (F32 resV, int maxR, ADS1xRCPB *pP, const LXI2CBusCtx *pC, const U8 dev)
+{
+   int r=-1, n= 0;
+   U8 cfg[ADS1X_NRB];
+   U8 mgr[3];
+
+   if (pP) { memcpy(cfg, pP->cfg, ADS1X_NRB); }
+   else
+   {
+      cfg[0]= ADS1X_REG_CFG;
+      r= lxi2cReadRB(pC, dev, cfg, ADS1X_NRB);
+      if (r>=0)
+      {
+
+      }
+   }
+   mgr[0]= ads1xGetMux(cfg+1);
+   mgr[1]= ads1xGetGain(cfg+1);
+   mgr[2]= ads1xGetRate(cfg+1);
+   if (mgr[0] >= ADS1X_MUX0G)
+   { // single ended: no rev. pol.
+
+   }
+   return(n);
+} // readAutoADS1x
 
 #ifdef ADS1X_TEST
 
@@ -76,27 +102,27 @@ int testADS1x15
    const U8 maxIter
 )
 {
-   ADS1xRB rb;
+   ADS1xFullPB fpb;
    const int i2cWait= ADS1X_TRANS_NCLK * 1E6 / pC->clk;
    int convWait=0, expectWait=0, minWaitStep=10;
    int r;
    float sv;
    U8 cfgStatus[ADS1X_NRB];
 
-   r= ads1xInitRB(&rb, pWS, pC, dev);
+   r= ads1xInitRB(&fpb, pWS, pC, dev);
    if (r >= 0)
    {
       const enum ADS1xRate idRate[]={ADS10_DR920, ADS11_DR860};
       //const enum ADS1xRate idRate[]={ADS10_DR128, ADS11_DR8};
 
-      ads1xDumpCfg(rb.cfg+1, 0);
-      memcpy(cfgStatus, rb.cfg, ADS1X_NRB);
-      ads1xGenCfg(rb.cfg+1, ADS1X_MUX0G, ADS1X_GAIN_6V144, idRate[id], ADS1X_CMP_DISABLE);
-      rb.cfg[1]|= ADS1X_FL0_OS|ADS1X_FL0_MODE; // Now enable single-shot conversion
+      ads1xDumpCfg(fpb.rc.cfg+1, 0);
+      memcpy(cfgStatus, fpb.rc.cfg, ADS1X_NRB);
+      ads1xGenCfg(fpb.rc.cfg+1, ADS1X_MUX0G, ADS1X_GAIN_6V144, idRate[id], ADS1X_CMP_DISABLE);
+      fpb.rc.cfg[1]|= ADS1X_FL0_OS|ADS1X_FL0_MODE; // Now enable single-shot conversion
       // NB: Config packet written to device in loop that follows
-      convWait= ads1xConvIvl(rb.cfg+1, id);
-      sv= ads1xGainScaleV(rb.cfg+1, id);
-      ads1xDumpCfg(rb.cfg+1, id);
+      convWait= ads1xConvIvl(fpb.rc.cfg+1, id);
+      sv= ads1xGainScaleV(fpb.rc.cfg+1, id);
+      ads1xDumpCfg(fpb.rc.cfg+1, id);
       LOG("Ivl: conv=%dus comm=%dus\n", convWait, i2cWait);
       if (mode & ADS1X_TEST_MODE_SLEEP)
       {
@@ -107,9 +133,9 @@ int testADS1x15
       }
       {
          I16 v[3];
-         v[0]= rdI16BE(rb.res+1);
-         v[1]= rdI16BE(rb.cLo+1);
-         v[2]= rdI16BE(rb.cHi+1);
+         v[0]= rdI16BE(fpb.rc.res+1);
+         v[1]= rdI16BE(fpb.cLo+1);
+         v[2]= rdI16BE(fpb.cHi+1);
          LOG("res: %04x (%d) cmp: %04x %04x (%d %d)\n", v[0], v[0], v[1], v[2], v[1], v[2]);
       }
       if (r >= 0)
@@ -122,14 +148,14 @@ int testADS1x15
             U8 cfgVer=FALSE;
             do
             {
-               r= lxi2cWriteRB(pC, dev, rb.cfg, ADS1X_NRB);
+               r= lxi2cWriteRB(pC, dev, fpb.rc.cfg, ADS1X_NRB);
                if ((mode & ADS1X_TEST_MODE_VERIFY) && (r >= 0))
                {
                   r= lxi2cReadRB(pC, dev, cfgStatus, ADS1X_NRB);
                   if (r >= 0)
                   {  // Device goes busy (OS1->0) immediately on write, so merge back in for check
-                     cfgStatus[1] |= (rb.cfg[1] & ADS1X_FL0_OS);
-                     cfgVer= (0 == memcmp(cfgStatus, rb.cfg, ADS1X_NRB));
+                     cfgStatus[1] |= (fpb.rc.cfg[1] & ADS1X_FL0_OS);
+                     cfgVer= (0 == memcmp(cfgStatus, fpb.rc.cfg, ADS1X_NRB));
                      if (mode & ADS1X_TEST_MODE_VERBOSE) { LOG("ver%d=%d: ", iR0, cfgVer); ads1xDumpCfg(cfgStatus+1, id); }
                   }
                }
@@ -144,24 +170,24 @@ int testADS1x15
                } while (((r < 0) || (0 == (cfgStatus[1] & ADS1X_FL0_OS))) && (++iR1 < 10));
             }
 
-            r= lxi2cReadRB(pC, dev, rb.res, ADS1X_NRB); // read result
+            r= lxi2cReadRB(pC, dev, fpb.rc.res, ADS1X_NRB); // read result
             if (r >= 0)
             {
-               int raw=  rdI16BE(rb.res+1);
+               int raw=  rdI16BE(fpb.rc.res+1);
                float v= raw * sv;
                const char muxVerCh[]={'?','V'};
                enum ADS1xMux m;
                if (cfgVer) { m= ads1xGetMux(cfgStatus+1); }
-               else { m= ads1xGetMux(rb.cfg+1); }
+               else { m= ads1xGetMux(fpb.rc.cfg+1); }
                LOG("%s (%c) (i=%d,%d) W%d [%d] : 0x%x -> %GV\n", ads1xMuxStr(m), muxVerCh[cfgVer], iR0, iR1, expectWait, n, raw, v);
                if (mode & ADS1X_TEST_MODE_ROTMUX)
                {
                   static const U8 muxRot[]= { ADS1X_MUX0G, ADS1X_MUX1G, ADS1X_MUX2G, ADS1X_MUX3G };
                   const int iNM= (1+n) & 0x3;
-                  ads1xSetMux(rb.cfg+1, muxRot[iNM]); // 99999999);
+                  ads1xSetMux(fpb.rc.cfg+1, muxRot[iNM]); // 99999999);
                   if (mode & ADS1X_TEST_MODE_VERBOSE)
                   {
-                     LOG("%d -> 0x%02x -> %s chk: %s\n", iNM, muxRot[iNM], ads1xMuxStr(muxRot[iNM]), ads1xMuxStr(ads1xGetMux(rb.cfg+1)));
+                     LOG("%d -> 0x%02x -> %s chk: %s\n", iNM, muxRot[iNM], ads1xMuxStr(muxRot[iNM]), ads1xMuxStr(ads1xGetMux(fpb.rc.cfg+1)));
                   }
                }
             }
