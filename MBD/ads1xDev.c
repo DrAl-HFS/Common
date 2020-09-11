@@ -9,6 +9,19 @@
 
 /***/
 
+int ads1xInitFPB (ADS1xFullPB *pFPB, const MemBuff *pWS, const LXI2CBusCtx *pC, const U8 dev)
+{  // setup i2c-reg id's in "packet" frames
+   pFPB->rc.res[0]= ADS1X_REG_RES;
+   pFPB->rc.cfg[0]= ADS1X_REG_CFG;
+   pFPB->cLo[0]=  ADS1X_REG_CLO;
+   pFPB->cHi[0]=  ADS1X_REG_CHI;
+   if (pC && dev)
+   {  // Get actual device data if possible
+      return lxi2cReadMultiRB(pC, pWS, dev, pFPB->rc.res, ADS1X_NRB, 4);
+   }
+   return(0);
+} // ads1xInitFPB
+
 void ads1xTranslateCfg (ADS1xTrans *pT, const U8 cfg[2], const ADS1xHWID id)
 {
    pT->gainFSV= ads1xGainToFSV( ads1xGetGain(cfg) );
@@ -61,19 +74,6 @@ void ads1xDumpAll (const ADS1xFullPB *pFPB, const ADS1xHWID id)
    LOG("res: %04x (%d) cmp: %04x %04x (%d %d)\n", v[0], v[0], v[1], v[2], v[1], v[2]);
 } // ads1xDumpAll
 
-int ads1xInitRB (ADS1xFullPB *pFPB, const MemBuff *pWS, const LXI2CBusCtx *pC, const U8 dev)
-{  // setup i2c-reg id's in "packet" frames
-   pFPB->rc.res[0]= ADS1X_REG_RES;
-   pFPB->rc.cfg[0]= ADS1X_REG_CFG;
-   pFPB->cLo[0]=  ADS1X_REG_CLO;
-   pFPB->cHi[0]=  ADS1X_REG_CHI;
-   if (pC && dev)
-   {  // Get actual device data if possible
-      return lxi2cReadMultiRB(pC, pWS, dev, pFPB->rc.res, ADS1X_NRB, 4);
-   }
-   return(0);
-} // ads1xInitRB
-
 int readAutoADS1x (F32 resV, int maxR, ADS1xRCPB *pP, const LXI2CBusCtx *pC, const U8 dev)
 {
    int r=-1, n= 0;
@@ -119,7 +119,7 @@ int testADS1x15
    float sv;
    U8 cfgStatus[ADS1X_NRB];
 
-   r= ads1xInitRB(&fpb, pWS, pC, dev);
+   r= ads1xInitFPB(&fpb, pWS, pC, dev);
    if (r >= 0)
    {
       const enum ADS1xRate idRate[]={ADS10_DR920, ADS11_DR860};

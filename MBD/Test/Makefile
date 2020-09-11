@@ -58,6 +58,10 @@ LSM_INCDEF := -I$(COM_DIR) -DLSM_MAIN -DLSM_TEST
 $(OBJ_DIR)/%.o : %.o
 	mv $< $@
 
+.PHONY : all clean run
+
+all : ti2c ads1x lsm9ds1
+
 # Full build from source
 ti2c : $(I2C_SRC) $(I2C_HDR) $(SUPP_SRC) $(SUPP_HDR) $(MAKEFILE)
 	$(CC) $(OPT) $(I2C_INCDEF) $(LIBS) $(I2C_SRC) $(SUPP_SRC) -o $@
@@ -68,10 +72,6 @@ ads1x : $(I2C_SRC) $(I2C_HDR) $(ADS_SRC) $(ADS_HDR) $(SUPP_SRC) $(SUPP_HDR)  $(M
 lsm9ds1 : $(I2C_SRC) $(I2C_HDR) $(LSM_SRC) $(LSM_HDR) $(SUPP_SRC) $(SUPP_HDR) $(MAKEFILE)
 	$(CC) $(OPT) $(LSM_INCDEF) $(LIBS) $(I2C_SRC) $(LSM_SRC) $(SUPP_SRC) -o $@
 
-.PHONY : all clean run
-
-
-all : ti2c ads1x lsm9ds1
 
 clean :
 	rm -f ti2c ads1x lsm9ds1 $(OBJ_DIR)/*
