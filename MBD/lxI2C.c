@@ -311,22 +311,33 @@ void lxi2cDumpDevAddr (const LXI2CBusCtx *pC, U16 dev, U8 bytes, U8 addr)
 
 typedef struct
 {
-   U8 b[3];
-   U8 nB;
+   U8 nB, b[3];
    int maxIter, maxErr, ivl_us;
 } LXI2CPing;
 
-static const LXI2CPing gPing={ {0,}, 0, 3, 0, 1000 };
+typedef struct
+{
+   LXI2CPing ping;
+   char devPath[15];
+   U8 devAddr;
+} LXI2CPingArg;
 
-int lxi2cPing (const LXI2CBusCtx *pC, const U8 dev, const LXI2CPing *pP)
+static LXI2CPingArg gPA=
+{
+   { 0, {0,}, 3, 0, 1000 },
+   "/dev/i2c-1", 0x48
+};
+
+int lxi2cPing (const LXI2CBusCtx *pC, U8 devAddr, const LXI2CPing *pP)
 {
    //if (NULL == pP) { pP= &gPing; }
-   struct i2c_msg m= { .addr= dev,  .flags= I2C_M_WR,  .len= pP->nB,  .buf= (void*)(pP->b) };
+   struct i2c_msg m= { .addr= devAddr,  .flags= I2C_M_WR,  .len= pP->nB,  .buf= (void*)(pP->b) };
    struct i2c_rdwr_ioctl_data d={ &m, 1 };
    //int t[2]={0,0};
    int r, i=0, e=0;
 
-   TRACE_CALL("(0x%02X, [%d])\n", dev, 1+m.len);
+   r= I2C_BYTES_NCLK(m.len);
+   TRACE_CALL("(0x%02X, 1+[%d]) - %dclk -> %dus\n", m.addr, m.len, r, (1000000 * r) / pC->clk);
    do
    {
       r= ioctl(pC->fd, I2C_RDWR, &d);
@@ -465,15 +476,50 @@ void setup (void)
 #endif // RPI_VC4
 
 LXI2CBusCtx gBusCtx={0,-1};
+//#include <unistd.h>
+void pingArgs (LXI2CPingArg *pPA, int argc, char *argv[])
+{
+   int c, t;
+   do
+   {
+      c= getopt(argc,argv,"a:c:d:e:t:");
+      switch(c)
+      {
+         case 'a' :
+            sscanf(optarg, "%x", &t);
+            if (t <= 0x7F) { pPA->devAddr= t; }
+            break;
+         case 'c' :
+            sscanf(optarg, "%d", &t);
+            if (t > 0) { pPA->ping.maxIter= t; }
+            break;
+         case 'd' :
+         {
+            char ch= optarg[0];
+            if ((ch > '0') && (ch <= '9')) { pPA->devPath[9]= ch; }
+            break;
+         }
+         case 'e' :
+            sscanf(optarg,"%d", &t);
+            if (t > 0) { pPA->ping.maxErr= t; }
+            break;
+         case 't' :
+            sscanf(optarg,"%d", &t);
+            if (t > 0) { pPA->ping.ivl_us= t; }
+            break;
+      }
+   } while (c > 0);
+} // pingArgs
 
 int main (int argc, char *argv[])
 {
    int r= -1;
 
-   if (lxi2cOpen(&gBusCtx, "/dev/i2c-1", 400))
+   pingArgs(&gPA,argc,argv);
+   if (lxi2cOpen(&gBusCtx, gPA.devPath, 400))
    {
       // lxi2cDumpDevAddr(&gBusCtx, 0x48, 0xFF,0x00);
-      r= lxi2cPing(&gBusCtx, 0x48, &gPing);
+      r= lxi2cPing(&gBusCtx, gPA.devAddr, &(gPA.ping));
       lxi2cClose(&gBusCtx);
    }
 
