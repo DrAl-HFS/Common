@@ -309,25 +309,6 @@ void lxi2cDumpDevAddr (const LXI2CBusCtx *pC, U16 dev, U8 bytes, U8 addr)
    //else { printf(WARN/ERROR); }
 } // lxi2cDumpDevAddr
 
-typedef struct
-{
-   U8 nB, b[3];
-   int maxIter, maxErr, ivl_us;
-} LXI2CPing;
-
-typedef struct
-{
-   LXI2CPing ping;
-   char devPath[15];
-   U8 devAddr;
-} LXI2CPingArg;
-
-static LXI2CPingArg gPA=
-{
-   { 0, {0,}, 3, 0, 1000 },
-   "/dev/i2c-1", 0x48
-};
-
 int lxi2cPing (const LXI2CBusCtx *pC, U8 devAddr, const LXI2CPing *pP)
 {
    //if (NULL == pP) { pP= &gPing; }
@@ -358,6 +339,55 @@ int lxi2cPing (const LXI2CBusCtx *pC, U8 devAddr, const LXI2CPing *pP)
 } // lxi2cPing
 
 #ifdef LX_I2C_MAIN
+
+//#include <>
+
+typedef struct
+{
+   LXI2CPing ping;
+   char devPath[15];
+   U8 devAddr;
+} LXI2CPingCLA;
+
+static LXI2CPingCLA gPCLA=
+{
+   { 0, {0,}, 3, 0, 1000 },
+   "/dev/i2c-1", 0x48
+};
+
+void pingArgTrans (LXI2CPingCLA *pPCLA, int argc, char *argv[])
+{
+   int c, t;
+   do
+   {
+      c= getopt(argc,argv,"a:c:d:e:t:");
+      switch(c)
+      {
+         case 'a' :
+            sscanf(optarg, "%x", &t);
+            if (t <= 0x7F) { pPCLA->devAddr= t; }
+            break;
+         case 'c' :
+            sscanf(optarg, "%d", &t);
+            if (t > 0) { pPCLA->ping.maxIter= t; }
+            break;
+         case 'd' :
+         {
+            char ch= optarg[0];
+            if ((ch > '0') && (ch <= '9')) { pPCLA->devPath[9]= ch; }
+            break;
+         }
+         case 'e' :
+            sscanf(optarg,"%d", &t);
+            if (t > 0) { pPCLA->ping.maxErr= t; }
+            break;
+         case 't' :
+            sscanf(optarg,"%d", &t);
+            if (t > 0) { pPCLA->ping.ivl_us= t; }
+            break;
+      }
+   } while (c > 0);
+} // pingArgTrans
 
 #ifdef RPI_VC4 // Broadcom VideoCore IV timestamp register(s) mapped into (root-only) process address space
 
@@ -475,51 +505,20 @@ void setup (void)
 
 #endif // RPI_VC4
 
-LXI2CBusCtx gBusCtx={0,-1};
 //#include <unistd.h>
-void pingArgs (LXI2CPingArg *pPA, int argc, char *argv[])
-{
-   int c, t;
-   do
-   {
-      c= getopt(argc,argv,"a:c:d:e:t:");
-      switch(c)
-      {
-         case 'a' :
-            sscanf(optarg, "%x", &t);
-            if (t <= 0x7F) { pPA->devAddr= t; }
-            break;
-         case 'c' :
-            sscanf(optarg, "%d", &t);
-            if (t > 0) { pPA->ping.maxIter= t; }
-            break;
-         case 'd' :
-         {
-            char ch= optarg[0];
-            if ((ch > '0') && (ch <= '9')) { pPA->devPath[9]= ch; }
-            break;
-         }
-         case 'e' :
-            sscanf(optarg,"%d", &t);
-            if (t > 0) { pPA->ping.maxErr= t; }
-            break;
-         case 't' :
-            sscanf(optarg,"%d", &t);
-            if (t > 0) { pPA->ping.ivl_us= t; }
-            break;
-      }
-   } while (c > 0);
-} // pingArgs
+
+
+LXI2CBusCtx gBusCtx={0,-1};
 
 int main (int argc, char *argv[])
 {
    int r= -1;
 
-   pingArgs(&gPA,argc,argv);
-   if (lxi2cOpen(&gBusCtx, gPA.devPath, 400))
+   pingArgTrans(&gPCLA, argc, argv);
+   if (lxi2cOpen(&gBusCtx, gPCLA.devPath, 400))
    {
       // lxi2cDumpDevAddr(&gBusCtx, 0x48, 0xFF,0x00);
-      r= lxi2cPing(&gBusCtx, gPA.devAddr, &(gPA.ping));
+      r= lxi2cPing(&gBusCtx, gPCLA.devAddr, &(gPCLA.ping));
       lxi2cClose(&gBusCtx);
    }
 

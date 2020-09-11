@@ -32,6 +32,13 @@ typedef struct
    int  clk; // bus clock rate used for transaction timing estimation
 } LXI2CBusCtx;
 
+typedef struct
+{
+   U8 nB, b[3];
+   int maxIter, maxErr, ivl_us;
+} LXI2CPing;
+
+
 
 /***/
 

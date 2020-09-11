@@ -51,6 +51,16 @@ void ads1xDumpCfg (const U8 cfg[2], const ADS1xHWID id)
    LOG("%s %GV, %d/s C:%d\n", ads1xMuxStr(ads1xGetMux(cfg)), t.gainFSV, t.rate, t.cmp);
 } // ads1xDumpCfg
 
+void ads1xDumpAll (const ADS1xFullPB *pFPB, const ADS1xHWID id)
+{
+   I16 v[3];
+   ads1xDumpCfg(pFPB->rc.cfg+1, id);
+   v[0]= rdI16BE(pFPB->rc.res+1);
+   v[1]= rdI16BE(pFPB->cLo+1);
+   v[2]= rdI16BE(pFPB->cHi+1);
+   LOG("res: %04x (%d) cmp: %04x %04x (%d %d)\n", v[0], v[0], v[1], v[2], v[1], v[2]);
+} // ads1xDumpAll
+
 int ads1xInitRB (ADS1xFullPB *pFPB, const MemBuff *pWS, const LXI2CBusCtx *pC, const U8 dev)
 {  // setup i2c-reg id's in "packet" frames
    pFPB->rc.res[0]= ADS1X_REG_RES;
@@ -122,7 +132,7 @@ int testADS1x15
       // NB: Config packet written to device in loop that follows
       convWait= ads1xConvIvl(fpb.rc.cfg+1, id);
       sv= ads1xGainScaleV(fpb.rc.cfg+1, id);
-      ads1xDumpCfg(fpb.rc.cfg+1, id);
+      ads1xDumpAll(&fpb, id);
       LOG("Ivl: conv=%dus comm=%dus\n", convWait, i2cWait);
       if (mode & ADS1X_TEST_MODE_SLEEP)
       {
@@ -130,13 +140,6 @@ int testADS1x15
          int i2cDelay= nDelay * i2cWait;
          if (convWait > i2cDelay) { expectWait= convWait-i2cDelay; } // Hacky : conversion time seems less than sample interval...
          if (i2cWait < minWaitStep) { minWaitStep= i2cWait; }
-      }
-      {
-         I16 v[3];
-         v[0]= rdI16BE(fpb.rc.res+1);
-         v[1]= rdI16BE(fpb.cLo+1);
-         v[2]= rdI16BE(fpb.cHi+1);
-         LOG("res: %04x (%d) cmp: %04x %04x (%d %d)\n", v[0], v[0], v[1], v[2], v[1], v[2]);
       }
       if (r >= 0)
       {
