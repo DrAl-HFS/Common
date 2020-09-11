@@ -19,9 +19,10 @@
 #include <string.h>
 #include <ctype.h>
 #include <math.h>
+#include <time.h> // date & time etc.
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <sys/time.h>
+#include <sys/time.h>   // timeval etc.
 #include <unistd.h>
 
 #if 0 //def __PGI
