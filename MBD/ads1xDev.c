@@ -74,28 +74,74 @@ void ads1xDumpAll (const ADS1xFullPB *pFPB, const ADS1xHWID id)
    LOG("res: %04x (%d) cmp: %04x %04x (%d %d)\n", v[0], v[0], v[1], v[2], v[1], v[2]);
 } // ads1xDumpAll
 
-int readAutoADS1x (F32 resV, int maxR, ADS1xRCPB *pP, const LXI2CBusCtx *pC, const U8 dev)
+typedef struct
+{
+   I16 res;
+   U8 muxGain, status;
+} RawRMG;
+
+int readAutoADS1x (RawRMG rmg[], int nR, ADS1xRCPB *pP, const LXI2CBusCtx *pC, const U8 dev)
 {
    int r=-1, n= 0;
+   int ivl;
+   I16 fFSR, hFSR;
    U8 cfg[ADS1X_NRB];
-   U8 mgr[3];
+   U8 res[ADS1X_NRB];
+   U8 hwID=ADS11;
 
+   res[0]= ADS1X_REG_RES;
+   fFSR= ADS11_FSR;
+   hFSR= ADS11_FSR / 2;
    if (pP) { memcpy(cfg, pP->cfg, ADS1X_NRB); }
    else
    {
       cfg[0]= ADS1X_REG_CFG;
       r= lxi2cReadRB(pC, dev, cfg, ADS1X_NRB);
-      if (r>=0)
-      {
-
-      }
+      if (r <= 0) { return(r); }
    }
-   mgr[0]= ads1xGetMux(cfg+1);
-   mgr[1]= ads1xGetGain(cfg+1);
-   mgr[2]= ads1xGetRate(cfg+1);
-   if (mgr[0] >= ADS1X_MUX0G)
-   { // single ended: no rev. pol.
+   //rID= ads1xGetRate(cfg+1);
+   ivl= ads1xConvIvl(cfg+1, hwID);
+   for (int i=0; i<nR; i++)
+   {
+      rmg[i].status= 0;
+      if (rmg[i].muxGain == (0x77 & rmg[i].muxGain)) // validate
+      {
+         ads1xSetMux(cfg+1, rmg[i].muxGain >> 4);
+         do
+         {
+            // cfg[1]= r[i].cfg;
+            ads1xSetGain(cfg+1, rmg[i].muxGain & 0x7);
+            cfg[1]|= ADS1X_FL0_OS|ADS1X_FL0_MODE; // Now enable single-shot conversion
+            r= lxi2cWriteRB(pC, dev, cfg, ADS1X_NRB);
+            if (r > 0)
+            {
+               usleep(ivl);
+               r= lxi2cReadRB(pC, dev, res, ADS1X_NRB); // read result
+               if (r > 0)
+               {
+                  rmg[i].res= rdI16BE(res+1);
+                  if ((rmg[i].muxGain >= (ADS1X_MUX0G<<4)) && (rmg[i].res < 0)) { r= -1; rmg[i].status|= 0x80; } // single ended: reverse polarity abort
+                  else
+                  {
+                     U8 gain= rmg[i].muxGain & 0x7;
 
+                     rmg[i].status++;
+                     if ((rmg[i].res < hFSR) && (gain > ADS1X_GAIN_6V144))
+                     {
+                        I16 tFSR= hFSR;
+                        do
+                        {
+                           gain= (--(rmg[i].muxGain)) & 0x7;
+                           tFSR>>= 1;
+                        } while ((rmg[i].res < tFSR) && (gain > ADS1X_GAIN_6V144));
+                     }
+                     else if ((rmg[i].res >= fFSR) && (gain < ADS1X_GAIN_0V256)) { rmg[i].muxGain++; }
+                     else { r= 0; }
+                  }
+               }
+            }
+         } while ((r > 0) && (rmg[i].status < 5));
+      }
    }
    return(n);
 } // readAutoADS1x
