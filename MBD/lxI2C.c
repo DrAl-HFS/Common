@@ -197,17 +197,17 @@ int lxi2cTrans (const LXI2CBusCtx *pBC, const U16 dev, const U16 f, U16 nB, U8 *
 void lxi2cSleepm (U32 ms)
 {
    int r;
-#if 0
+   LX_TRC0("(%u)\n",ms);
+#ifdef __USE_POSIX199309
+//#warning __USE_POSIX199309 -> nanosleep()
    struct timespec rq, rem={0};
    rq.tv_sec= ms / 1000;
    rq.tv_nsec= (ms % 1000) * 1000000;
    r= nanosleep(&rq,&rem);
-   //if ((0 != r) || (0 != rem.tv_sec)) "WARNING"
 #else
-   LX_TRC0("(%u)\n",ms);
    if (ms < 5000)
    {
-      r= usleep(ms*1000); // deprecated ?
+      r= usleep(ms*1000); // deprecated on many x86 builds, but not on ARM...
    }
    else { r= sleep(ms / 1000); }
 #endif
@@ -309,9 +309,44 @@ void lxi2cDumpDevAddr (const LXI2CBusCtx *pC, U16 dev, U8 bytes, U8 addr)
    //else { printf(WARN/ERROR); }
 } // lxi2cDumpDevAddr
 
-#ifdef LX_I2C_MAIN
+typedef struct
+{
+   U8 b[3];
+   U8 nB;
+   int maxIter, maxErr, ivl_us;
+} LXI2CPing;
 
-// Was a standalone test, now being used as a device test harness...
+static const LXI2CPing gPing={ {0,}, 0, 3, 0, 1000 };
+
+int lxi2cPing (const LXI2CBusCtx *pC, const U8 dev, const LXI2CPing *pP)
+{
+   //if (NULL == pP) { pP= &gPing; }
+   struct i2c_msg m= { .addr= dev,  .flags= I2C_M_WR,  .len= pP->nB,  .buf= (void*)(pP->b) };
+   struct i2c_rdwr_ioctl_data d={ &m, 1 };
+   //int t[2]={0,0};
+   int r, i=0, e=0;
+
+   TRACE_CALL("(0x%02X, [%d])\n", dev, 1+m.len);
+   do
+   {
+      r= ioctl(pC->fd, I2C_RDWR, &d);
+      e+= (1 != r);
+      if (pP->ivl_us > 0)
+      {
+/*       if ((t[1] - t[0]) >= 1000)
+         {
+            //printf("%d / %d -> %d\n", i, max, r);
+            t[0]= t[1];
+         }
+*/       usleep(pP->ivl_us);
+         //t[1]+= pP->ivl_us;
+      }
+   } while ((++i < pP->maxIter) && (e <= pP->maxErr));
+   LOG("\t%d OK, %d Err\n", i-e,e);
+   return(-e);
+} // lxi2cPing
+
+#ifdef LX_I2C_MAIN
 
 #ifdef RPI_VC4 // Broadcom VideoCore IV timestamp register(s) mapped into (root-only) process address space
 
@@ -331,7 +366,6 @@ void setup (void)
 #else // RPI_VC4
 // Evaluate other timing mechanisms that should provide better-than-millisecond accuracy
 //#include <sys/time.h>
-#include <time.h>
 #include <signal.h>
 #define USEC(t1,t2) (((t2).tv_sec-(t1).tv_sec)*1000000+((t2).tv_usec-(t1).tv_usec))
 #define NSEC(t1,t2) (((t2).tv_sec-(t1).tv_sec)*1000000000+((t2).tv_nsec-(t1).tv_nsec))
@@ -432,44 +466,18 @@ void setup (void)
 
 LXI2CBusCtx gBusCtx={0,-1};
 
-#include "lsmUtil.h"
-
 int main (int argc, char *argv[])
 {
-   U8 dev=0x48, payload[]={0x02};
-   int r= -1, err=0, max= 1000, msIvl=200;
-   int t[2]= {0};
+   int r= -1;
 
    if (lxi2cOpen(&gBusCtx, "/dev/i2c-1", 400))
    {
       // lxi2cDumpDevAddr(&gBusCtx, 0x48, 0xFF,0x00);
-      // Hacky "ping"
-      struct i2c_msg m= { .addr= dev,  .flags= I2C_M_WR,  .len= sizeof(payload),  .buf= payload };
-//      struct i2c_msg m= { .addr= dev,  .flags= I2C_M_WR,  .len= 0,  .buf= payload };
-      struct i2c_rdwr_ioctl_data d={ &m, 1 };
-
-      printf("i2c-ping: dev.addr=0x%02X, pkt.len=%d\n\t", dev, 1+m.len);
-      for (int i=0; i<max; i++)
-      {
-         r= ioctl(gBusCtx.fd, I2C_RDWR, &d);
-         err+= (1 != r);
-         if (msIvl > 0)
-         {
-            if ((t[1] - t[0]) >= 1000)
-            {
-               printf("%d / %d -> %d\n", i, max, r);
-               t[0]= t[1];
-            }
-            usleep(msIvl*1000);
-         }
-         t[1]+= msIvl;
-      }
+      r= lxi2cPing(&gBusCtx, 0x48, &gPing);
       lxi2cClose(&gBusCtx);
-      printf("\n\t%d errors\n", err);
-      if (0 == err) { return(0); }
    }
 
-   return(-1);
+   return(r);
 } // main
 
 #endif // LX_I2C_MAIN

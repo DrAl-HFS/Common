@@ -14,8 +14,12 @@
 extern "C" {
 #endif
 
-// I2C clock cycles for nb byte message
-#define I2C_BYTES_NCLK(nb) ((1+(nb)) * 9 + 1)
+// I2C clock cycles for a address bits plus b payload bits
+// assumes single ACK following address, thereafter one ACK
+// per 8 bits plus final NACK to end transaction.
+#define I2C_ADDR_BITS_NCLK(a,b) ((a)+1+(b)+(((b)+7)>>3) + 1)
+// I2C clock cycles for byte addressed n byte message
+#define I2C_BYTES_NCLK(n) I2C_ADDR_BITS_NCLK(8,(n<<3))
 
 #define I2C_M_WR  (0x0)   // Dummy for code readability
 
@@ -36,8 +40,13 @@ extern Bool32 lxi2cOpen (LXI2CBusCtx *pBC, const char *path, const int clk);
 extern int lxi2cReadRB (const LXI2CBusCtx *pBC, const U8 dev, U8 regBytes[], const U8 nRB);
 extern int lxi2cWriteRB (const LXI2CBusCtx *pBC, const U8 dev, const U8 regBytes[], const U8 nRB);
 
-// Multi-message-block transfer (uniform block size to/from single device only) versions
-// for efficiency/convenience
+// Multi-message-block transfer extensions for efficiency (?) and convenience
+// when numerous register blocks are to be read or written on a given device.
+// NB - these support uniform block size only and a single device address only
+// within a "batch" of messages. More specific stuff is best achieved by using
+// the "i2c-dev" API directly.
+// CONSIDER: is there a more general abstraction that yields greater elegance
+// without sacrificing efficiency? What about devRegBytes[]={dev,reg,b0..bn} ???
 extern int lxi2cReadMultiRB
 (
    const LXI2CBusCtx *pBC, // bus info
@@ -60,6 +69,7 @@ extern int lxi2cWriteMultiRB  // ditto
 // DEPRECATE
 extern int lxi2cTrans (const LXI2CBusCtx *pBC, const U16 dev, const U16 f, U16 nB, U8 *pB, U8 reg);
 
+// millisecond sleep for compatibility with "black box" driver code eg. Bosch Sensortech
 extern void lxi2cSleepm (U32 ms);
 
 extern void lxi2cDumpDevAddr (const LXI2CBusCtx *pC, U16 dev, U8 bytes, U8 addr);

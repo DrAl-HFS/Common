@@ -14,7 +14,8 @@ extern "C" {
 
 #ifndef UTIL_H
 
-// Cannot rely on <sys/types.h> etc. being available so just homebrew the necessities.
+// Cannot rely on <sys/types.h> etc. being available
+// on all targets, so just home-brew as necessary.
 typedef signed char       I8;
 typedef signed short      I16;
 typedef signed int        I32;
