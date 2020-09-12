@@ -4,7 +4,26 @@
 // (c) Project Contributors Sept 2020
 
 #include "ads1xDev.h"
-#include <stdio.h> // -> REPORT !
+//#include <stdio.h> // -> REPORT !
+
+typedef struct
+{
+   U32 ivl; // Delay for conversion interval (hardware rate dependant)
+   I16 fsr; // Full scale reading (hardware version dependant)
+   U8 devAddr; // I2C device address
+   U8 cfgPB[ADS1X_NRB]; // Config packet bytes
+} AutoRawCtx;
+
+#define RMG_FLAG_AUTO 1<<7 // Enable auto gain
+#define RMG_FLAG_SGND 1<<6 // Mux selects single ended operation
+#define RMG_FLAG_ORNG 1<<5 // out of range (uncorrectable over/under-flow)
+#define RMG_FLAG_VROK 1<<4 // Valid result
+#define RMG_MASK_ITER 0xF
+typedef struct
+{
+   I16 res;
+   U8 cfgRB0[1], flSt; // flags (above) & 4bit iter count
+} RawRMG;
 
 
 /***/
@@ -35,7 +54,7 @@ int ads1xConvIvl (const U8 cfg[2], const ADS1xHWID id)
    return(1000000 / ads1xRateToU( ads1xGetRate(cfg), id));
 } // ads1xConvIvl
 
-F32 ads1xGainScaleV (const U8 cfg[2], const ADS1xHWID x)
+F32 ads1xGainScaleV (const U8 cfg[1], const ADS1xHWID x)
 {
    static const F32 rawFS[]= { 1.0 / ADS10_FSR, 1.0 / ADS11_FSR };
    if ((x & 1) != x) { return(0); } //else
@@ -73,25 +92,6 @@ void ads1xDumpAll (const ADS1xFullPB *pFPB, const ADS1xHWID id)
    v[2]= rdI16BE(pFPB->cHi+1);
    LOG("res: %04x (%d) cmp: %04x %04x (%d %d)\n", v[0], v[0], v[1], v[2], v[1], v[2]);
 } // ads1xDumpAll
-
-typedef struct
-{
-   U32 ivl; // Delay for conversion interval (hardware rate dependant)
-   I16 fsr; // Full scale reading (hardware version dependant)
-   U8 devAddr; // I2C device address
-   U8 cfgPB[ADS1X_NRB]; // Config packet bytes
-} AutoRawCtx;
-
-#define RMG_FLAG_AUTO 1<<7 // Enable auto gain
-#define RMG_FLAG_SGND 1<<6 // Mux selects single ended operation
-#define RMG_FLAG_ORNG 1<<5 // out of range (uncorrectable over/under-flow)
-#define RMG_FLAG_VROK 1<<4 // Valid result
-#define RMG_MASK_ITER 0xF
-typedef struct
-{
-   I16 res;
-   U8 cfgRB0[1], flSt; // flags (above) & 4bit iter count
-} RawRMG;
 
 int readAutoRawADS1x (RawRMG rmg[], int nR, AutoRawCtx *pARC, const LXI2CBusCtx *pC)
 {
@@ -175,6 +175,7 @@ int readAutoADS1X (F32 f[], const U8 mux[], int nMux, const LXI2CBusCtx *pC, U8 
       arc.cfgPB[0]= ADS1X_REG_CFG;
       r= lxi2cReadRB(pC, devAddr, arc.cfgPB, ADS1X_NRB);
       if (r <= 0) { return(r); }
+      //LOG("lxi2cReadRB() - r=%d\n", r);
    }
    if (nMux > 4) { WARN_CALL("(..nMux=%u..) - clamped to 4\n", nMux); nMux= 4; }
    for (int i=0; i<nMux; i++)
@@ -183,7 +184,7 @@ int readAutoADS1X (F32 f[], const U8 mux[], int nMux, const LXI2CBusCtx *pC, U8 
       rmg[i].flSt= RMG_FLAG_AUTO;
       if (mux[i] >= ADS1X_MUX0G) { rmg[i].flSt|= RMG_FLAG_SGND; }
    }
-   r= readAutoRawADS1x(rmg, nMux, &arc,pC);
+   r= readAutoRawADS1x(rmg, nMux, &arc,pC); //LOG("readAutoRawADS1x() - r=%d\n", r);
    if (r > 0)
    {
       for (int i=0; i<nMux; i++)
@@ -191,10 +192,11 @@ int readAutoADS1X (F32 f[], const U8 mux[], int nMux, const LXI2CBusCtx *pC, U8 
          if (rmg[i].flSt & RMG_FLAG_VROK)
          {
             f[i]= rmg[i].res * ads1xGainScaleV(rmg[i].cfgRB0, hwID);
+            //LOG("%d : %f\n", i, f[i]);
          }
-         //else { f[i]= 0; }
+         else { f[i]= 0; }
       }
-      if (r == nMux) { memcpy(pCfgPB, arc.cfgPB, ADS1X_NRB); }
+      if (pCfgPB && (r == nMux)) { memcpy(pCfgPB, arc.cfgPB, ADS1X_NRB); }
    }
    return(r);
 } // readAutoADS1X
@@ -321,6 +323,7 @@ int main (int argc, char *argv[])
 {
    if (lxi2cOpen(&gBusCtx, "/dev/i2c-1", 400))
    {
+#if 0
       U8 adcMF= ADS1X_TEST_MODE_VERIFY|ADS1X_TEST_MODE_SLEEP|ADS1X_TEST_MODE_POLL|ADS1X_TEST_MODE_ROTMUX;
       //adcMF|= ADS1X_TEST_MODE_VERBOSE;
 
@@ -329,6 +332,18 @@ int main (int argc, char *argv[])
       //allocMemBuff(&ws, 4<<10);//
       testADS1x15(&gBusCtx, NULL, 0x48, ADS11, adcMF, 100);
       //releaseMemBuff(&ws);
+#else
+      const char sepCh[2]={'\t','\n'};
+      F32 f[4];
+      U8 mux[4]= { ADS1X_MUX0G, ADS1X_MUX1G, ADS1X_MUX2G, ADS1X_MUX3G };
+      int nM=4, r;
+      for (int j=0; j<nM; j++) { LOG("%s%c", ads1xMuxStr(mux[j]), sepCh[j >= (nM-1)] ); }
+      for (int i=0; i<10; i++)
+      {
+         r= readAutoADS1X(f, mux, nM, &gBusCtx, NULL, 0x48, ADS11);
+         for (int j=0; j<r; j++) { LOG("%G%c", f[j], sepCh[j >= (nM-1)]); }
+      }
+#endif
       lxi2cClose(&gBusCtx);
    }
 
