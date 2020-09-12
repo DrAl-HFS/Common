@@ -76,75 +76,128 @@ void ads1xDumpAll (const ADS1xFullPB *pFPB, const ADS1xHWID id)
 
 typedef struct
 {
+   U32 ivl; // Delay for conversion interval (hardware rate dependant)
+   I16 fsr; // Full scale reading (hardware version dependant)
+   U8 devAddr; // I2C device address
+   U8 cfgPB[ADS1X_NRB]; // Config packet bytes
+} AutoRawCtx;
+
+#define RMG_FLAG_AUTO 1<<7 // Enable auto gain
+#define RMG_FLAG_SGND 1<<6 // Mux selects single ended operation
+#define RMG_FLAG_ORNG 1<<5 // out of range (uncorrectable over/under-flow)
+#define RMG_FLAG_VROK 1<<4 // Valid result
+#define RMG_MASK_ITER 0xF
+typedef struct
+{
    I16 res;
-   U8 muxGain, status;
+   U8 cfgRB0[1], flSt; // flags (above) & 4bit iter count
 } RawRMG;
 
-int readAutoADS1x (RawRMG rmg[], int nR, ADS1xRCPB *pP, const LXI2CBusCtx *pC, const U8 dev)
+int readAutoRawADS1x (RawRMG rmg[], int nR, AutoRawCtx *pARC, const LXI2CBusCtx *pC)
 {
-   int r=-1, n= 0;
-   int ivl;
-   I16 fFSR, hFSR;
-   U8 cfg[ADS1X_NRB];
-   U8 res[ADS1X_NRB];
-   U8 hwID=ADS11;
+   int n=0, r=-1, vr, tFSR, iT; // intermediate values at machine word-length: intended to reduce operations
+   U8 resPB[ADS1X_NRB], gainID;
 
-   res[0]= ADS1X_REG_RES;
-   fFSR= ADS11_FSR;
-   hFSR= ADS11_FSR / 2;
-   if (pP) { memcpy(cfg, pP->cfg, ADS1X_NRB); }
-   else
-   {
-      cfg[0]= ADS1X_REG_CFG;
-      r= lxi2cReadRB(pC, dev, cfg, ADS1X_NRB);
-      if (r <= 0) { return(r); }
-   }
-   //rID= ads1xGetRate(cfg+1);
-   ivl= ads1xConvIvl(cfg+1, hwID);
+   resPB[0]= ADS1X_REG_RES;
    for (int i=0; i<nR; i++)
-   {
-      rmg[i].status= 0;
-      if (rmg[i].muxGain == (0x77 & rmg[i].muxGain)) // validate
-      {
-         ads1xSetMux(cfg+1, rmg[i].muxGain >> 4);
-         do
-         {
-            // cfg[1]= r[i].cfg;
-            ads1xSetGain(cfg+1, rmg[i].muxGain & 0x7);
-            cfg[1]|= ADS1X_FL0_OS|ADS1X_FL0_MODE; // Now enable single-shot conversion
-            r= lxi2cWriteRB(pC, dev, cfg, ADS1X_NRB);
+   {  // per-mux iteration
+      vr= 0; iT= 0; // clean start
+      rmg[i].flSt&= RMG_FLAG_AUTO|RMG_FLAG_SGND; // clear status, preserve setting
+      gainID= ads1xGetGain(rmg[i].cfgRB0);
+      do
+      {  // Get best available reading
+         pARC->cfgPB[1]= rmg[i].cfgRB0[0]; // Sets Gain, Mux, flags (Single Shot & Start)
+         r= lxi2cWriteRB(pC, pARC->devAddr, pARC->cfgPB, ADS1X_NRB);
+         if (r > 0)
+         {  // working
+            iT++;
+            usleep(pARC->ivl);
+            r= lxi2cReadRB(pC, pARC->devAddr, resPB, ADS1X_NRB);
             if (r > 0)
-            {
-               usleep(ivl);
-               r= lxi2cReadRB(pC, dev, res, ADS1X_NRB); // read result
-               if (r > 0)
-               {
-                  rmg[i].res= rdI16BE(res+1);
-                  if ((rmg[i].muxGain >= (ADS1X_MUX0G<<4)) && (rmg[i].res < 0)) { r= -1; rmg[i].status|= 0x80; } // single ended: reverse polarity abort
-                  else
-                  {
-                     U8 gain= rmg[i].muxGain & 0x7;
-
-                     rmg[i].status++;
-                     if ((rmg[i].res < hFSR) && (gain > ADS1X_GAIN_6V144))
-                     {
-                        I16 tFSR= hFSR;
-                        do
-                        {
-                           gain= (--(rmg[i].muxGain)) & 0x7;
-                           tFSR>>= 1;
-                        } while ((rmg[i].res < tFSR) && (gain > ADS1X_GAIN_6V144));
-                     }
-                     else if ((rmg[i].res >= fFSR) && (gain < ADS1X_GAIN_0V256)) { rmg[i].muxGain++; }
-                     else { r= 0; }
-                  }
+            {  // got result
+               iT++;
+               vr= rdI16BE(resPB+1);
+               if ((vr < 0) && (rmg[i].flSt & RMG_FLAG_SGND))
+               {  // single ended: reverse polarity -> abort
+                  rmg[i].flSt|= RMG_FLAG_ORNG;
+                  r= 0;
                }
-            }
-         } while ((r > 0) && (rmg[i].status < 5));
-      }
+               else if (rmg[i].flSt & RMG_FLAG_AUTO)
+               {  // Check for better gain setting
+                  tFSR= (int)(pARC->fsr) / 2;
+                  if ((vr < tFSR) && (gainID < ADS1X_GAIN_0V256))
+                  {
+                     do // Search for appropriate gain to improve
+                     {  // precision based on last reading
+                        gainID++;
+                        tFSR/= 2;
+                     } while ((vr < tFSR) && (gainID < ADS1X_GAIN_0V256));
+                     ads1xSetGain(rmg[i].cfgRB0, gainID);
+                  }
+                  else if ((vr >= pARC->fsr) && (gainID > ADS1X_GAIN_6V144))
+                  {  // Reduce gain by half
+                     gainID/= 2;
+                     ads1xSetGain(rmg[i].cfgRB0, gainID);
+                  }
+                  else { r= 0; } // done
+               }
+            } // Result
+         } // Start
+      } while ((r > 0) && (iT < 10)); // 5 attempts max
+      if (r >= 0)
+      { // Set final status info
+         const int fsr= pARC->fsr;
+         if ((vr >= fsr) || (vr <= -(fsr+1))) { rmg[i].flSt|= RMG_FLAG_ORNG; }
+         else
+         {
+            rmg[i].flSt|= RMG_FLAG_VROK;
+            ++n;
+         }
+         rmg[i].res= vr;
+         rmg[i].flSt|= RMG_MASK_ITER & iT;
+       }
    }
    return(n);
-} // readAutoADS1x
+} // readAutoRawADS1x
+
+int readAutoADS1X (F32 f[], const U8 mux[], int nMux, const LXI2CBusCtx *pC, U8 *pCfgPB, const U8 devAddr, const U8 hwID)
+{
+   AutoRawCtx arc;
+   RawRMG rmg[4];
+   int r;
+
+   arc.ivl= ads1xConvIvl(arc.cfgPB+1, hwID);
+   arc.fsr= ads1xRawFSR(hwID);
+   arc.devAddr= devAddr;
+   if (pCfgPB) { memcpy(arc.cfgPB, pCfgPB, ADS1X_NRB); }
+   else
+   {
+      arc.cfgPB[0]= ADS1X_REG_CFG;
+      r= lxi2cReadRB(pC, devAddr, arc.cfgPB, ADS1X_NRB);
+      if (r <= 0) { return(r); }
+   }
+   if (nMux > 4) { WARN_CALL("(..nMux=%u..) - clamped to 4\n", nMux); nMux= 4; }
+   for (int i=0; i<nMux; i++)
+   {
+      ads1xGenCfgRB0(rmg[i].cfgRB0, mux[i], ADS1X_GAIN_4V096, ADS1X_FL0_OS|ADS1X_FL0_MODE);
+      rmg[i].flSt= RMG_FLAG_AUTO;
+      if (mux[i] >= ADS1X_MUX0G) { rmg[i].flSt|= RMG_FLAG_SGND; }
+   }
+   r= readAutoRawADS1x(rmg, nMux, &arc,pC);
+   if (r > 0)
+   {
+      for (int i=0; i<nMux; i++)
+      {
+         if (rmg[i].flSt & RMG_FLAG_VROK)
+         {
+            f[i]= rmg[i].res * ads1xGainScaleV(rmg[i].cfgRB0, hwID);
+         }
+         //else { f[i]= 0; }
+      }
+      if (r == nMux) { memcpy(pCfgPB, arc.cfgPB, ADS1X_NRB); }
+   }
+   return(r);
+} // readAutoADS1X
 
 #ifdef ADS1X_TEST
 

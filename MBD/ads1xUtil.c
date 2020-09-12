@@ -9,16 +9,16 @@
 /***/
 
 /*- Suitable for inlining  -*/
-enum ADS1xMux ads1xGetMux (const U8 cfg[2]) { return((cfg[0] >> ADS1X_SH0_MUX) & ADS1X_MUX_M); }
-enum ADS1xGain ads1xGetGain (const U8 cfg[2]) { return((cfg[0] >> ADS1X_SH0_GAIN) & ADS1X_GAIN_M); }
+enum ADS1xMux ads1xGetMux (const U8 cfg[1]) { return((cfg[0] >> ADS1X_SH0_MUX) & ADS1X_MUX_M); }
+enum ADS1xGain ads1xGetGain (const U8 cfg[1]) { return((cfg[0] >> ADS1X_SH0_GAIN) & ADS1X_GAIN_M); }
 enum ADS1xRate ads1xGetRate (const U8 cfg[2]) { return((cfg[1] >> ADS1X_SH1_DR) & ADS1X_DR_M); }
 
-void ads1xSetMux (U8 cfg[2], enum ADS1xMux mux)
+void ads1xSetMux (U8 cfg[1], enum ADS1xMux mux)
 {
    cfg[0]= setMaskU8(cfg[0], ADS1X_MUX_M, mux, ADS1X_SH0_MUX);
    //cfg[0]= (cfg[0] & ~(ADS1X_MUX_M << ADS1X_SH0_MUX)) | (mux << ADS1X_SH0_MUX);
 }
-void ads1xSetGain (U8 cfg[2], enum ADS1xGain gain)
+void ads1xSetGain (U8 cfg[1], enum ADS1xGain gain)
 {
    cfg[0]= setMaskU8(cfg[0], ADS1X_GAIN_M, gain, ADS1X_SH0_GAIN);
    //cfg[0]= (cfg[0] & ~(ADS1X_GAIN_M << ADS1X_SH0_GAIN)) | (gain << ADS1X_SH0_GAIN);
@@ -28,6 +28,11 @@ void ads1xSetRate (U8 cfg[2], enum ADS1xRate rate)
    cfg[1]= setMaskU8(cfg[1], ADS1X_DR_M, rate, ADS1X_SH1_DR);
    //cfg[1]= (cfg[1] & ~(ADS1X_DR_M << ADS1X_SH1_DR)) | (rate << ADS1X_SH1_DR);
 }
+
+void ads1xGenCfgRB0 (U8 cfgRB[1], enum ADS1xMux mux, enum ADS1xGain gain, enum ADS1xFlag0 f)
+{
+   cfgRB[0]= (mux << ADS1X_SH0_MUX) | (gain << ADS1X_SH0_GAIN) | f;
+} // ads1xGenCfgRB0
 
 void ads1xGenCfg (U8 cfg[2], enum ADS1xMux mux, enum ADS1xGain gain, enum ADS1xRate rate, enum ADS1xCompare cmp)
 {
@@ -43,10 +48,16 @@ F32 ads1xGainToFSV (enum ADS1xGain gain)
    if (gain < ADS1X_GAIN_0V256) return(gainFSV[gain]); else return(0.256);
 } // ads1xGainToFSV
 
-U16 ads1xRateToU (enum ADS1xRate rate, ADS1xHWID id)
+U16 ads1xRateToU (enum ADS1xRate rate, ADS1xHWID hwID)
 {
 static const U16 rateU[2][8]=
    {  {128,250,490,920,1600,2400,3300,3300},
       {8,16,32,64,128,250,475,860} };
-   return( rateU[ id ][ rate ] );
+   return( rateU[ hwID ][ rate ] );
 } // ads1xRateToU
+
+I16 ads1xRawFSR (ADS1xHWID hwID)
+{
+   static const I16 fsr[]={ ADS10_FSR, ADS11_FSR };
+   return fsr[hwID];
+} // ads1xRawFSR
