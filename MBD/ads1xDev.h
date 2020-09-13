@@ -44,8 +44,8 @@ typedef struct
 /***/
 extern void ads1xTranslateCfg (ADS1xTrans *pT, const U8 cfg[2], const ADS1xHWID id);
 
-extern char muxCh (const U8 c);
-extern void printMux4x4 (const U8 m4x4);
+//extern char muxCh (const U8 c);
+//extern void RawAGR (const U8 m4x4);
 extern void ads1xDumpCfg (const U8 cfg[2], const ADS1xHWID id);
 
 extern int ads1xInitRB (ADS1xFullPB *pFPB, const MemBuff *pWS, const LXI2CBusCtx *pC, const U8 dev);

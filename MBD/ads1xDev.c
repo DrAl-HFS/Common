@@ -8,25 +8,24 @@
 
 typedef struct
 {
-   U32 ivl; // Delay for conversion interval (hardware rate dependant 303~125000 us)
-   I16 fsr; // Full scale reading (hardware version dependant)
+   U8 *pCfgPB; // Config packet bytes - (pointer to outer level declaration eliminates copying)
+   U32 ivl;    // Delay for conversion interval (hardware rate dependant 303~125000 us)
+   I16 fsr;    // Full scale reading (hardware version dependant)
    U8 devAddr; // I2C device address
-   U8 cfgPB[ADS1X_NRB]; // Config packet bytes - consider pointer instead ?
    U8 maxT;    // Max transactions per mux channel
-   U8 pad[1];  // Pad out to 32b boundary, flags ?
 } AutoRawCtx;
 
 #define RMG_FLAG_AUTO 1<<7 // Enable auto gain
 #define RMG_FLAG_SGND 1<<6 // Mux selects single ended operation
-#define RMG_FLAG_ORNG 1<<5 // out of range (uncorrectable over/under-flow)
-#define RMG_FLAG_VROK 1<<4 // Valid result
+#define RMG_FLAG_VROK 1<<5 // Valid result
+#define RMG_FLAG_ORNG 1<<4 // out of range (uncorrectable over/under-flow)
 #define RMG_MASK_ITER 0xF
 typedef struct
 {
    I16 res;
    U8  cfgRB0[1]; // First byte of config register: describes mux gain and single/multi conversion control
    U8  flSt; // flags (see above) in high nybble & 4bit transaction count in low
-} RawRMG; // TODO: rename to something more relevant
+} RawAGR; // TODO: rename to something more relevant
 
 
 /***/
@@ -51,10 +50,14 @@ void ads1xTranslateCfg (ADS1xTrans *pT, const U8 cfg[2], const ADS1xHWID id)
    pT->cmp= (((cfg[1] >> ADS1X_SH1_CQ) & ADS1X_CMP_M) + 1 ) & ADS1X_CMP_M; // rotate by +1 so 0->off
 } // ads1xTranslateCfg
 
-// Conversion interval (us)
-int ads1xConvIvl (const U8 cfg[2], const ADS1xHWID id)
+// Conversion interval (us), rate stored optionally (else NULL)
+int ads1xConvIvl (int *pRate, const U8 cfg[2], const ADS1xHWID id)
 {
-   return(1000000 / ads1xRateToU( ads1xGetRate(cfg), id));
+   int rate= ads1xRateToU( ads1xGetRate(cfg), id);
+   if (pRate) { *pRate= rate; }
+   if (rate > 0) { return(1000000 / rate); }
+   // else
+   return(0);
 } // ads1xConvIvl
 
 F32 ads1xGainScaleV (const U8 cfg[1], const ADS1xHWID x)
@@ -66,7 +69,7 @@ F32 ads1xGainScaleV (const U8 cfg[1], const ADS1xHWID x)
 
 // DEBUG & TEST
 //char muxCh (const U8 c) { if (c<=3) return('0'+c); else return('G'); }
-//void printMux4x4 (const U8 m4x4) { printf("%c/%c", muxCh(m4x4 >> 4), muxCh(m4x4 & 0xF)); }
+//void RawAGR (const U8 m4x4) { printf("%c/%c", muxCh(m4x4 >> 4), muxCh(m4x4 & 0xF)); }
 
 const char * ads1xMuxStr (const enum ADS1xMux m)
 {
@@ -99,7 +102,7 @@ void ads1xDumpAll (const ADS1xFullPB *pFPB, const ADS1xHWID id)
 // DISPLACE : ads1xUtil ?
 // Read a set of mux channels, updating the gain setting for each to maximise precison
 // Can perform multiple reads per channel in cases where accuracy dominates speed.
-int readAutoRawADS1x (RawRMG rmg[], int nR, AutoRawCtx *pARC, const LXI2CBusCtx *pC)
+int readAutoRawADS1x (RawAGR rmg[], int nR, AutoRawCtx *pARC, const LXI2CBusCtx *pC)
 {
    int n=0, r=-1, vr, tFSR; // intermediate values at machine word-length: intended to reduce operations
    U8 resPB[ADS1X_NRB], gainID, iT;
@@ -112,8 +115,8 @@ int readAutoRawADS1x (RawRMG rmg[], int nR, AutoRawCtx *pARC, const LXI2CBusCtx 
       gainID= ads1xGetGain(rmg[i].cfgRB0);
       do
       {  // Get best available reading
-         pARC->cfgPB[1]= rmg[i].cfgRB0[0]; // Sets Gain, Mux, flags (Single Shot & Start)
-         r= lxi2cWriteRB(pC, pARC->devAddr, pARC->cfgPB, ADS1X_NRB);
+         pARC->pCfgPB[1]= rmg[i].cfgRB0[0]; // Sets Gain, Mux, flags (Single Shot & Start)
+         r= lxi2cWriteRB(pC, pARC->devAddr, pARC->pCfgPB, ADS1X_NRB);
          if (r > 0)
          {  // working
             iT++;
@@ -166,7 +169,7 @@ int readAutoRawADS1x (RawRMG rmg[], int nR, AutoRawCtx *pARC, const LXI2CBusCtx 
    return(n);
 } // readAutoRawADS1x
 
-void setupRawAGMC (RawRMG r[], const U8 mux[], const int n, const enum ADS1xGain initGain)
+void setupRawAGR (RawAGR r[], const U8 mux[], const int n, const enum ADS1xGain initGain)
 {
    for (int i=0; i<n; i++)
    {
@@ -174,9 +177,9 @@ void setupRawAGMC (RawRMG r[], const U8 mux[], const int n, const enum ADS1xGain
       r[i].flSt= RMG_FLAG_AUTO;
       if (mux[i] >= ADS1X_MUX0G) { r[i].flSt|= RMG_FLAG_SGND; }
    }
-} // setupRawAGMC
+} // setupRawAGR
 
-void convertRawAGMC (F32 f[], const RawRMG r[], const int n, const ADS1xHWID hwID)
+void convertRawAGR (F32 f[], const RawAGR r[], const int n, const ADS1xHWID hwID)
 {
    for (int i=0; i<n; i++)
    {
@@ -187,58 +190,97 @@ void convertRawAGMC (F32 f[], const RawRMG r[], const int n, const ADS1xHWID hwI
       }
       else { f[i]= 0; }
    }
-} // convertRawAGMC
+} // convertRawAGR
 
 static const char gSepCh[2]={'\t','\n'};
 
-int readAutoADS1X (F32 f[], const U8 mux[], int nMux, const LXI2CBusCtx *pC, U8 *pCfgPB, const U8 devAddr, const ADS1xHWID hwID, const int n)
+int readAutoADS1X
+(
+   F32 f[],
+   const U8 mux[],
+   int nMux,
+   const LXI2CBusCtx *pC,
+   U8 *pCfgPB,
+   const U8 devAddr,
+   const ADS1xHWID hwID,
+   const int n
+)
 {
    AutoRawCtx arc;
-   RawRMG rmg[4];
+   RawAGR rmg[4];
    int r=-1;
+   U8 cfgPB[ADS1X_NRB];
 
-   arc.ivl= ads1xConvIvl(arc.cfgPB+1, hwID);
+   if (pCfgPB) { arc.pCfgPB= pCfgPB; } // Paranoid VALIDATE ?
+   else
+   {
+      cfgPB[0]= ADS1X_REG_CFG;
+      r= lxi2cReadRB(pC, devAddr, cfgPB, ADS1X_NRB);
+      //LOG_CALL(" : lxi2cReadRB() - r=%d\n", r);
+      if (r <= 0) { return(r); }
+      //else
+      arc.pCfgPB= cfgPB;
+   }
+   arc.ivl= ads1xConvIvl(&r, arc.pCfgPB+1, hwID);
+   //LOG_CALL("() - rate=%d -> ivl=%d\n", r, arc.ivl);
    arc.fsr= ads1xRawFSR(hwID);
    arc.devAddr= devAddr;
    arc.maxT= 10; // => 5 iterations * 2 transactions
-   if (pCfgPB) { memcpy(arc.cfgPB, pCfgPB, ADS1X_NRB); }
-   else
-   {
-      arc.cfgPB[0]= ADS1X_REG_CFG;
-      r= lxi2cReadRB(pC, devAddr, arc.cfgPB, ADS1X_NRB);
-      if (r <= 0) { return(r); }
-      //LOG("lxi2cReadRB() - r=%d\n", r);
-   }
+
    if (nMux > 4) { WARN_CALL("(..nMux=%u..) - clamped to 4\n", nMux); nMux= 4; }
-   setupRawAGMC(rmg, mux, nMux, ADS1X_GAIN_4V096);
-/* for (int i=0; i<nMux; i++)
-   {
-      ads1xGenCfgRB0(rmg[i].cfgRB0, mux[i], ADS1X_GAIN_4V096, ADS1X_FL0_OS|ADS1X_FL0_MODE);
-      rmg[i].flSt= RMG_FLAG_AUTO;
-      if (mux[i] >= ADS1X_MUX0G) { rmg[i].flSt|= RMG_FLAG_SGND; }
-   }*/
+   setupRawAGR(rmg, mux, nMux, ADS1X_GAIN_4V096);
+
    for (int i=0; i<n; i++)
    {
-      r= readAutoRawADS1x(rmg, nMux, &arc,pC); //LOG("readAutoRawADS1x() - r=%d\n", r);
+      r= readAutoRawADS1x(rmg, nMux, &arc, pC); //LOG("readAutoRawADS1x() - r=%d\n", r);
       if (r > 0)
       {
-         convertRawAGMC(f, rmg, nMux, hwID);
-         for (int j=0; j<r; j++) { LOG("%G%c", f[j], gSepCh[j >= (nMux-1)]); }
+         for (int j=0; j<nMux; j++) { LOG("%02X%c", rmg[j].flSt, gSepCh[j >= (nMux-1)]); }
+         convertRawAGR(f, rmg, nMux, hwID);
+         for (int j=0; j<nMux; j++) { LOG("%G%c", f[j], gSepCh[j >= (nMux-1)]); }
       }
    }
-/*    for (int i=0; i<nMux; i++)
-      {
-         if (rmg[i].flSt & RMG_FLAG_VROK)
-         {
-            f[i]= rmg[i].res * ads1xGainScaleV(rmg[i].cfgRB0, hwID);
-            //LOG("%d : %f\n", i, f[i]);
-         }
-         else { f[i]= 0; }
-      }*/
 
-   if (pCfgPB && (r == nMux)) { memcpy(pCfgPB, arc.cfgPB, ADS1X_NRB); }
    return(r);
 } // readAutoADS1X
+
+#define TEST_AUTO_MUX_N 4
+int testAuto
+(
+   const LXI2CBusCtx *pC,
+   const U8 devAddr,
+   const ADS1xHWID hwID,
+   const enum ADS1xRate rateID,
+   const U8 maxIter
+)
+{
+   const U8 mux[TEST_AUTO_MUX_N]= { ADS1X_MUX0G, ADS1X_MUX1G, ADS1X_MUX2G, ADS1X_MUX3G };
+   U8 cfgPB[ADS1X_NRB];
+   F32 f[TEST_AUTO_MUX_N];
+   int r;
+
+   cfgPB[0]= ADS1X_REG_CFG;
+   r= lxi2cReadRB(pC, devAddr, cfgPB, ADS1X_NRB);
+   //LOG_CALL("(...rateID=%d...) : ReadRB() r=%d \n", rateID, r);
+   if (r > 0)
+   {
+      r= ads1xGetRate(cfgPB+1);
+      //LOG("\tcfg=%02X%02X rateID=%d \n",cfgPB[1], cfgPB[2], r);
+      if (rateID == r) { r= 1; }
+      else
+      {
+         ads1xSetRate(cfgPB+1, rateID);
+         r= lxi2cWriteRB(pC, devAddr, cfgPB, ADS1X_NRB);
+         //LOG_CALL(" : WriteRB() cfg=%02X%02X r=%d\n", cfgPB[1], cfgPB[2], r);
+      }
+   }
+   if (r > 0)
+   {
+      for (int j=0; j<TEST_AUTO_MUX_N; j++) { LOG("%s%c", ads1xMuxStr(mux[j]), gSepCh[j >= (TEST_AUTO_MUX_N-1)] ); }
+      r= readAutoADS1X(f, mux, TEST_AUTO_MUX_N, pC, cfgPB, devAddr, hwID, maxIter);
+   }
+   return(r);
+} // testAuto
 
 #ifdef ADS1X_TEST
 
@@ -270,7 +312,7 @@ int testADS1x15
       ads1xGenCfg(fpb.rc.cfg+1, ADS1X_MUX0G, ADS1X_GAIN_6V144, idRate[id], ADS1X_CMP_DISABLE);
       fpb.rc.cfg[1]|= ADS1X_FL0_OS|ADS1X_FL0_MODE; // Now enable single-shot conversion
       // NB: Config packet written to device in loop that follows
-      convWait= ads1xConvIvl(fpb.rc.cfg+1, id);
+      convWait= ads1xConvIvl(NULL,fpb.rc.cfg+1, id);
       sv= ads1xGainScaleV(fpb.rc.cfg+1, id);
       ads1xDumpAll(&fpb, id);
       LOG("Ivl: conv=%dus comm=%dus\n", convWait, i2cWait);
@@ -373,12 +415,7 @@ int main (int argc, char *argv[])
       r= testADS1x15(&gBusCtx, NULL, 0x48, ADS11, adcMF, 100);
       //releaseMemBuff(&ws);
 #else
-      const U8 mux[4]= { ADS1X_MUX0G, ADS1X_MUX1G, ADS1X_MUX2G, ADS1X_MUX3G };
-      const int nM=4;
-      F32 f[4];
-
-      for (int j=0; j<nM; j++) { LOG("%s%c", ads1xMuxStr(mux[j]), gSepCh[j >= (nM-1)] ); }
-      r= readAutoADS1X(f, mux, nM, &gBusCtx, NULL, 0x48, ADS11, 10);
+      r= testAuto(&gBusCtx, 0x48, ADS11, ADS11_DR128, 10);
 #endif
       lxi2cClose(&gBusCtx);
    }
