@@ -15,10 +15,10 @@ typedef struct
    U8 maxT;    // Max transactions per mux channel
 } AutoRawCtx;
 
-#define RMG_FLAG_AUTO 1<<7 // Enable auto gain
-#define RMG_FLAG_SGND 1<<6 // Mux selects single ended operation
-#define RMG_FLAG_VROK 1<<5 // Valid result
-#define RMG_FLAG_ORNG 1<<4 // out of range (uncorrectable over/under-flow)
+#define AGR_FLAG_AUTO 1<<7 // Enable auto gain
+#define AGR_FLAG_SGND 1<<6 // Mux selects single ended operation
+#define AGR_FLAG_VROK 1<<5 // Valid result
+#define AGR_FLAG_ORNG 1<<4 // out of range (uncorrectable over/under-flow)
 #define RMG_MASK_ITER 0xF
 typedef struct
 {
@@ -111,7 +111,7 @@ int readAutoRawADS1x (RawAGR rmg[], int nR, AutoRawCtx *pARC, const LXI2CBusCtx 
    for (int i=0; i<nR; i++)
    {  // per-mux iteration
       vr= 0; iT= 0; // clean start
-      rmg[i].flSt&= RMG_FLAG_AUTO|RMG_FLAG_SGND; // clear status, preserve setting
+      rmg[i].flSt&= AGR_FLAG_AUTO|AGR_FLAG_SGND; // clear status, preserve setting
       gainID= ads1xGetGain(rmg[i].cfgRB0);
       do
       {  // Get best available reading
@@ -126,12 +126,12 @@ int readAutoRawADS1x (RawAGR rmg[], int nR, AutoRawCtx *pARC, const LXI2CBusCtx 
             {  // got result
                iT++;
                vr= rdI16BE(resPB+1);
-               if ((vr < 0) && (rmg[i].flSt & RMG_FLAG_SGND))
+               if ((vr < 0) && (rmg[i].flSt & AGR_FLAG_SGND))
                {  // single ended: reverse polarity -> abort
-                  rmg[i].flSt|= RMG_FLAG_ORNG;
+                  rmg[i].flSt|= AGR_FLAG_ORNG;
                   r= 0;
                }
-               else if (rmg[i].flSt & RMG_FLAG_AUTO)
+               else if (rmg[i].flSt & AGR_FLAG_AUTO)
                {  // Check for better gain setting
                   tFSR= (int)(pARC->fsr) / 2;
                   if ((vr < tFSR) && (gainID < ADS1X_GAIN_0V256))
@@ -156,11 +156,14 @@ int readAutoRawADS1x (RawAGR rmg[], int nR, AutoRawCtx *pARC, const LXI2CBusCtx 
       if (r >= 0)
       { // Set final status info
          const int fsr= pARC->fsr;
-         if ((vr >= fsr) || (vr <= -(fsr+1))) { rmg[i].flSt|= RMG_FLAG_ORNG; }
-         else
+         if (0 == (rmg[i].flSt & AGR_FLAG_ORNG))
          {
-            rmg[i].flSt|= RMG_FLAG_VROK;
-            ++n;
+            if ((vr >= fsr) || (vr <= -(fsr+1))) { rmg[i].flSt|= AGR_FLAG_ORNG; }
+            else
+            {
+               rmg[i].flSt|= AGR_FLAG_VROK;
+               ++n;
+            }
          }
          rmg[i].res= vr;
          rmg[i].flSt|= RMG_MASK_ITER & iT;
@@ -174,8 +177,8 @@ void setupRawAGR (RawAGR r[], const U8 mux[], const int n, const enum ADS1xGain 
    for (int i=0; i<n; i++)
    {
       ads1xGenCfgRB0(r[i].cfgRB0, mux[i], initGain, ADS1X_FL0_OS|ADS1X_FL0_MODE);
-      r[i].flSt= RMG_FLAG_AUTO;
-      if (mux[i] >= ADS1X_MUX0G) { r[i].flSt|= RMG_FLAG_SGND; }
+      r[i].flSt= AGR_FLAG_AUTO;
+      if (mux[i] >= ADS1X_MUX0G) { r[i].flSt|= AGR_FLAG_SGND; }
    }
 } // setupRawAGR
 
@@ -183,7 +186,7 @@ void convertRawAGR (F32 f[], const RawAGR r[], const int n, const ADS1xHWID hwID
 {
    for (int i=0; i<n; i++)
    {
-      if (r[i].flSt & RMG_FLAG_VROK)
+      if (r[i].flSt & AGR_FLAG_VROK)
       {
          f[i]= r[i].res * ads1xGainScaleV(r[i].cfgRB0, hwID);
          //LOG("%d : %f\n", i, f[i]);
@@ -196,55 +199,59 @@ static const char gSepCh[2]={'\t','\n'};
 
 int readAutoADS1X
 (
-   F32 f[],
+   F32       f[],
+   const int nF,
    const U8 mux[],
-   int nMux,
+   int       nMux,
+   U8       * pCfgPB,
    const LXI2CBusCtx *pC,
-   U8 *pCfgPB,
    const U8 devAddr,
-   const ADS1xHWID hwID,
-   const int n
+   const ADS1xHWID hwID
 )
 {
    AutoRawCtx arc;
    RawAGR rmg[4];
-   int r=-1;
+   int n=0, r=-1;
    U8 cfgPB[ADS1X_NRB];
 
-   if (pCfgPB) { arc.pCfgPB= pCfgPB; } // Paranoid VALIDATE ?
-   else
+   if ((nF > 0) && (nMux > 0))
    {
-      cfgPB[0]= ADS1X_REG_CFG;
-      r= lxi2cReadRB(pC, devAddr, cfgPB, ADS1X_NRB);
-      //LOG_CALL(" : lxi2cReadRB() - r=%d\n", r);
-      if (r <= 0) { return(r); }
-      //else
-      arc.pCfgPB= cfgPB;
-   }
-   arc.ivl= ads1xConvIvl(&r, arc.pCfgPB+1, hwID);
-   //LOG_CALL("() - rate=%d -> ivl=%d\n", r, arc.ivl);
-   arc.fsr= ads1xRawFSR(hwID);
-   arc.devAddr= devAddr;
-   arc.maxT= 10; // => 5 iterations * 2 transactions
-
-   if (nMux > 4) { WARN_CALL("(..nMux=%u..) - clamped to 4\n", nMux); nMux= 4; }
-   setupRawAGR(rmg, mux, nMux, ADS1X_GAIN_4V096);
-
-   for (int i=0; i<n; i++)
-   {
-      r= readAutoRawADS1x(rmg, nMux, &arc, pC); //LOG("readAutoRawADS1x() - r=%d\n", r);
-      if (r > 0)
+      if (pCfgPB) { arc.pCfgPB= pCfgPB; } // Paranoid VALIDATE ?
+      else
       {
-         for (int j=0; j<nMux; j++) { LOG("%02X%c", rmg[j].flSt, gSepCh[j >= (nMux-1)]); }
-         convertRawAGR(f, rmg, nMux, hwID);
-         for (int j=0; j<nMux; j++) { LOG("%G%c", f[j], gSepCh[j >= (nMux-1)]); }
+         cfgPB[0]= ADS1X_REG_CFG;
+         r= lxi2cReadRB(pC, devAddr, cfgPB, ADS1X_NRB);
+         //LOG_CALL(" : lxi2cReadRB() - r=%d\n", r);
+         if (r <= 0) { return(r); }
+         //else
+         arc.pCfgPB= cfgPB;
       }
-   }
+      arc.ivl= ads1xConvIvl(&r, arc.pCfgPB+1, hwID);
+      //LOG_CALL("() - rate=%d -> ivl=%d\n", r, arc.ivl);
+      arc.fsr= ads1xRawFSR(hwID);
+      arc.devAddr= devAddr;
+      arc.maxT= 10; // => 5 iterations * 2 transactions
 
-   return(r);
+      if (nMux > 4) { WARN_CALL("(..nMux=%u..) - clamped to 4\n", nMux); nMux= 4; }
+      setupRawAGR(rmg, mux, nMux, ADS1X_GAIN_4V096);
+
+      do
+      {
+         r= readAutoRawADS1x(rmg, nMux, &arc, pC); //LOG("readAutoRawADS1x() - r=%d\n", r);
+         if (r > 0)
+         {
+            for (int j=0; j<nMux; j++) { LOG("%02X%c", rmg[j].flSt, gSepCh[j >= (nMux-1)]); }
+            convertRawAGR(f+n, rmg, nMux, hwID);
+            for (int j=0; j<nMux; j++) { LOG("%G%c", f[n+j], gSepCh[j >= (nMux-1)]); }
+            n+= nMux;
+         }
+      } while ((n < nF) && (r > 0));
+   }
+   return(n);
 } // readAutoADS1X
 
 #define TEST_AUTO_MUX_N 4
+#define TEST_AUTO_SAMPLES 8*TEST_AUTO_MUX_N
 int testAuto
 (
    const LXI2CBusCtx *pC,
@@ -256,7 +263,7 @@ int testAuto
 {
    const U8 mux[TEST_AUTO_MUX_N]= { ADS1X_MUX0G, ADS1X_MUX1G, ADS1X_MUX2G, ADS1X_MUX3G };
    U8 cfgPB[ADS1X_NRB];
-   F32 f[TEST_AUTO_MUX_N];
+   F32 f[TEST_AUTO_SAMPLES];
    int r;
 
    cfgPB[0]= ADS1X_REG_CFG;
@@ -277,7 +284,7 @@ int testAuto
    if (r > 0)
    {
       for (int j=0; j<TEST_AUTO_MUX_N; j++) { LOG("%s%c", ads1xMuxStr(mux[j]), gSepCh[j >= (TEST_AUTO_MUX_N-1)] ); }
-      r= readAutoADS1X(f, mux, TEST_AUTO_MUX_N, pC, cfgPB, devAddr, hwID, maxIter);
+      r= readAutoADS1X(f, TEST_AUTO_SAMPLES, mux, TEST_AUTO_MUX_N, cfgPB, pC, devAddr, hwID);
    }
    return(r);
 } // testAuto
