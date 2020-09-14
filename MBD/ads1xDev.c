@@ -413,12 +413,12 @@ int testADS1x15
 
 #ifdef ADS1X_MAIN
 
-void argTrans (U8 devAddr[1], char devPath[], int argc, char *argv[])
+void argTrans (char devPath[], U8 devAddr[1], U8 hwID[1], int argc, char *argv[])
 {
    int c, t;
    do
    {
-      c= getopt(argc,argv,"a:d:"); // c:d:e:t:hv");
+      c= getopt(argc,argv,"a:d:i:"); // c:d:e:t:hv");
       switch(c)
       {
          case 'a' :
@@ -431,8 +431,13 @@ void argTrans (U8 devAddr[1], char devPath[], int argc, char *argv[])
             if ((ch > '0') && (ch <= '9')) { devPath[9]= ch; }
             break;
          }
-      }
+         case 'i' :
+            sscanf(optarg, "%d", &t);
+            if ((0x1 & t) == t) { hwID[0]= t; }
+            break;
+     }
    } while (c > 0);
+   LOG("arg: %s, %02X, %d\n", devPath, devAddr[0], hwID[0]);
 } // argTrans
 
 LXI2CBusCtx gBusCtx={0,-1};
@@ -441,13 +446,14 @@ int main (int argc, char *argv[])
 {
    char devPath[]="/dev/i2c-1";
    U8 devAddr= 0x48;
+   U8 hwID=ADS11;
    int r= -1;
 
-   argTrans(&devAddr, devPath, argc, argv);
+   argTrans(devPath, &devAddr, &hwID, argc, argv);
 
    if (lxi2cOpen(&gBusCtx, devPath, 400))
    {
-      const ADSInstProp *pP= adsInitProp(NULL, 3.3, ADS11);
+      const ADSInstProp *pP= adsInitProp(NULL, 3.3, hwID);
 #if 0
       U8 adcMF= ADS1X_TEST_MODE_VERIFY|ADS1X_TEST_MODE_SLEEP|ADS1X_TEST_MODE_POLL|ADS1X_TEST_MODE_ROTMUX;
       //adcMF|= ADS1X_TEST_MODE_VERBOSE;
