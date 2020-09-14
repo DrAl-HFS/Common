@@ -209,7 +209,7 @@ int readAutoADS1X
    U8       * pCfgPB,
    const LXI2CBusCtx *pC,
    const U8 devAddr,
-   const ADS1xHWID hwID
+   const ADSInstProp *pP
 )
 {
    AutoRawCtx arc;
@@ -229,9 +229,9 @@ int readAutoADS1X
          //else
          arc.pCfgPB= cfgPB;
       }
-      arc.ivl= ads1xConvIvl(&r, arc.pCfgPB+1, hwID);
+      arc.ivl= ads1xConvIvl(&r, arc.pCfgPB+1, pP->hwID);
       //LOG_CALL("() - rate=%d -> ivl=%d\n", r, arc.ivl);
-      arc.fsr= ads1xRawFSR(hwID);
+      arc.fsr= ads1xRawFSR(pP->hwID);
       arc.devAddr= devAddr;
       arc.maxT= 10; // => 5 iterations * 2 transactions
 
@@ -250,8 +250,17 @@ int readAutoADS1X
                U8 f= rmg[j].flSt >> 4;
                LOG("%d,%X,%d%c", g, f, t, gSepCh[j >= (nMux-1)]);
             }
-            convertRawAGR(f+n, rmg, nMux, hwID);
+            convertRawAGR(f+n, rmg, nMux, pP->hwID);
             for (int j=0; j<nMux; j++) { LOG("%G%c", f[n+j], gSepCh[j >= (nMux-1)]); }
+            for (int j=0; j<nMux; j++)
+            {
+               F32 V0, V1, R0=0;
+               V0= f[n+j];
+               V1= pP->vdd - V0;
+               if (V1 > 0) { R0= 56000 * V0 / V1; }
+               LOG("%G%c", R0, gSepCh[j >= (nMux-1)]);
+            }
+
             n+= nMux;
          }
       } while ((n < nF) && (r > 0));
@@ -292,7 +301,7 @@ int testAuto
    if (r > 0)
    {
       for (int j=0; j<TEST_AUTO_MUX_N; j++) { LOG("%s%c", ads1xMuxStr(mux[j]), gSepCh[j >= (TEST_AUTO_MUX_N-1)] ); }
-      r= readAutoADS1X(f, TEST_AUTO_SAMPLES, mux, TEST_AUTO_MUX_N, cfgPB, pC, devAddr, pP->hwID);
+      r= readAutoADS1X(f, TEST_AUTO_SAMPLES, mux, TEST_AUTO_MUX_N, cfgPB, pC, devAddr, pP);
    }
    return(r);
 } // testAuto
