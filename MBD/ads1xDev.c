@@ -6,10 +6,13 @@
 #include "ads1xDev.h"
 //#include <stdio.h> // -> REPORT !
 
+
+/***/
+
 typedef struct
 {
    U8 *pCfgPB; // Config packet bytes - (pointer to outer level declaration eliminates copying)
-   U32 ivl;    // Delay for conversion interval (hardware rate dependant 303~125000 us)
+   U32 ivl;    // Delay for conversion interval (hardware rate dependant 303~125000 usec. for 400kHz bus clock)
    I16 fsr;    // Full scale reading (hardware version dependant)
    U8 devAddr; // I2C device address
    U8 maxT;    // Max transactions per mux channel
@@ -43,12 +46,12 @@ int ads1xInitFPB (ADS1xFullPB *pFPB, const MemBuff *pWS, const LXI2CBusCtx *pC, 
    return(0);
 } // ads1xInitFPB
 
-void ads1xTranslateCfg (ADS1xTrans *pT, const U8 cfg[2], const ADS1xHWID id)
+void ads1xTransCfg (ADS1xTrans *pT, const U8 cfg[2], const ADS1xHWID id)
 {
    pT->gainFSV= ads1xGainToFSV( ads1xGetGain(cfg) );
    pT->rate= ads1xRateToU( ads1xGetRate(cfg), id);
    pT->cmp= (((cfg[1] >> ADS1X_SH1_CQ) & ADS1X_CMP_M) + 1 ) & ADS1X_CMP_M; // rotate by +1 so 0->off
-} // ads1xTranslateCfg
+} // ads1xTransCfg
 
 // Conversion interval (us), rate stored optionally (else NULL)
 int ads1xConvIvl (int *pRate, const U8 cfg[2], const ADS1xHWID id)
@@ -85,7 +88,7 @@ void ads1xDumpCfg (const U8 cfg[2], const ADS1xHWID id)
    LOG(" OS%d MUX%d PGA%d M%d, ", (cfg[0]>>7) & 0x1, (cfg[0]>>4) & 0x7, (cfg[0]>>1) & 0x7, cfg[0] & 0x1);
    LOG(" DR%d CM%d CP%d CL%d CQ%d : ", (cfg[1]>>5) & 0x7, (cfg[1]>>4) & 0x1, (cfg[1]>>3) & 0x1, (cfg[1]>>2) & 0x1, cfg[1] & 0x3);
    //
-   ads1xTranslateCfg(&t, cfg, id);
+   ads1xTransCfg(&t, cfg, id);
    LOG("%s %GV, %d/s C:%d\n", ads1xMuxStr(ads1xGetMux(cfg)), t.gainFSV, t.rate, t.cmp);
 } // ads1xDumpCfg
 
@@ -100,8 +103,8 @@ void ads1xDumpAll (const ADS1xFullPB *pFPB, const ADS1xHWID id)
 } // ads1xDumpAll
 
 // DISPLACE : ads1xUtil ?
-// Read a set of mux channels, updating the gain setting for each to maximise precison
-// Can perform multiple reads per channel in cases where accuracy dominates speed.
+// Read a set of mux channels, updating the gain setting for each to maximise precison.
+// Performs multiple reads per channel as appropriate, if permitted.
 int readAutoRawADS1x (RawAGR rmg[], int nR, AutoRawCtx *pARC, const LXI2CBusCtx *pC)
 {
    int n=0, r=-1, vr, tFSR; // intermediate values at machine word-length: intended to reduce operations
@@ -257,8 +260,7 @@ int testAuto
    const LXI2CBusCtx *pC,
    const U8 devAddr,
    const ADS1xHWID hwID,
-   const enum ADS1xRate rateID,
-   const U8 maxIter
+   const enum ADS1xRate rateID   //,const U8 maxIter
 )
 {
    const U8 mux[TEST_AUTO_MUX_N]= { ADS1X_MUX0G, ADS1X_MUX1G, ADS1X_MUX2G, ADS1X_MUX3G };
@@ -422,7 +424,7 @@ int main (int argc, char *argv[])
       r= testADS1x15(&gBusCtx, NULL, 0x48, ADS11, adcMF, 100);
       //releaseMemBuff(&ws);
 #else
-      r= testAuto(&gBusCtx, 0x48, ADS11, ADS11_DR128, 10);
+      r= testAuto(&gBusCtx, 0x48, ADS11, ADS11_DR128);
 #endif
       lxi2cClose(&gBusCtx);
    }
