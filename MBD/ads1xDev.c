@@ -413,12 +413,39 @@ int testADS1x15
 
 #ifdef ADS1X_MAIN
 
+void argTrans (U8 devAddr[1], char devPath[], int argc, char *argv[])
+{
+   int c, t;
+   do
+   {
+      c= getopt(argc,argv,"a:d:"); // c:d:e:t:hv");
+      switch(c)
+      {
+         case 'a' :
+            sscanf(optarg, "%x", &t);
+            if (t <= 0x7F) { devAddr[0]= t; }
+            break;
+         case 'd' :
+         {
+            char ch= optarg[0];
+            if ((ch > '0') && (ch <= '9')) { devPath[9]= ch; }
+            break;
+         }
+      }
+   } while (c > 0);
+} // argTrans
+
 LXI2CBusCtx gBusCtx={0,-1};
 
 int main (int argc, char *argv[])
 {
+   char devPath[]="/dev/i2c-1";
+   U8 devAddr= 0x48;
    int r= -1;
-   if (lxi2cOpen(&gBusCtx, "/dev/i2c-1", 400))
+
+   argTrans(&devAddr, devPath, argc, argv);
+
+   if (lxi2cOpen(&gBusCtx, devPath, 400))
    {
       const ADSInstProp *pP= adsInitProp(NULL, 3.3, ADS11);
 #if 0
@@ -428,10 +455,10 @@ int main (int argc, char *argv[])
       // Paranoid enum check: for (int i=ADS11_DR8; i<=ADS11_DR860; i++) { printf("%d -> %d\n", i, ads1xRateToU(i,1) ); }
       //MemBuff ws={0,};
       //allocMemBuff(&ws, 4<<10);//
-      r= testADS1x15(&gBusCtx, NULL, 0x48, pP, adcMF, 100);
+      r= testADS1x15(&gBusCtx, NULL, devAddr, pP, adcMF, 100);
       //releaseMemBuff(&ws);
 #else
-      r= testAuto(&gBusCtx, 0x48, pP, ADS11_DR128);
+      r= testAuto(&gBusCtx, devAddr, pP, ADS11_DR128);
 #endif
       lxi2cClose(&gBusCtx);
    }
