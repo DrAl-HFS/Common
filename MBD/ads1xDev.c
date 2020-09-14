@@ -185,15 +185,11 @@ void setupRawAGR (RawAGR r[], const U8 mux[], const int n, const enum ADS1xGain 
    }
 } // setupRawAGR
 
-void convertRawAGR (F32 f[], const RawAGR r[], const int n, const ADS1xHWID hwID)
+void convertRawAGR (F32 f[], const RawAGR r[], const int n, const ADSInstProp *pP)
 {
    for (int i=0; i<n; i++)
    {
-      if (r[i].flSt & AGR_FLAG_VROK)
-      {
-         f[i]= r[i].res * ads1xGainScaleV(r[i].cfgRB0, hwID);
-         //LOG("%d : %f\n", i, f[i]);
-      }
+      if (r[i].flSt & AGR_FLAG_VROK) { f[i]= r[i].res * ads1xGainScaleV(r[i].cfgRB0, pP->hwID); }
       else { f[i]= 0; }
    }
 } // convertRawAGR
@@ -216,7 +212,7 @@ int readAutoADS1X
    RawAGR rmg[4];
    int n=0, r=-1;
    U8 cfgPB[ADS1X_NRB];
-
+   F32 R1[]={2200, 330, 330, 0.001};
    if ((nF > 0) && (nMux > 0))
    {
       if (pCfgPB) { arc.pCfgPB= pCfgPB; } // Paranoid VALIDATE ?
@@ -250,14 +246,14 @@ int readAutoADS1X
                U8 f= rmg[j].flSt >> 4;
                LOG("%d,%X,%d%c", g, f, t, gSepCh[j >= (nMux-1)]);
             }
-            convertRawAGR(f+n, rmg, nMux, pP->hwID);
+            convertRawAGR(f+n, rmg, nMux, pP);
             for (int j=0; j<nMux; j++) { LOG("%G%c", f[n+j], gSepCh[j >= (nMux-1)]); }
             for (int j=0; j<nMux; j++)
             {
                F32 V0, V1, R0=0;
                V0= f[n+j];
                V1= pP->vdd - V0;
-               if (V1 > 0) { R0= 56000 * V0 / V1; }
+               if (V1 > 0) { R0= R1[j] * V0 / V1; }
                LOG("%G%c", R0, gSepCh[j >= (nMux-1)]);
             }
 
