@@ -19,16 +19,16 @@
 typedef struct
 {
    F32 vdd; // Supply voltage, determines useful gain ID (measurement range)
-   U8 hwID;
+   U8 hwID; // Hardware version
    U8 flags; // Unused so far - serves as 32b alignment padding at present
-   U8 minUGID, maxUGID; // Limits of useful gainID
+   U8 minUGID, maxUGID; // Limits of useful gainID (derived from vdd)
 } ADSInstProp;
 
 
 /***/
 
 
-extern ADSInstProp gDefaultADSIP;
+//extern ADSInstProp gDefaultADSIP;
 
 /***/
 
@@ -79,6 +79,6 @@ extern enum ADS1xRate ads1xSelectRate (const int targetRate, ADS1xHWID hwID);
 // Lookup Full Scale Raw reading value for particular hardware
 extern I16 ads1xRawFSR (ADS1xHWID hwID);
 
-extern void adsInitProp (ADSInstProp *pP, const F32 vdd, const U8 hwID);
+extern const ADSInstProp *adsInitProp (ADSInstProp *pP, const F32 vdd, const U8 hwID);
 
 #endif // ADS1X_UTIL_H

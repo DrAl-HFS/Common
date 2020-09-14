@@ -345,8 +345,9 @@ int lxi2cPing (const LXI2CBusCtx *pC, U8 devAddr, const LXI2CPing *pP)
 typedef struct
 {
    LXI2CPing ping;
-   char devPath[15];
+   char devPath[14];
    U8 devAddr;
+   U8 flags;
 } LXI2CPingCLA;
 
 static LXI2CPingCLA gPCLA=
@@ -357,20 +358,23 @@ static LXI2CPingCLA gPCLA=
 
 void pingUsageMsg (const char name[])
 {
-static const char optCh[]="acdet";
+static const char optCh[]="acdetvh";
+static const char argCh[]="#####  ";
 static const char *desc[]=
 {
    "I2C bus address: 2digit hex (no prefix)",
    "message count (max pings to send)",
    "device index (-> path /dev/i2c-# )",
    "maximum errors to ignore (-1 -> all)",
-   "interval (microseconds) between messages"
+   "interval (microseconds) between messages",
+   "verbose diagnostic messages",
+   "help - diplay this text"
 };
-   const int n=5; // strlen(optCh)
+   const int n= sizeof(desc)/sizeof(desc[0]);
    report(OUT,"Usage : %s [-%s]\n", name, optCh);
    for (int i= 0; i<n; i++)
    {
-      report(OUT,"\t%c # - %s\n", optCh[i], desc[i]);
+      report(OUT,"\t%c %c - %s\n", optCh[i], argCh[i], desc[i]);
    }
 } // pingUsageMsg
 
@@ -383,7 +387,7 @@ void pingDump (LXI2CPingCLA *pCLA)
 #define PING_VERBOSE (1<<1)
 void pingArgTrans (LXI2CPingCLA *pPCLA, int argc, char *argv[])
 {
-   int c, t, flags=0;
+   int c, t;
    do
    {
       c= getopt(argc,argv,"a:c:d:e:t:hv");
@@ -405,22 +409,22 @@ void pingArgTrans (LXI2CPingCLA *pPCLA, int argc, char *argv[])
          }
          case 'e' :
             sscanf(optarg,"%d", &t);
-            if (t > 0) { pPCLA->ping.maxErr= t; }
+            pPCLA->ping.maxErr= t;
             break;
          case 't' :
             sscanf(optarg,"%d", &t);
             if (t > 0) { pPCLA->ping.ivl_us= t; }
             break;
          case 'h' :
-            flags|= PING_HELP;
+            pPCLA->flags|= PING_HELP;
             break;
          case 'v' :
-            flags|= PING_VERBOSE;
+            pPCLA->flags|= PING_VERBOSE;
             break;
       }
    } while (c > 0);
-   if (flags & PING_HELP) { pingUsageMsg(argv[0]); }
-   if (flags & PING_VERBOSE) { pingDump(pPCLA); }
+   if (pPCLA->flags & PING_HELP) { pingUsageMsg(argv[0]); }
+   if (pPCLA->flags & PING_VERBOSE) { pingDump(pPCLA); }
 } // pingArgTrans
 
 #ifdef RPI_VC4 // Broadcom VideoCore IV timestamp register(s) mapped into (root-only) process address space

@@ -4,6 +4,8 @@
 // (c) Project Contributors Aug-Sept. 2020
 
 #include "ads1xUtil.h"
+#include <stddef.h> // ???
+
 
 /***/
 
@@ -102,12 +104,14 @@ I16 ads1xRawFSR (ADS1xHWID hwID)
    return(gHC.rawFS[hwID]);
 } // ads1xRawFSR
 
-void adsInitProp (ADSInstProp *pP, const F32 vdd, const U8 hwID)
+const ADSInstProp * adsInitProp (ADSInstProp *pP, const F32 vdd, const U8 hwID)
 {
    U8 i=0;
    while ((gHC.gainFSV[i+1] > vdd) && (i < (ADS1X_GAIN_NID-2))) { ++i; }
+   if (NULL == pP) { pP= &gDefaultADSIP; }
    pP->minUGID= i;
    pP->maxUGID= ADS1X_GAIN_0V256;
    pP->hwID= hwID;
    pP->vdd= vdd;
+   return(pP);
 } // adsInitProp

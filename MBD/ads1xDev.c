@@ -4,11 +4,11 @@
 // (c) Project Contributors Sept 2020
 
 #include "ads1xDev.h"
-//#include <stdio.h> // -> REPORT !
 
 
 /***/
 
+// Auto-gain raw reading group parameters
 typedef struct
 {
    U8 *pCfgPB; // Config packet bytes - (pointer to outer level declaration eliminates copying)
@@ -22,7 +22,7 @@ typedef struct
 #define AGR_FLAG_SGND 1<<6 // Mux selects single ended operation
 #define AGR_FLAG_VROK 1<<5 // Valid result
 #define AGR_FLAG_ORNG 1<<4 // out of range (uncorrectable over/under-flow)
-#define RMG_MASK_ITER 0xF
+#define RMG_MASK_TRNS 0xF
 typedef struct
 {
    I16 res;
@@ -169,7 +169,7 @@ int readAutoRawADS1x (RawAGR rmg[], int nR, AutoRawCtx *pARC, const LXI2CBusCtx 
             }
          }
          rmg[i].res= vr;
-         rmg[i].flSt|= RMG_MASK_ITER & iT;
+         rmg[i].flSt|= RMG_MASK_TRNS & iT;
        }
    }
    return(n);
@@ -243,7 +243,13 @@ int readAutoADS1X
          r= readAutoRawADS1x(rmg, nMux, &arc, pC); //LOG("readAutoRawADS1x() - r=%d\n", r);
          if (r > 0)
          {
-            for (int j=0; j<nMux; j++) { LOG("%02X%c", rmg[j].flSt, gSepCh[j >= (nMux-1)]); }
+            for (int j=0; j<nMux; j++)
+            {
+               U8 g= ads1xGetGain(rmg[j].cfgRB0);
+               U8 t= rmg[j].flSt & RMG_MASK_TRNS;
+               U8 f= rmg[j].flSt >> 4;
+               LOG("%d,%X,%d%c", g, f, t, gSepCh[j >= (nMux-1)]);
+            }
             convertRawAGR(f+n, rmg, nMux, hwID);
             for (int j=0; j<nMux; j++) { LOG("%G%c", f[n+j], gSepCh[j >= (nMux-1)]); }
             n+= nMux;
@@ -259,7 +265,7 @@ int testAuto
 (
    const LXI2CBusCtx *pC,
    const U8 devAddr,
-   const ADS1xHWID hwID,
+   const ADSInstProp *pP,
    const enum ADS1xRate rateID   //,const U8 maxIter
 )
 {
@@ -286,7 +292,7 @@ int testAuto
    if (r > 0)
    {
       for (int j=0; j<TEST_AUTO_MUX_N; j++) { LOG("%s%c", ads1xMuxStr(mux[j]), gSepCh[j >= (TEST_AUTO_MUX_N-1)] ); }
-      r= readAutoADS1X(f, TEST_AUTO_SAMPLES, mux, TEST_AUTO_MUX_N, cfgPB, pC, devAddr, hwID);
+      r= readAutoADS1X(f, TEST_AUTO_SAMPLES, mux, TEST_AUTO_MUX_N, cfgPB, pC, devAddr, pP->hwID);
    }
    return(r);
 } // testAuto
@@ -298,7 +304,7 @@ int testADS1x15
    const LXI2CBusCtx *pC,
    const MemBuff *pWS,
    const U8 dev,
-   const ADS1xHWID id,
+   const ADSInstProp *pP,
    const U8 mode,
    const U8 maxIter
 )
@@ -318,12 +324,12 @@ int testADS1x15
 
       ads1xDumpCfg(fpb.rc.cfg+1, 0);
       memcpy(cfgStatus, fpb.rc.cfg, ADS1X_NRB);
-      ads1xGenCfg(fpb.rc.cfg+1, ADS1X_MUX0G, ADS1X_GAIN_6V144, idRate[id], ADS1X_CMP_DISABLE);
+      ads1xGenCfg(fpb.rc.cfg+1, ADS1X_MUX0G, ADS1X_GAIN_6V144, idRate[pP->hwID], ADS1X_CMP_DISABLE);
       fpb.rc.cfg[1]|= ADS1X_FL0_OS|ADS1X_FL0_MODE; // Now enable single-shot conversion
       // NB: Config packet written to device in loop that follows
-      convWait= ads1xConvIvl(NULL,fpb.rc.cfg+1, id);
-      sv= ads1xGainScaleV(fpb.rc.cfg+1, id);
-      ads1xDumpAll(&fpb, id);
+      convWait= ads1xConvIvl(NULL,fpb.rc.cfg+1, pP->hwID);
+      sv= ads1xGainScaleV(fpb.rc.cfg+1, pP->hwID);
+      ads1xDumpAll(&fpb, pP->hwID);
       LOG("Ivl: conv=%dus comm=%dus\n", convWait, i2cWait);
       if (mode & ADS1X_TEST_MODE_SLEEP)
       {
@@ -350,7 +356,7 @@ int testADS1x15
                   {  // Device goes busy (OS1->0) immediately on write, so merge back in for check
                      cfgStatus[1] |= (fpb.rc.cfg[1] & ADS1X_FL0_OS);
                      cfgVer= (0 == memcmp(cfgStatus, fpb.rc.cfg, ADS1X_NRB));
-                     if (mode & ADS1X_TEST_MODE_VERBOSE) { LOG("ver%d=%d: ", iR0, cfgVer); ads1xDumpCfg(cfgStatus+1, id); }
+                     if (mode & ADS1X_TEST_MODE_VERBOSE) { LOG("ver%d=%d: ", iR0, cfgVer); ads1xDumpCfg(cfgStatus+1, pP->hwID); }
                   }
                }
             } while ((mode & ADS1X_TEST_MODE_VERIFY) && ((r < 0) || !cfgVer) && (++iR0 < 10));
@@ -414,6 +420,7 @@ int main (int argc, char *argv[])
    int r= -1;
    if (lxi2cOpen(&gBusCtx, "/dev/i2c-1", 400))
    {
+      const ADSInstProp *pP= adsInitProp(NULL, 3.3, ADS11);
 #if 0
       U8 adcMF= ADS1X_TEST_MODE_VERIFY|ADS1X_TEST_MODE_SLEEP|ADS1X_TEST_MODE_POLL|ADS1X_TEST_MODE_ROTMUX;
       //adcMF|= ADS1X_TEST_MODE_VERBOSE;
@@ -421,10 +428,10 @@ int main (int argc, char *argv[])
       // Paranoid enum check: for (int i=ADS11_DR8; i<=ADS11_DR860; i++) { printf("%d -> %d\n", i, ads1xRateToU(i,1) ); }
       //MemBuff ws={0,};
       //allocMemBuff(&ws, 4<<10);//
-      r= testADS1x15(&gBusCtx, NULL, 0x48, ADS11, adcMF, 100);
+      r= testADS1x15(&gBusCtx, NULL, 0x48, pP, adcMF, 100);
       //releaseMemBuff(&ws);
 #else
-      r= testAuto(&gBusCtx, 0x48, ADS11, ADS11_DR128);
+      r= testAuto(&gBusCtx, 0x48, pP, ADS11_DR128);
 #endif
       lxi2cClose(&gBusCtx);
    }

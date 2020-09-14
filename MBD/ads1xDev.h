@@ -51,7 +51,7 @@ extern void ads1xDumpCfg (const U8 cfg[2], const ADS1xHWID id);
 extern int ads1xInitRB (ADS1xFullPB *pFPB, const MemBuff *pWS, const LXI2CBusCtx *pC, const U8 dev);
 
 #ifdef ADS1X_TEST
-extern int testADS1x15 (const LXI2CBusCtx *pC, const MemBuff *pWS, const U8 dev, const ADS1xHWID id, const U8 mode, const U8 maxIter);
+extern int testADS1x15 (const LXI2CBusCtx *pC, const MemBuff *pWS, const U8 dev, const ADSInstProp *pP, const U8 mode, const U8 maxIter);
 #endif // ADS1X_TEST
 
 #endif // ADS1X_DEV_H
