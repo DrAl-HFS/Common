@@ -355,12 +355,38 @@ static LXI2CPingCLA gPCLA=
    "/dev/i2c-1", 0x48
 };
 
+void pingUsageMsg (const char name[])
+{
+static const char optCh[]="acdet";
+static const char *desc[]=
+{
+   "I2C bus address: 2digit hex (no prefix)",
+   "message count (max pings to send)",
+   "device index (-> path /dev/i2c-# )",
+   "maximum errors to ignore (-1 -> all)",
+   "interval (microseconds) between messages"
+};
+   const int n=5; // strlen(optCh)
+   report(OUT,"Usage : %s [-%s]\n", name, optCh);
+   for (int i= 0; i<n; i++)
+   {
+      report(OUT,"\t%c # - %s\n", optCh[i], desc[i]);
+   }
+} // pingUsageMsg
+
+void pingDump (LXI2CPingCLA *pCLA)
+{
+   report(OUT,"Device: path=%s, address=%02X\n", pCLA->devPath, pCLA->devAddr);
+} // pingDump
+
+#define PING_HELP    (1<<0)
+#define PING_VERBOSE (1<<1)
 void pingArgTrans (LXI2CPingCLA *pPCLA, int argc, char *argv[])
 {
-   int c, t;
+   int c, t, flags=0;
    do
    {
-      c= getopt(argc,argv,"a:c:d:e:t:");
+      c= getopt(argc,argv,"a:c:d:e:t:hv");
       switch(c)
       {
          case 'a' :
@@ -385,8 +411,16 @@ void pingArgTrans (LXI2CPingCLA *pPCLA, int argc, char *argv[])
             sscanf(optarg,"%d", &t);
             if (t > 0) { pPCLA->ping.ivl_us= t; }
             break;
+         case 'h' :
+            flags|= PING_HELP;
+            break;
+         case 'v' :
+            flags|= PING_VERBOSE;
+            break;
       }
    } while (c > 0);
+   if (flags & PING_HELP) { pingUsageMsg(argv[0]); }
+   if (flags & PING_VERBOSE) { pingDump(pPCLA); }
 } // pingArgTrans
 
 #ifdef RPI_VC4 // Broadcom VideoCore IV timestamp register(s) mapped into (root-only) process address space

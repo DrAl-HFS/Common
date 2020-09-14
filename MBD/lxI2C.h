@@ -34,8 +34,8 @@ typedef struct
 
 typedef struct
 {
-   U8 nB, b[3];
-   int maxIter, maxErr, ivl_us;
+   U8    nB, b[3];
+   U32   maxIter, maxErr, ivl_us;
 } LXI2CPing;
 
 
