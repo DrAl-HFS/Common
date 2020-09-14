@@ -5,7 +5,7 @@ CC := clang-6.0
 OPT := -Wall -Oz
 else
 CC := gcc
-OPT := -Wall -Os
+OPT := -Wall -Os -march=native
 #OPT := -v -Wall -g -O0
 # -std=c11 -D__USE_MISC -pedantic
 endif
@@ -54,24 +54,37 @@ I2C_INCDEF := -I$(COM_DIR) -DLX_I2C_MAIN
 ADS_INCDEF := -I$(COM_DIR) -DADS1X_MAIN -DADS1X_TEST
 LSM_INCDEF := -I$(COM_DIR) -DLSM_MAIN -DLSM_TEST
 
-# Move any object files to the expected location
-$(OBJ_DIR)/%.o : %.o
-	mv $< $@
 
 .PHONY : all clean run
 
 all : ti2c ads1x lsm9ds1
 
-# Full build from source
-ti2c : $(I2C_SRC) $(I2C_HDR) $(SUPP_SRC) $(SUPP_HDR) $(MAKEFILE)
-	$(CC) $(OPT) $(I2C_INCDEF) $(LIBS) $(I2C_SRC) $(SUPP_SRC) -o $@
 
-ads1x : $(I2C_SRC) $(I2C_HDR) $(ADS_SRC) $(ADS_HDR) $(SUPP_SRC) $(SUPP_HDR)  $(MAKEFILE)
+# Move any object files to the expected location
+$(OBJ_DIR)/%.o : %.o
+	mv $< $@
+
+# Conflicting conditional compilations break folder based rules
+#%.o : $(SRC_DIR)/%.c $(HDR_DIR)/%.h
+#	$(CC) $(OPT) $(ACC) $(INCDEF) $< -c
+
+%.o : $(COM_DIR)/%.c $(COM_DIR)/%.h
+	$(CC) $(OPT) $(ACC) $(INCDEF) $< -c
+
+
+# Full build from source
+ti2c : $(I2C_SRC) $(I2C_HDR) $(SUPP_OBJ) $(MAKEFILE)
+	$(CC) $(OPT) $(I2C_INCDEF) $(LIBS) $(I2C_SRC) $(SUPP_OBJ) -o $@
+
+ads1x : $(I2C_SRC) $(I2C_HDR) $(ADS_SRC) $(ADS_HDR) $(SUPP_OBJ)  $(MAKEFILE)
 	$(CC) $(OPT) $(ADS_INCDEF) $(LIBS) $(I2C_SRC) $(ADS_SRC) $(SUPP_SRC) -o $@
 
-lsm9ds1 : $(I2C_SRC) $(I2C_HDR) $(LSM_SRC) $(LSM_HDR) $(SUPP_SRC) $(SUPP_HDR) $(MAKEFILE)
+lsm9ds1 : $(I2C_SRC) $(I2C_HDR) $(LSM_SRC) $(LSM_HDR) $(SUPP_OBJ) $(MAKEFILE)
 	$(CC) $(OPT) $(LSM_INCDEF) $(LIBS) $(I2C_SRC) $(LSM_SRC) $(SUPP_SRC) -o $@
 
+
+setup :
+	mkdir obj
 
 clean :
 	rm -f ti2c ads1x lsm9ds1 $(OBJ_DIR)/*
