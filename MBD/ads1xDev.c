@@ -28,7 +28,7 @@ typedef struct
    I16 res;
    U8  cfgRB0[1]; // First byte of config register: describes mux gain and single/multi conversion control
    U8  flSt; // flags (see above) in high nybble & 4bit transaction count in low
-} RawAGR; // TODO: rename to something more relevant
+} RawAGR;
 
 
 /***/
@@ -212,7 +212,7 @@ int readAutoADS1X
    RawAGR rmg[4];
    int n=0, r=-1;
    U8 cfgPB[ADS1X_NRB];
-   F32 R1[]={2200, 330, 330, 0.001};
+   F32 R1[]={2200, 330, 330, 0};
    if ((nF > 0) && (nMux > 0))
    {
       if (pCfgPB) { arc.pCfgPB= pCfgPB; } // Paranoid VALIDATE ?
@@ -234,20 +234,24 @@ int readAutoADS1X
       if (nMux > 4) { WARN_CALL("(..nMux=%u..) - clamped to 4\n", nMux); nMux= 4; }
       setupRawAGR(rmg, mux, nMux, ADS1X_GAIN_4V096);
 
+	// Messy debug dump...
       do
       {
          r= readAutoRawADS1x(rmg, nMux, &arc, pC); //LOG("readAutoRawADS1x() - r=%d\n", r);
          if (r > 0)
          {
+            LOG("\nRaw[%d]\t\t",n);
             for (int j=0; j<nMux; j++)
             {
                U8 g= ads1xGetGain(rmg[j].cfgRB0);
                U8 t= rmg[j].flSt & RMG_MASK_TRNS;
-               U8 f= rmg[j].flSt >> 4;
+               U8 f= rmg[j].flSt >> 4;	// rmg[j].res,
                LOG("%d,%X,%d%c", g, f, t, gSepCh[j >= (nMux-1)]);
             }
             convertRawAGR(f+n, rmg, nMux, pP);
+            LOG("Volts[%d]\t",n);
             for (int j=0; j<nMux; j++) { LOG("%G%c", f[n+j], gSepCh[j >= (nMux-1)]); }
+            LOG("Resistance[%d]\t",n);
             for (int j=0; j<nMux; j++)
             {
                F32 V0, V1, R0=0;
@@ -264,7 +268,7 @@ int readAutoADS1X
    return(n);
 } // readAutoADS1X
 
-#define TEST_AUTO_MUX_N 4
+#define TEST_AUTO_MUX_N 3
 #define TEST_AUTO_SAMPLES 8*TEST_AUTO_MUX_N
 int testAuto
 (
@@ -296,6 +300,7 @@ int testAuto
    }
    if (r > 0)
    {
+      LOG("%s","\t\t");
       for (int j=0; j<TEST_AUTO_MUX_N; j++) { LOG("%s%c", ads1xMuxStr(mux[j]), gSepCh[j >= (TEST_AUTO_MUX_N-1)] ); }
       r= readAutoADS1X(f, TEST_AUTO_SAMPLES, mux, TEST_AUTO_MUX_N, cfgPB, pC, devAddr, pP);
    }
@@ -458,7 +463,7 @@ int main (int argc, char *argv[])
 
    if (lxi2cOpen(&gBusCtx, devPath, 400))
    {
-      const ADSInstProp *pP= adsInitProp(NULL, 3.3, hwID);
+      const ADSInstProp *pP= adsInitProp(NULL, 3.3065, hwID);
 #if 0
       U8 adcMF= ADS1X_TEST_MODE_VERIFY|ADS1X_TEST_MODE_SLEEP|ADS1X_TEST_MODE_POLL|ADS1X_TEST_MODE_ROTMUX;
       //adcMF|= ADS1X_TEST_MODE_VERBOSE;
