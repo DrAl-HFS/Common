@@ -8,6 +8,9 @@
 #ifndef LSM9DS1_H
 #define LSM9DS1_H
 
+/***/
+
+
 #ifdef __cplusplus
 extern "C" {
 #endif

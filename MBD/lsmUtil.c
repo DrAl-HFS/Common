@@ -15,6 +15,9 @@
 // of control and data registers within each interface - still considering
 // how to make this more manageable without introducing gross inefficiencies...
 
+
+/***/
+
 // Register frames for I2C / SPI interfacing - each includes leading register
 // address byte for simple message handling
 typedef struct // I2C packet/frames for 16b acc. & temperature measurement
