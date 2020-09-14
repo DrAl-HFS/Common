@@ -77,10 +77,10 @@ ti2c : $(I2C_SRC) $(I2C_HDR) $(SUPP_OBJ) $(MAKEFILE)
 	$(CC) $(OPT) $(I2C_INCDEF) $(LIBS) $(I2C_SRC) $(SUPP_OBJ) -o $@
 
 ads1x : $(I2C_SRC) $(I2C_HDR) $(ADS_SRC) $(ADS_HDR) $(SUPP_OBJ)  $(MAKEFILE)
-	$(CC) $(OPT) $(ADS_INCDEF) $(LIBS) $(I2C_SRC) $(ADS_SRC) $(SUPP_SRC) -o $@
+	$(CC) $(OPT) $(ADS_INCDEF) $(LIBS) $(I2C_SRC) $(ADS_SRC) $(SUPP_OBJ) -o $@
 
 lsm9ds1 : $(I2C_SRC) $(I2C_HDR) $(LSM_SRC) $(LSM_HDR) $(SUPP_OBJ) $(MAKEFILE)
-	$(CC) $(OPT) $(LSM_INCDEF) $(LIBS) $(I2C_SRC) $(LSM_SRC) $(SUPP_SRC) -o $@
+	$(CC) $(OPT) $(LSM_INCDEF) $(LIBS) $(I2C_SRC) $(LSM_SRC) $(SUPP_OBJ) -o $@
 
 
 setup :
