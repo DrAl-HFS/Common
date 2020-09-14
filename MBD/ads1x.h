@@ -11,6 +11,9 @@
 #ifndef ADS1X_H
 #define ADS1X_H
 
+/***/
+
+
 #ifdef __cplusplus
 extern "C" {
 #endif

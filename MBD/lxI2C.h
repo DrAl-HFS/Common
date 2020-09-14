@@ -10,6 +10,8 @@
 #include <linux/i2c.h>
 //#include <linux/i2c-dev.h>
 
+/***/
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -37,7 +39,6 @@ typedef struct
    U8    nB, b[3];
    U32   maxIter, maxErr, ivl_us;
 } LXI2CPing;
-
 
 
 /***/
