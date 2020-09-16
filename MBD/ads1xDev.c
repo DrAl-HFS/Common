@@ -102,6 +102,7 @@ void ads1xDumpAll (const ADS1xFullPB *pFPB, const ADS1xHWID id)
    LOG("res: %04x (%d) cmp: %04x %04x (%d %d)\n", v[0], v[0], v[1], v[2], v[1], v[2]);
 } // ads1xDumpAll
 
+/***/
 // DISPLACE : ads1xUtil ?
 // Read a set of mux channels, updating the gain setting for each to maximise precison.
 // Performs multiple reads per channel as appropriate, if permitted.
@@ -194,6 +195,8 @@ void convertRawAGR (F32 f[], const RawAGR r[], const int n, const ADSInstProp *p
    }
 } // convertRawAGR
 
+/***/
+
 static const char gSepCh[2]={'\t','\n'};
 
 int readAutoADS1X
@@ -268,6 +271,7 @@ int readAutoADS1X
    return(n);
 } // readAutoADS1X
 
+
 #define TEST_AUTO_MUX_N 3
 #define TEST_AUTO_SAMPLES 8*TEST_AUTO_MUX_N
 int testAuto
@@ -275,14 +279,17 @@ int testAuto
    const LXI2CBusCtx *pC,
    const U8 devAddr,
    const ADSInstProp *pP,
-   const enum ADS1xRate rateID   //,const U8 maxIter
+   const U16   rate
 )
 {
-   const U8 mux[TEST_AUTO_MUX_N]= { ADS1X_MUX0G, ADS1X_MUX1G, ADS1X_MUX2G, ADS1X_MUX3G };
+   const U8 mux[TEST_AUTO_MUX_N]= { ADS1X_MUX0G, ADS1X_MUX1G, ADS1X_MUX2G };//, ADS1X_MUX3G };
+   const U8 rateID= ads1xSelectRate(rate, pP->hwID);
    U8 cfgPB[ADS1X_NRB];
    F32 f[TEST_AUTO_SAMPLES];
    int r;
 
+   r= ads1xRateToU(rateID, pP->hwID);
+   LOG_CALL("(..rate=%d) - selected id=%d -> %d\n", rate, rateID, r);
    cfgPB[0]= ADS1X_REG_CFG;
    r= lxi2cReadRB(pC, devAddr, cfgPB, ADS1X_NRB);
    //LOG_CALL("(...rateID=%d...) : ReadRB() r=%d \n", rateID, r);
@@ -307,8 +314,34 @@ int testAuto
    return(r);
 } // testAuto
 
+/***/
+
 #ifdef ADS1X_TEST
 
+typedef struct { struct itimerval tLast; } Timer;
+int initTimer (Timer *pT, F32 sec)
+{
+   LOG_CALL("(%G)\n", sec);
+   pT->tLast.it_value.tv_sec= sec;
+   pT->tLast.it_value.tv_usec= 1E6 * (sec - pT->tLast.it_value.tv_sec);
+   pT->tLast.it_interval=   pT->tLast.it_value;
+   return setitimer(ITIMER_REAL, &(pT->tLast), NULL); // >= 0);
+} // initTimer
+
+#define USECF(t1,t2) (((t2).tv_sec-(t1).tv_sec) + 1E-6*((t2).tv_usec-(t1).tv_usec))
+F32 elapsedTime (Timer *pT)
+{
+   struct itimerval tNow;
+   F32 dt=-1;
+   if (getitimer(ITIMER_REAL, &tNow) >= 0)
+   {
+      dt= USECF(tNow.it_value, pT->tLast.it_value); // NB: countdown so last > now
+      pT->tLast= tNow;
+   }
+   return(dt);
+} // elapsedTime
+
+// Testing indicates usleep() granularity 1.5~2ms...
 int testADS1x15
 (
    const LXI2CBusCtx *pC,
@@ -321,17 +354,21 @@ int testADS1x15
 {
    ADS1xFullPB fpb;
    const int i2cWait= ADS1X_TRANS_NCLK * 1E6 / pC->clk;
-   int convWait=0, expectWait=0, minWaitStep=10;
+   Timer timer;
+   int i2cDelay=0, convWait=0, expectWait=0, minWaitStep=10;
    int r;
    float sv;
-   U8 cfgStatus[ADS1X_NRB];
+   U8 n, cfgStatus[ADS1X_NRB];
 
    r= ads1xInitFPB(&fpb, pWS, pC, dev);
    if (r >= 0)
    {
       const enum ADS1xRate idRate[]={ADS10_DR920, ADS11_DR860};
       //const enum ADS1xRate idRate[]={ADS10_DR128, ADS11_DR8};
-
+      {
+         int nDelay= 1+bitCountZ(mode & (ADS1X_TEST_MODE_VERIFY|ADS1X_TEST_MODE_POLL));
+         i2cDelay= nDelay * i2cWait;
+      }
       ads1xDumpCfg(fpb.rc.cfg+1, 0);
       memcpy(cfgStatus, fpb.rc.cfg, ADS1X_NRB);
       ads1xGenCfg(fpb.rc.cfg+1, ADS1X_MUX0G, ADS1X_GAIN_6V144, idRate[pP->hwID], ADS1X_CMP_DISABLE);
@@ -343,78 +380,81 @@ int testADS1x15
       LOG("Ivl: conv=%dus comm=%dus\n", convWait, i2cWait);
       if (mode & ADS1X_TEST_MODE_SLEEP)
       {
-         int nDelay= 1+bitCountZ(mode & (ADS1X_TEST_MODE_VERIFY|ADS1X_TEST_MODE_POLL));
-         int i2cDelay= nDelay * i2cWait;
          if (convWait > i2cDelay) { expectWait= convWait-i2cDelay; } // Hacky : conversion time seems less than sample interval...
          if (i2cWait < minWaitStep) { minWaitStep= i2cWait; }
       }
-      if (r >= 0)
+      if (mode & ADS1X_TEST_MODE_TIMER)
       {
-         U8 n= 0;
-         LOG("%s\n","***");
+         int s= 1.999 + 1E-6 * maxIter * (convWait+i2cDelay);
+         initTimer(&timer, s);
+         //expectWait/= 8;
+      }
+      LOG("%s\n","***");
+      n= 0;
+      do
+      {
+         int iR0= 0, iR1= 0; // retry counters
+         U8 cfgVer=FALSE;
          do
          {
-            int iR0= 0, iR1= 0; // retry counters
-            U8 cfgVer=FALSE;
-            do
+            r= lxi2cWriteRB(pC, dev, fpb.rc.cfg, ADS1X_NRB);
+            if ((mode & ADS1X_TEST_MODE_VERIFY) && (r >= 0))
             {
-               r= lxi2cWriteRB(pC, dev, fpb.rc.cfg, ADS1X_NRB);
-               if ((mode & ADS1X_TEST_MODE_VERIFY) && (r >= 0))
-               {
-                  r= lxi2cReadRB(pC, dev, cfgStatus, ADS1X_NRB);
-                  if (r >= 0)
-                  {  // Device goes busy (OS1->0) immediately on write, so merge back in for check
-                     cfgStatus[1] |= (fpb.rc.cfg[1] & ADS1X_FL0_OS);
-                     cfgVer= (0 == memcmp(cfgStatus, fpb.rc.cfg, ADS1X_NRB));
-                     if (mode & ADS1X_TEST_MODE_VERBOSE) { LOG("ver%d=%d: ", iR0, cfgVer); ads1xDumpCfg(cfgStatus+1, pP->hwID); }
-                  }
-               }
-            } while ((mode & ADS1X_TEST_MODE_VERIFY) && ((r < 0) || !cfgVer) && (++iR0 < 10));
-
-            if (expectWait > 0) { usleep(expectWait); }
-
-            if (mode & ADS1X_TEST_MODE_POLL)
-            {
-               do { // poll status
-                  r= lxi2cReadRB(pC, dev, cfgStatus, ADS1X_NRB);
-               } while (((r < 0) || (0 == (cfgStatus[1] & ADS1X_FL0_OS))) && (++iR1 < 10));
-            }
-
-            r= lxi2cReadRB(pC, dev, fpb.rc.res, ADS1X_NRB); // read result
-            if (r >= 0)
-            {
-               int raw=  rdI16BE(fpb.rc.res+1);
-               float v= raw * sv;
-               const char muxVerCh[]={'?','V'};
-               enum ADS1xMux m;
-               if (cfgVer) { m= ads1xGetMux(cfgStatus+1); }
-               else { m= ads1xGetMux(fpb.rc.cfg+1); }
-               LOG("%s (%c) (i=%d,%d) W%d [%d] : 0x%x -> %GV\n", ads1xMuxStr(m), muxVerCh[cfgVer], iR0, iR1, expectWait, n, raw, v);
-               if (mode & ADS1X_TEST_MODE_ROTMUX)
-               {
-                  static const U8 muxRot[]= { ADS1X_MUX0G, ADS1X_MUX1G, ADS1X_MUX2G, ADS1X_MUX3G };
-                  const int iNM= (1+n) & 0x3;
-                  ads1xSetMux(fpb.rc.cfg+1, muxRot[iNM]); // 99999999);
-                  if (mode & ADS1X_TEST_MODE_VERBOSE)
-                  {
-                     LOG("%d -> 0x%02x -> %s chk: %s\n", iNM, muxRot[iNM], ads1xMuxStr(muxRot[iNM]), ads1xMuxStr(ads1xGetMux(fpb.rc.cfg+1)));
-                  }
+               r= lxi2cReadRB(pC, dev, cfgStatus, ADS1X_NRB);
+               if (r >= 0)
+               {  // Device goes busy (OS1->0) immediately on write, so merge back in for check
+                  cfgStatus[1] |= (fpb.rc.cfg[1] & ADS1X_FL0_OS);
+                  cfgVer= (0 == memcmp(cfgStatus, fpb.rc.cfg, ADS1X_NRB));
+                  if (mode & ADS1X_TEST_MODE_VERBOSE) { LOG("ver%d=%d: ", iR0, cfgVer); ads1xDumpCfg(cfgStatus+1, pP->hwID); }
                }
             }
-            if ((mode & ADS1X_TEST_MODE_TUNE) && (0 == iR0))
+         } while ((mode & ADS1X_TEST_MODE_VERIFY) && ((r < 0) || !cfgVer) && (++iR0 < 10));
+
+         if (expectWait > 0) { usleep(expectWait); }
+
+         if (mode & ADS1X_TEST_MODE_POLL)
+         {
+            do { // poll status
+               r= lxi2cReadRB(pC, dev, cfgStatus, ADS1X_NRB);
+            } while (((r < 0) || (0 == (cfgStatus[1] & ADS1X_FL0_OS))) && (++iR1 < 10));
+         }
+
+         r= lxi2cReadRB(pC, dev, fpb.rc.res, ADS1X_NRB); // read result
+         if (r >= 0)
+         {
+            F32 dt=-1;
+            if (mode & ADS1X_TEST_MODE_TIMER) { dt= elapsedTime(&timer); }
+            int raw=  rdI16BE(fpb.rc.res+1);
+            F32 v= raw * sv;
+            const char muxVerCh[]={'?','V'};
+            enum ADS1xMux m;
+            if (cfgVer) { m= ads1xGetMux(cfgStatus+1); }
+            else { m= ads1xGetMux(fpb.rc.cfg+1); }
+            LOG("%s (%c) (i=%d,%d) W%d dt%G [%d] : 0x%x -> %GV\n", ads1xMuxStr(m), muxVerCh[cfgVer], iR0, iR1, expectWait, dt, n, raw, v);
+            if (mode & ADS1X_TEST_MODE_ROTMUX)
             {
-               if (expectWait > minWaitStep)
+               static const U8 muxRot[]= { ADS1X_MUX0G, ADS1X_MUX1G, ADS1X_MUX2G, ADS1X_MUX3G };
+               const int iNM= (1+n) & 0x3;
+               ads1xSetMux(fpb.rc.cfg+1, muxRot[iNM]); // 99999999);
+               if (mode & ADS1X_TEST_MODE_VERBOSE)
                {
-                  if (0 == iR1)
-                  {
-                     if (expectWait > (convWait>>1)) { expectWait-= i2cWait; } else { expectWait-= minWaitStep; }
-                  }
-                  else { expectWait+= i2cWait; }
+                  LOG("%d -> 0x%02x -> %s chk: %s\n", iNM, muxRot[iNM], ads1xMuxStr(muxRot[iNM]), ads1xMuxStr(ads1xGetMux(fpb.rc.cfg+1)));
                }
             }
-         } while (++n < maxIter);
-         LOG("%s\n","---");
-      }
+         }
+         if ((mode & ADS1X_TEST_MODE_TUNE) && (0 == iR0))
+         {
+            if (expectWait > minWaitStep)
+            {
+               if (0 == iR1)
+               {
+                  if (expectWait > (convWait>>1)) { expectWait-= i2cWait; } else { expectWait-= minWaitStep; }
+               }
+               else { expectWait+= i2cWait; }
+            }
+         }
+      } while (++n < maxIter);
+      LOG("%s\n","---");
    }
    return(r);
 } // testADS1x15
@@ -464,8 +504,8 @@ int main (int argc, char *argv[])
    if (lxi2cOpen(&gBusCtx, devPath, 400))
    {
       const ADSInstProp *pP= adsInitProp(NULL, 3.3065, hwID);
-#if 0
-      U8 adcMF= ADS1X_TEST_MODE_VERIFY|ADS1X_TEST_MODE_SLEEP|ADS1X_TEST_MODE_POLL|ADS1X_TEST_MODE_ROTMUX;
+#if 1
+      U8 adcMF= ADS1X_TEST_MODE_VERIFY|ADS1X_TEST_MODE_SLEEP|ADS1X_TEST_MODE_POLL|ADS1X_TEST_MODE_TIMER|ADS1X_TEST_MODE_ROTMUX;
       //adcMF|= ADS1X_TEST_MODE_VERBOSE;
 
       // Paranoid enum check: for (int i=ADS11_DR8; i<=ADS11_DR860; i++) { printf("%d -> %d\n", i, ads1xRateToU(i,1) ); }
@@ -474,7 +514,7 @@ int main (int argc, char *argv[])
       r= testADS1x15(&gBusCtx, NULL, devAddr, pP, adcMF, 100);
       //releaseMemBuff(&ws);
 #else
-      r= testAuto(&gBusCtx, devAddr, pP, ADS11_DR128);
+      r= testAuto(&gBusCtx, devAddr, pP, 10);
 #endif
       lxi2cClose(&gBusCtx);
    }

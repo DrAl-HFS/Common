@@ -39,6 +39,7 @@ typedef struct
 #define ADS1X_TEST_MODE_POLL    (1<<5)
 #define ADS1X_TEST_MODE_ROTMUX  (1<<4)
 #define ADS1X_TEST_MODE_TUNE    (1<<3)
+#define ADS1X_TEST_MODE_TIMER   (1<<1)
 #define ADS1X_TEST_MODE_VERBOSE (1<<0)
 
 
