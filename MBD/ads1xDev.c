@@ -318,6 +318,14 @@ int testAuto
 
 #ifdef ADS1X_TEST
 
+void xusleep (int us)
+{
+   struct timespec rq, rem;
+   rq.tv_sec= 0;
+   rq.tv_nsec= us * 1000;
+   nanosleep(&rq,&rem);
+} // xusleep
+
 typedef struct { struct itimerval tLast; } Timer;
 int initTimer (Timer *pT, F32 sec)
 {
@@ -410,7 +418,7 @@ int testADS1x15
             }
          } while ((mode & ADS1X_TEST_MODE_VERIFY) && ((r < 0) || !cfgVer) && (++iR0 < 10));
 
-         if (expectWait > 0) { usleep(expectWait); }
+         if (expectWait > 0) { xusleep(expectWait); }
 
          if (mode & ADS1X_TEST_MODE_POLL)
          {
