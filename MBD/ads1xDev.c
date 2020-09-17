@@ -326,29 +326,6 @@ void xusleep (int us)
    nanosleep(&rq,&rem);
 } // xusleep
 
-typedef struct { struct itimerval tLast; } Timer;
-int initTimer (Timer *pT, F32 sec)
-{
-   LOG_CALL("(%G)\n", sec);
-   pT->tLast.it_value.tv_sec= sec;
-   pT->tLast.it_value.tv_usec= 1E6 * (sec - pT->tLast.it_value.tv_sec);
-   pT->tLast.it_interval=   pT->tLast.it_value;
-   return setitimer(ITIMER_REAL, &(pT->tLast), NULL); // >= 0);
-} // initTimer
-
-#define USECF(t1,t2) (((t2).tv_sec-(t1).tv_sec) + 1E-6*((t2).tv_usec-(t1).tv_usec))
-F32 elapsedTime (Timer *pT)
-{
-   struct itimerval tNow;
-   F32 dt=-1;
-   if (getitimer(ITIMER_REAL, &tNow) >= 0)
-   {
-      dt= USECF(tNow.it_value, pT->tLast.it_value); // NB: countdown so last > now
-      pT->tLast= tNow;
-   }
-   return(dt);
-} // elapsedTime
-
 // Testing indicates usleep() granularity 1.5~2ms...
 int testADS1x15
 (
@@ -362,7 +339,7 @@ int testADS1x15
 {
    ADS1xFullPB fpb;
    const int i2cWait= ADS1X_TRANS_NCLK * 1E6 / pC->clk;
-   Timer timer;
+   IOTimer timer;
    int i2cDelay=0, convWait=0, expectWait=0, minWaitStep=10;
    int r;
    float sv;
