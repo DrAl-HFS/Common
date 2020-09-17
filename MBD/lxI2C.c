@@ -309,10 +309,10 @@ void lxi2cDumpDevAddr (const LXI2CBusCtx *pC, U16 dev, U8 bytes, U8 addr)
    //else { printf(WARN/ERROR); }
 } // lxi2cDumpDevAddr
 
-int lxi2cPing (const LXI2CBusCtx *pC, U8 devAddr, const LXI2CPing *pP)
+int lxi2cPing (const LXI2CBusCtx *pC, U8 busAddr, const LXI2CPing *pP)
 {
    //if (NULL == pP) { pP= &gPing; }
-   struct i2c_msg m= { .addr= devAddr,  .flags= I2C_M_WR,  .len= pP->nB,  .buf= (void*)(pP->b) };
+   struct i2c_msg m= { .addr= busAddr,  .flags= I2C_M_WR,  .len= pP->nB,  .buf= (void*)(pP->b) };
    struct i2c_rdwr_ioctl_data d={ &m, 1 };
    //int t[2]={0,0};
    int r, i=0, e=0;
@@ -338,15 +338,112 @@ int lxi2cPing (const LXI2CBusCtx *pC, U8 devAddr, const LXI2CPing *pP)
    return(-e);
 } // lxi2cPing
 
+#ifdef LX_I2C_TEST
+
+int initTimer (IOTimer *pT, F32 sec)
+{
+   LOG_CALL("(%G)\n", sec);
+   pT->tLast.it_value.tv_sec= sec;
+   pT->tLast.it_value.tv_usec= 1E6 * (sec - pT->tLast.it_value.tv_sec);
+   pT->tLast.it_interval=   pT->tLast.it_value;
+   return setitimer(ITIMER_REAL, &(pT->tLast), NULL); // >= 0);
+} // initTimer
+
+#define USECF(t1,t2) (((t2).tv_sec-(t1).tv_sec) + 1E-6*((t2).tv_usec-(t1).tv_usec))
+F32 elapsedTime (IOTimer *pT)
+{
+   struct itimerval tNow;
+   F32 dt=-1;
+   if (getitimer(ITIMER_REAL, &tNow) >= 0)
+   {
+      dt= USECF(tNow.it_value, pT->tLast.it_value); // NB: countdown so last > now
+      pT->tLast= tNow;
+   }
+   return(dt);
+} // elapsedTime
+
+#define ITIMER_GRANULARITY (4) // us
+#define USLEEP_GRANULARITY (2000) // us
+int spinSleep (int us)
+{
+   if (us >= ITIMER_GRANULARITY)
+   {
+      struct itimerval ivl= { .it_value.tv_sec= 0, .it_value.tv_usec= us };
+      //ivl.it_value.tv_sec= us / 1000000;
+      //ivl.it_value.tv_usec= us % 1000000;
+      int r= setitimer(ITIMER_REAL, &ivl, NULL);
+      if (r >= 0)
+      {
+         if (us >= USLEEP_GRANULARITY) { usleep(us - 500); } // Minimise wasted clock cycles
+         do // spin (system calls)
+         {
+            r= getitimer(ITIMER_REAL, &ivl);
+         } while ((r >= 0) && (ivl.it_value.tv_usec >= ITIMER_GRANULARITY));
+         us= ivl.it_value.tv_usec;
+      }
+   }
+   return(us);
+} // spinSleep
+
+#endif // LX_I2C_TEST
+
 #ifdef LX_I2C_MAIN
 
+int sumNI (int v[], const int n) { if (n > 0) { int t= v[0]; for (int i=1; i<n; i++) { t+= v[i]; } return(t); } return(0); }
+float rcpI (int x) { if (0 != x) { return(1.0 / (float)x); } else return(0); }
+float sumNF (float v[], const int n) { if (n > 0) { float t= v[0]; for (int i=1; i<n; i++) { t+= v[i]; } return(t); } return(0); }
+float rcpF (float x) { if (0 != x) { return(1.0 / x); } else return(0); }
+void timerTestHack (int us)
+{
+   int r, dtus[100];
+   struct itimerval ivl;
+
+   LOG_CALL("(%dus)\n",us);
+   ivl.it_value.tv_sec= 1;
+   ivl.it_value.tv_usec= 0;
+   ivl.it_interval= ivl.it_value;
+   r= setitimer(ITIMER_REAL, &ivl, NULL);
+   if (r >= 0)
+   {
+      int n=0, last;
+      r= getitimer(ITIMER_REAL, &ivl); last= ivl.it_value.tv_usec;
+      while ((r >= 0) && (n < 100))
+      {
+         //spinSleep(us); // can't reuse ITIMER_REAL ...
+         r= getitimer(ITIMER_REAL, &ivl);
+         dtus[n++]= last - ivl.it_value.tv_usec; last= ivl.it_value.tv_usec;
+      }
+      LOG("Results: [%d]: mean=%G\n", n, rcpI(n) * sumNI(dtus,n));
+      // for (int i=0; i<n; i++) { LOG("\t%d", dtus[i]); }
+      LOG("%s\n","---");
+   } else { ERROR_CALL(" : setitimer() - %d\n", r); }
+} // timerTestHack
+
+#define NSECF(t1,t2) (((t2).tv_sec-(t1).tv_sec) + 1E-9*((t2).tv_nsec-(t1).tv_nsec))
+void t2 (int us)
+{
+   struct timespec ts[2];
+   int r,n=0;
+   F32 dt[100];
+   r= clock_gettime(CLOCK_REALTIME, ts+1);
+   while ((r >= 0) && (n < 100))
+   {
+      int i= n&1;
+      spinSleep(us);
+      r= clock_gettime(CLOCK_REALTIME, ts+i);
+      dt[n++]= NSECF(ts[i^1],ts[i]);
+   }
+   LOG("Results: [%d]: mean=%G\n", n, rcpF(n) * sumNF(dt,n));
+   // for (int i=0; i<n; i++) { LOG("\t%d", dtus[i]); }
+   LOG("%s\n","---");
+}
 //#include <>
 
 typedef struct
 {
    LXI2CPing ping;
-   char devPath[14];
-   U8 devAddr;
+   char devPath[14]; // host device path
+   U8 busAddr; // bus device address
    U8 flags;
 } LXI2CPingCLA;
 
@@ -380,7 +477,7 @@ static const char *desc[]=
 
 void pingDump (LXI2CPingCLA *pCLA)
 {
-   report(OUT,"Device: path=%s, address=%02X\n", pCLA->devPath, pCLA->devAddr);
+   report(OUT,"Device: path=%s, address=%02X\n", pCLA->devPath, pCLA->busAddr);
 } // pingDump
 
 #define PING_HELP    (1<<0)
@@ -395,7 +492,7 @@ void pingArgTrans (LXI2CPingCLA *pPCLA, int argc, char *argv[])
       {
          case 'a' :
             sscanf(optarg, "%x", &t);
-            if (t <= 0x7F) { pPCLA->devAddr= t; }
+            if (t <= 0x7F) { pPCLA->busAddr= t; }
             break;
          case 'c' :
             sscanf(optarg, "%d", &t);
@@ -442,12 +539,12 @@ void setup (void)
    }
 } // setup
 
-#else // RPI_VC4
+#endif // RPI_VC4
 // Evaluate other timing mechanisms that should provide better-than-millisecond accuracy
 //#include <sys/time.h>
+#if 0
 #include <signal.h>
 #define USEC(t1,t2) (((t2).tv_sec-(t1).tv_sec)*1000000+((t2).tv_usec-(t1).tv_usec))
-#define NSEC(t1,t2) (((t2).tv_sec-(t1).tv_sec)*1000000000+((t2).tv_nsec-(t1).tv_nsec))
 
 void setup (void)
 {
@@ -489,38 +586,7 @@ void setup (void)
       }
    }
    /***/
-   {  // Interval timer
-      struct itimerval t0={0}, t1={0};
-
-      t0.it_value.tv_sec= 10;
-      t0.it_interval=   t0.it_value;
-
-      r= setitimer(ITIMER_REAL, &t0, NULL);
-      if (0==r)
-      {
-         printf("%ld : %ld (%ld : %ld)\n", t0.it_value.tv_sec, t0.it_value.tv_usec, t0.it_interval.tv_sec, t0.it_interval.tv_usec);
-         u= 2000;
-         i= 0;
-         sdd= 0;
-         printf("slept\tmeasure\tdiff (usec)\n");
-         do
-         {
-            usleep(u);
-            r= getitimer(ITIMER_REAL, &t1);
-            if (0==r)
-            {
-               int dtu= USEC(t1.it_value, t0.it_value);
-               int ddu= dtu - u;
-               sdd+= ddu; ++i;
-               printf("%d\t%d\t%d\n", u, dtu, ddu);
-            }
-            t0= t1; // delta, not cumulative
-            u-= 100;
-         } while ((0 ==r) && (u > 0)); //<= 2000));
-         if (i > 0) { printf("%d : mean diff= %d\n", i, sdd / i); }
-      }
-   }
-#if 0 // not functional
+ // not functional
    {  // Process clock
       // CLOCK_REALTIME CLOCK_MONOTONIC
       timer_t hT=NULL;
@@ -538,12 +604,8 @@ void setup (void)
          printf("%ld : %ld (%ld : %ld)\n", ts1.it_value.tv_sec, ts1.it_value.tv_nsec, ts1.it_interval.tv_sec, ts1.it_interval.tv_nsec);
       }
    }
-#endif
 } // setup
-
-#endif // RPI_VC4
-
-//#include <unistd.h>
+#endif
 
 
 LXI2CBusCtx gBusCtx={0,-1};
@@ -552,11 +614,13 @@ int main (int argc, char *argv[])
 {
    int r= -1;
 
+   t2(0); // timerTestHack(10000);
+   LOG("%s\n","***");
    pingArgTrans(&gPCLA, argc, argv);
    if (lxi2cOpen(&gBusCtx, gPCLA.devPath, 400))
    {
       // lxi2cDumpDevAddr(&gBusCtx, 0x48, 0xFF,0x00);
-      r= lxi2cPing(&gBusCtx, gPCLA.devAddr, &(gPCLA.ping));
+      r= lxi2cPing(&gBusCtx, gPCLA.busAddr, &(gPCLA.ping));
       lxi2cClose(&gBusCtx);
    }
 

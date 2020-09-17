@@ -14,7 +14,7 @@ typedef struct
    U8 *pCfgPB; // Config packet bytes - (pointer to outer level declaration eliminates copying)
    U32 ivl;    // Delay for conversion interval (hardware rate dependant 303~125000 usec. for 400kHz bus clock)
    I16 fsr;    // Full scale reading (hardware version dependant)
-   U8 devAddr; // I2C device address
+   U8 busAddr; // I2C device address
    U8 maxT;    // Max transactions per mux channel
 } AutoRawCtx;
 
@@ -120,12 +120,12 @@ int readAutoRawADS1x (RawAGR rmg[], int nR, AutoRawCtx *pARC, const LXI2CBusCtx 
       do
       {  // Get best available reading
          pARC->pCfgPB[1]= rmg[i].cfgRB0[0]; // Sets Gain, Mux, flags (Single Shot & Start)
-         r= lxi2cWriteRB(pC, pARC->devAddr, pARC->pCfgPB, ADS1X_NRB);
+         r= lxi2cWriteRB(pC, pARC->busAddr, pARC->pCfgPB, ADS1X_NRB);
          if (r > 0)
          {  // working
             iT++;
             usleep(pARC->ivl);
-            r= lxi2cReadRB(pC, pARC->devAddr, resPB, ADS1X_NRB);
+            r= lxi2cReadRB(pC, pARC->busAddr, resPB, ADS1X_NRB);
             if (r > 0)
             {  // got result
                iT++;
@@ -207,7 +207,7 @@ int readAutoADS1X
    int       nMux,
    U8       * pCfgPB,
    const LXI2CBusCtx *pC,
-   const U8 devAddr,
+   const U8 busAddr,
    const ADSInstProp *pP
 )
 {
@@ -222,7 +222,7 @@ int readAutoADS1X
       else
       {
          cfgPB[0]= ADS1X_REG_CFG;
-         r= lxi2cReadRB(pC, devAddr, cfgPB, ADS1X_NRB);
+         r= lxi2cReadRB(pC, busAddr, cfgPB, ADS1X_NRB);
          //LOG_CALL(" : lxi2cReadRB() - r=%d\n", r);
          if (r <= 0) { return(r); }
          //else
@@ -231,7 +231,7 @@ int readAutoADS1X
       arc.ivl= ads1xConvIvl(&r, arc.pCfgPB+1, pP->hwID);
       //LOG_CALL("() - rate=%d -> ivl=%d\n", r, arc.ivl);
       arc.fsr= ads1xRawFSR(pP->hwID);
-      arc.devAddr= devAddr;
+      arc.busAddr= busAddr;
       arc.maxT= 10; // => 5 iterations * 2 transactions
 
       if (nMux > 4) { WARN_CALL("(..nMux=%u..) - clamped to 4\n", nMux); nMux= 4; }
@@ -277,7 +277,7 @@ int readAutoADS1X
 int testAuto
 (
    const LXI2CBusCtx *pC,
-   const U8 devAddr,
+   const U8 busAddr,
    const ADSInstProp *pP,
    const U16   rate
 )
@@ -291,7 +291,7 @@ int testAuto
    r= ads1xRateToU(rateID, pP->hwID);
    LOG_CALL("(..rate=%d) - selected id=%d -> %d\n", rate, rateID, r);
    cfgPB[0]= ADS1X_REG_CFG;
-   r= lxi2cReadRB(pC, devAddr, cfgPB, ADS1X_NRB);
+   r= lxi2cReadRB(pC, busAddr, cfgPB, ADS1X_NRB);
    //LOG_CALL("(...rateID=%d...) : ReadRB() r=%d \n", rateID, r);
    if (r > 0)
    {
@@ -301,7 +301,7 @@ int testAuto
       else
       {
          ads1xSetRate(cfgPB+1, rateID);
-         r= lxi2cWriteRB(pC, devAddr, cfgPB, ADS1X_NRB);
+         r= lxi2cWriteRB(pC, busAddr, cfgPB, ADS1X_NRB);
          //LOG_CALL(" : WriteRB() cfg=%02X%02X r=%d\n", cfgPB[1], cfgPB[2], r);
       }
    }
@@ -309,7 +309,7 @@ int testAuto
    {
       LOG("%s","\t\t");
       for (int j=0; j<TEST_AUTO_MUX_N; j++) { LOG("%s%c", ads1xMuxStr(mux[j]), gSepCh[j >= (TEST_AUTO_MUX_N-1)] ); }
-      r= readAutoADS1X(f, TEST_AUTO_SAMPLES, mux, TEST_AUTO_MUX_N, cfgPB, pC, devAddr, pP);
+      r= readAutoADS1X(f, TEST_AUTO_SAMPLES, mux, TEST_AUTO_MUX_N, cfgPB, pC, busAddr, pP);
    }
    return(r);
 } // testAuto
@@ -448,7 +448,7 @@ int testADS1x15
 
 #ifdef ADS1X_MAIN
 
-void argTrans (char devPath[], U8 devAddr[1], U8 hwID[1], int argc, char *argv[])
+void argTrans (char devPath[], U8 busAddr[1], U8 hwID[1], int argc, char *argv[])
 {
    int c, t;
    do
@@ -458,7 +458,7 @@ void argTrans (char devPath[], U8 devAddr[1], U8 hwID[1], int argc, char *argv[]
       {
          case 'a' :
             sscanf(optarg, "%x", &t);
-            if (t <= 0x7F) { devAddr[0]= t; }
+            if (t <= 0x7F) { busAddr[0]= t; }
             break;
          case 'd' :
          {
@@ -472,7 +472,7 @@ void argTrans (char devPath[], U8 devAddr[1], U8 hwID[1], int argc, char *argv[]
             break;
      }
    } while (c > 0);
-   LOG("arg: %s, %02X, %d\n", devPath, devAddr[0], hwID[0]);
+   LOG("arg: %s, %02X, %d\n", devPath, busAddr[0], hwID[0]);
 } // argTrans
 
 LXI2CBusCtx gBusCtx={0,-1};
@@ -480,11 +480,11 @@ LXI2CBusCtx gBusCtx={0,-1};
 int main (int argc, char *argv[])
 {
    char devPath[]="/dev/i2c-1";
-   U8 devAddr= 0x48;
+   U8 busAddr= 0x48;
    U8 hwID=ADS11;
    int r= -1;
 
-   argTrans(devPath, &devAddr, &hwID, argc, argv);
+   argTrans(devPath, &busAddr, &hwID, argc, argv);
 
    if (lxi2cOpen(&gBusCtx, devPath, 400))
    {
@@ -496,10 +496,10 @@ int main (int argc, char *argv[])
       // Paranoid enum check: for (int i=ADS11_DR8; i<=ADS11_DR860; i++) { printf("%d -> %d\n", i, ads1xRateToU(i,1) ); }
       //MemBuff ws={0,};
       //allocMemBuff(&ws, 4<<10);//
-      r= testADS1x15(&gBusCtx, NULL, devAddr, pP, adcMF, 100);
+      r= testADS1x15(&gBusCtx, NULL, busAddr, pP, adcMF, 100);
       //releaseMemBuff(&ws);
 #else
-      r= testAuto(&gBusCtx, devAddr, pP, 10);
+      r= testAuto(&gBusCtx, busAddr, pP, 10);
 #endif
       lxi2cClose(&gBusCtx);
    }

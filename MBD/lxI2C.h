@@ -88,6 +88,20 @@ extern int lxi2cTransSMBUS (const LXI2CBusCtx *pBC, const U16 f, U16 nB, U8 *pB,
 
 extern void lxi2cClose (LXI2CBusCtx *pC);
 
+#ifdef LX_I2C_TEST
+// DISPLACE: Hacks awaiting evaluation
+typedef struct { struct itimerval tLast; } IOTimer;
+
+extern int initTimer (IOTimer *pT, F32 sec);
+
+extern F32 elapsedTime (IOTimer *pT);
+
+// Hybrid sleep (multi-millisecond delays) and spin-wait (using interval timer)
+// to achieve improved time resolution with a (limited) degree of efficiency.
+extern int spinSleep (int us);
+
+#endif // LX_I2C_TEST
+
 #ifdef __cplusplus
 } // extern "C"
 #endif
