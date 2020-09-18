@@ -340,13 +340,23 @@ int lxi2cPing (const LXI2CBusCtx *pC, U8 busAddr, const LXI2CPing *pP)
 
 #ifdef LX_I2C_TEST
 
+#include <signal.h>
+
+int gSigCount[2]={0,0};
+void alarmHandler (int a) { gSigCount[(SIGALRM==a)]+= 1; }
+
 int initTimer (IOTimer *pT, F32 sec)
 {
-   LOG_CALL("(%G)\n", sec);
-   pT->tLast.it_value.tv_sec= sec;
-   pT->tLast.it_value.tv_usec= 1E6 * (sec - pT->tLast.it_value.tv_sec);
-   pT->tLast.it_interval=   pT->tLast.it_value;
-   return setitimer(ITIMER_REAL, &(pT->tLast), NULL); // >= 0);
+   void *p= signal(SIGALRM,alarmHandler); // set up alarm handler to replace <itimer> default action (SigTerm)
+   LOG_CALL("(%G) - %p\n", sec, p);
+   if (pT && sec > 0)
+   {
+      pT->tLast.it_value.tv_sec= sec;  // truncate
+      pT->tLast.it_value.tv_usec= 1E6 * (sec - pT->tLast.it_value.tv_sec);
+      pT->tLast.it_interval=   pT->tLast.it_value;
+      return setitimer(ITIMER_REAL, &(pT->tLast), NULL); // >= 0);
+   }
+   return(0);
 } // initTimer
 
 #define USECF(t1,t2) (((t2).tv_sec-(t1).tv_sec) + 1E-6*((t2).tv_usec-(t1).tv_usec))
@@ -362,6 +372,7 @@ F32 elapsedTime (IOTimer *pT)
    return(dt);
 } // elapsedTime
 
+#define CLOCK_GRANULARITY (2) // us
 #define ITIMER_GRANULARITY (4) // us
 #define USLEEP_GRANULARITY (2000) // us
 int spinSleep (int us)
@@ -389,18 +400,20 @@ int spinSleep (int us)
 
 #ifdef LX_I2C_MAIN
 
+/*** TIMER ***/
 int sumNI (int v[], const int n) { if (n > 0) { int t= v[0]; for (int i=1; i<n; i++) { t+= v[i]; } return(t); } return(0); }
 float rcpI (int x) { if (0 != x) { return(1.0 / (float)x); } else return(0); }
 float sumNF (float v[], const int n) { if (n > 0) { float t= v[0]; for (int i=1; i<n; i++) { t+= v[i]; } return(t); } return(0); }
 float rcpF (float x) { if (0 != x) { return(1.0 / x); } else return(0); }
-void timerTestHack (int us)
+
+void th1 (int us)
 {
    int r, dtus[100];
    struct itimerval ivl;
 
    LOG_CALL("(%dus)\n",us);
-   ivl.it_value.tv_sec= 1;
-   ivl.it_value.tv_usec= 0;
+   ivl.it_value.tv_sec= 0;
+   ivl.it_value.tv_usec= 1000;
    ivl.it_interval= ivl.it_value;
    r= setitimer(ITIMER_REAL, &ivl, NULL);
    if (r >= 0)
@@ -413,14 +426,14 @@ void timerTestHack (int us)
          r= getitimer(ITIMER_REAL, &ivl);
          dtus[n++]= last - ivl.it_value.tv_usec; last= ivl.it_value.tv_usec;
       }
-      LOG("Results: [%d]: mean=%G\n", n, rcpI(n) * sumNI(dtus,n));
+      LOG("th1: [%d]: mean=%G\n", n, rcpI(n) * sumNI(dtus,n));
       // for (int i=0; i<n; i++) { LOG("\t%d", dtus[i]); }
       LOG("%s\n","---");
    } else { ERROR_CALL(" : setitimer() - %d\n", r); }
-} // timerTestHack
+} // th1
 
 #define NSECF(t1,t2) (((t2).tv_sec-(t1).tv_sec) + 1E-9*((t2).tv_nsec-(t1).tv_nsec))
-void t2 (int us)
+void th2 (int us)
 {
    struct timespec ts[2];
    int r,n=0;
@@ -429,15 +442,24 @@ void t2 (int us)
    while ((r >= 0) && (n < 100))
    {
       int i= n&1;
-      spinSleep(us);
+      //spinSleep(us);
       r= clock_gettime(CLOCK_REALTIME, ts+i);
       dt[n++]= NSECF(ts[i^1],ts[i]);
    }
-   LOG("Results: [%d]: mean=%G\n", n, rcpF(n) * sumNF(dt,n));
+   LOG("th2: [%d]: mean=%G\n", n, 1E6 * rcpF(n) * sumNF(dt,n));
    // for (int i=0; i<n; i++) { LOG("\t%d", dtus[i]); }
    LOG("%s\n","---");
-}
-//#include <>
+} // th2
+
+void timerTestHacks (int us)
+{
+   //initTimer(NULL,0);
+   signal(SIGALRM,SIG_IGN); // <itimer> signal ignore (prevent default <SigTerm>)
+   th1(us);
+   th2(us);
+} // timerTestHacks
+
+/*** PING ***/
 
 typedef struct
 {
@@ -543,7 +565,6 @@ void setup (void)
 // Evaluate other timing mechanisms that should provide better-than-millisecond accuracy
 //#include <sys/time.h>
 #if 0
-#include <signal.h>
 #define USEC(t1,t2) (((t2).tv_sec-(t1).tv_sec)*1000000+((t2).tv_usec-(t1).tv_usec))
 
 void setup (void)
@@ -614,8 +635,8 @@ int main (int argc, char *argv[])
 {
    int r= -1;
 
-   t2(0); // timerTestHack(10000);
-   LOG("%s\n","***");
+   timerTestHacks(100);
+   LOG("Sig=%d,%d\n%s\n",gSigCount[0],gSigCount[1],"***");
    pingArgTrans(&gPCLA, argc, argv);
    if (lxi2cOpen(&gBusCtx, gPCLA.devPath, 400))
    {
