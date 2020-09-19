@@ -318,14 +318,6 @@ int testAuto
 
 #ifdef ADS1X_TEST
 
-void xusleep (int us)
-{
-   struct timespec rq, rem;
-   rq.tv_sec= 0;
-   rq.tv_nsec= us * 1000;
-   nanosleep(&rq,&rem);
-} // xusleep
-
 // Testing indicates usleep() granularity 1.5~2ms...
 int testADS1x15
 (
@@ -368,12 +360,7 @@ int testADS1x15
          if (convWait > i2cDelay) { expectWait= convWait-i2cDelay; } // Hacky : conversion time seems less than sample interval...
          if (i2cWait < minWaitStep) { minWaitStep= i2cWait; }
       }
-      if (mode & ADS1X_TEST_MODE_TIMER)
-      {
-         int s= 1.999 + 1E-6 * maxIter * (convWait+i2cDelay);
-         initTimer(&timer, s);
-         //expectWait/= 8;
-      }
+      if (mode & ADS1X_TEST_MODE_TIMER) { timeNow(&timer); }
       LOG("%s\n","***");
       n= 0;
       do
@@ -395,7 +382,7 @@ int testADS1x15
             }
          } while ((mode & ADS1X_TEST_MODE_VERIFY) && ((r < 0) || !cfgVer) && (++iR0 < 10));
 
-         if (expectWait > 0) { xusleep(expectWait); }
+         if (expectWait > 0) { nsSpinSleep(expectWait*1000); }
 
          if (mode & ADS1X_TEST_MODE_POLL)
          {
@@ -408,7 +395,7 @@ int testADS1x15
          if (r >= 0)
          {
             F32 dt=-1;
-            if (mode & ADS1X_TEST_MODE_TIMER) { dt= elapsedTime(&timer); }
+            if (mode & ADS1X_TEST_MODE_TIMER) { dt= timeElapsed(&timer); }
             int raw=  rdI16BE(fpb.rc.res+1);
             F32 v= raw * sv;
             const char muxVerCh[]={'?','V'};
