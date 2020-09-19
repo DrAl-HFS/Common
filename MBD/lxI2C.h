@@ -27,6 +27,7 @@ extern "C" {
 
 typedef unsigned long UL;
 
+// Bus context
 typedef struct
 {
    UL   flags;
@@ -34,10 +35,11 @@ typedef struct
    int  clk; // bus clock rate used for transaction timing estimation
 } LXI2CBusCtx;
 
+// "Ping" descriptor
 typedef struct
 {
-   U8    nB, b[3];
-   U32   maxIter, maxErr, ivl_us;
+   U8    nB, b[3];   // "packet" bytes: count + content (max 3)
+   U32   maxIter, maxErr, ivl_us;   // packets to send, error/failure limit, interval (microseconds)
 } LXI2CPing;
 
 
@@ -45,8 +47,8 @@ typedef struct
 
 extern Bool32 lxi2cOpen (LXI2CBusCtx *pBC, const char *path, const int clk);
 
-extern int lxi2cReadRB (const LXI2CBusCtx *pBC, const U8 dev, U8 regBytes[], const U8 nRB);
-extern int lxi2cWriteRB (const LXI2CBusCtx *pBC, const U8 dev, const U8 regBytes[], const U8 nRB);
+extern int lxi2cReadRB (const LXI2CBusCtx *pBC, const U8 busAddr, U8 regBytes[], const U8 nRB);
+extern int lxi2cWriteRB (const LXI2CBusCtx *pBC, const U8 busAddr, const U8 regBytes[], const U8 nRB);
 
 // Multi-message-block transfer extensions for efficiency (?) and convenience
 // when numerous register blocks are to be read or written on a given device.
@@ -59,7 +61,7 @@ extern int lxi2cReadMultiRB
 (
    const LXI2CBusCtx *pBC, // bus info
    const MemBuff *pWS,  // Optional workspace (for linux kernel I2C structs)
-   const U8 dev,        // device id
+   const U8 busAddr,    // device id
    U8 regBytes[], // array of data blocks
    const U8 nRB,  // bytes per message block (must be uniform)
    const U8 nM    // Number of message blocks
@@ -68,19 +70,16 @@ extern int lxi2cWriteMultiRB  // ditto
 (
    const LXI2CBusCtx *pBC,
    const MemBuff *pWS,
-   const U8 dev,
+   const U8 busAddr,
    const U8 regBytes[],
    const U8 nRB,
    const U8 nM
 );
 
-// DEPRECATE
-extern int lxi2cTrans (const LXI2CBusCtx *pBC, const U16 dev, const U16 f, U16 nB, U8 *pB, U8 reg);
-
-// millisecond sleep for compatibility with "black box" driver code eg. Bosch Sensortech
-extern void lxi2cSleepm (U32 ms);
-
-extern void lxi2cDumpDevAddr (const LXI2CBusCtx *pC, U16 dev, U8 bytes, U8 addr);
+// DEPRECATE : first attempt at flexible read/write wrapper - inefficient for write due to (apparently
+// undocumented) single contiguous buffer requirement for writing. (Whereas reading is happily split into
+// write+read portions to match the common mode of device operation.)
+extern int lxi2cTrans (const LXI2CBusCtx *pBC, const U16 busAddr, const U16 f, U16 nB, U8 *pB, U8 reg);
 
 extern Bool32 lxi2cOpenSMBUS (LXI2CBusCtx *pBC, const char *path, I8 devID);
 // f= I2C_SMBUS_READ / I2C_SMBUS_WRITE
@@ -88,17 +87,30 @@ extern int lxi2cTransSMBUS (const LXI2CBusCtx *pBC, const U16 f, U16 nB, U8 *pB,
 
 extern void lxi2cClose (LXI2CBusCtx *pC);
 
+/***/
+// millisecond sleep for compatibility with "black box" driver code eg. Bosch Sensortech
+extern void lxi2cSleepm (U32 ms);
+
+// Dump device registers
+extern void lxi2cDumpDevAddr (const LXI2CBusCtx *pC, U8 busAddr, U8 bytes, U8 addr);
+
+// Write packets to bus for debug purposes
+extern int lxi2cPing (const LXI2CBusCtx *pC, U8 busAddr, const LXI2CPing *pP);
+
+/***/
+
 #ifdef LX_I2C_TEST
 // DISPLACE: Hacks awaiting evaluation
-typedef struct { struct itimerval tLast; } IOTimer;
+typedef struct { struct timespec tLast; } IOTimer;
 
-extern int initTimer (IOTimer *pT, F32 sec);
+extern F32 timeNow (IOTimer *pT);
 
-extern F32 elapsedTime (IOTimer *pT);
+extern F32 timeElapsed (IOTimer *pT);
 
-// Hybrid sleep (multi-millisecond delays) and spin-wait (using interval timer)
-// to achieve improved time resolution with a (limited) degree of efficiency.
-extern int spinSleep (int us);
+// Hybrid delay of up to 1 second implemented as sleep (for 2+ millisecond
+// delays) and spin-wait (using clock) to achieve improved time resolution
+// with a (limited) degree of efficiency.
+extern long nsSpinSleep (long ns);
 
 #endif // LX_I2C_TEST
 

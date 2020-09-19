@@ -77,24 +77,24 @@ Bool32 lxi2cOpen (LXI2CBusCtx *pBC, const char *path, const int clk)
    m[1].buf=    pB;
 #endif
 
-int lxi2cReadRB (const LXI2CBusCtx *pBC, const U8 dev, U8 regBytes[], const U8 nRB)
+int lxi2cReadRB (const LXI2CBusCtx *pBC, const U8 busAddr, U8 regBytes[], const U8 nRB)
 {
    struct i2c_msg m[]= {
-      { .addr= dev,  .flags= I2C_M_WR,  .len= 1,  .buf= regBytes },
-      { .addr= dev,  .flags= I2C_M_RD,  .len= nRB-1,  .buf= regBytes+1 } };
+      { .addr= busAddr,  .flags= I2C_M_WR,  .len= 1,  .buf= regBytes },
+      { .addr= busAddr,  .flags= I2C_M_RD,  .len= nRB-1,  .buf= regBytes+1 } };
    struct i2c_rdwr_ioctl_data d={ m, 2 };
    return ioctl(pBC->fd, I2C_RDWR, &d);
 } // lxi2cReadRB
 
-int lxi2cWriteRB (const LXI2CBusCtx *pBC, const U8 dev, const U8 regBytes[], const U8 nRB)
+int lxi2cWriteRB (const LXI2CBusCtx *pBC, const U8 busAddr, const U8 regBytes[], const U8 nRB)
 {
-   struct i2c_msg m= { .addr= dev,  .flags= I2C_M_WR,  .len= nRB,  .buf= (void*)regBytes };
+   struct i2c_msg m= { .addr= busAddr,  .flags= I2C_M_WR,  .len= nRB,  .buf= (void*)regBytes };
    struct i2c_rdwr_ioctl_data d={ &m, 1 };
    return ioctl(pBC->fd, I2C_RDWR, &d);
 } // lxi2cWriteRB
 
 #define MRBYTES (2 * sizeof(struct i2c_msg))
-int lxi2cReadMultiRB (const LXI2CBusCtx *pBC, const MemBuff *pWS, const U8 dev, U8 regBytes[], const U8 nRB, const U8 nM)
+int lxi2cReadMultiRB (const LXI2CBusCtx *pBC, const MemBuff *pWS, const U8 busAddr, U8 regBytes[], const U8 nRB, const U8 nM)
 {
    int offset= 0, r= 0;
    if (validMemBuff(pWS, nM * MRBYTES))
@@ -103,12 +103,12 @@ int lxi2cReadMultiRB (const LXI2CBusCtx *pBC, const MemBuff *pWS, const U8 dev, 
       for (int i= 0; i<nM; i++)
       {
          int j= 2*i;
-         d.msgs[j].addr=   dev;
+         d.msgs[j].addr=   busAddr;
          d.msgs[j].flags=  I2C_M_WR;
          d.msgs[j].len=    1;
          d.msgs[j].buf=    regBytes+offset;
 
-         d.msgs[j+1].addr= dev;
+         d.msgs[j+1].addr= busAddr;
          d.msgs[j+1].flags= I2C_M_RD;
          d.msgs[j+1].len=  nRB-1;
          d.msgs[j+1].buf=  regBytes+offset+1;
@@ -121,7 +121,7 @@ int lxi2cReadMultiRB (const LXI2CBusCtx *pBC, const MemBuff *pWS, const U8 dev, 
    {
       for (int i= 0; i<nM; i++)
       {
-         r+= lxi2cReadRB(pBC, dev, regBytes+offset, nRB);
+         r+= lxi2cReadRB(pBC, busAddr, regBytes+offset, nRB);
          offset+= nRB;
       }
    }
@@ -129,7 +129,7 @@ int lxi2cReadMultiRB (const LXI2CBusCtx *pBC, const MemBuff *pWS, const U8 dev, 
 } // lxi2cReadMultiRB
 
 #define MWBYTES sizeof(struct i2c_msg)
-int lxi2cWriteMultiRB (const LXI2CBusCtx *pBC, const MemBuff *pWS, const U8 dev, const U8 regBytes[], const U8 nRB, const U8 nM)
+int lxi2cWriteMultiRB (const LXI2CBusCtx *pBC, const MemBuff *pWS, const U8 busAddr, const U8 regBytes[], const U8 nRB, const U8 nM)
 {
    int offset= 0, r=0;
    if (validMemBuff(pWS, nM * MWBYTES))
@@ -137,7 +137,7 @@ int lxi2cWriteMultiRB (const LXI2CBusCtx *pBC, const MemBuff *pWS, const U8 dev,
       struct i2c_rdwr_ioctl_data d={ pWS->p, nM }; // NB: alignment assumed
       for (int i= 0; i<nM; i++)
       {
-         d.msgs[i].addr=   dev;
+         d.msgs[i].addr=   busAddr;
          d.msgs[i].flags=  I2C_M_WR;
          d.msgs[i].len=    nRB;
          d.msgs[i].buf=    (void*)(regBytes+offset);
@@ -150,7 +150,7 @@ int lxi2cWriteMultiRB (const LXI2CBusCtx *pBC, const MemBuff *pWS, const U8 dev,
    {
       for (int i= 0; i<nM; i++)
       {
-         r+= lxi2cWriteRB(pBC, dev, regBytes+offset, nRB);
+         r+= lxi2cWriteRB(pBC, busAddr, regBytes+offset, nRB);
          offset+= nRB;
       }
    }
@@ -159,18 +159,18 @@ int lxi2cWriteMultiRB (const LXI2CBusCtx *pBC, const MemBuff *pWS, const U8 dev,
 
 // DEPRECATE: inital "transaction" design flawed but retained for compatibility...
 #define TRANS_WRITE_MAX 15
-int lxi2cTrans (const LXI2CBusCtx *pBC, const U16 dev, const U16 f, U16 nB, U8 *pB, U8 reg)
+int lxi2cTrans (const LXI2CBusCtx *pBC, const U16 busAddr, const U16 f, U16 nB, U8 *pB, U8 reg)
 {
    struct i2c_msg m[LX_I2C_TRANS_NM]=
    {  // Split buffer setup necessary for read (but single buffer required for write)
-      { .addr= dev,  .flags= I2C_M_WR,  .len= 1,  .buf= &reg }, // command set device "address register"
-      { .addr= dev,  .flags= f,  .len= nB,  .buf= pB } // transfer buffer to/from the address set on device
+      { .addr= busAddr,  .flags= I2C_M_WR,  .len= 1,  .buf= &reg }, // command set device "address register"
+      { .addr= busAddr,  .flags= f,  .len= nB,  .buf= pB } // transfer buffer to/from the address set on device
    };
    struct i2c_rdwr_ioctl_data d={ .msgs= m, .nmsgs= 2 };
    U8 wb[1+TRANS_WRITE_MAX];  // Caution! Using local stack buffer assumes synchronous execution of ioctl()
    if (gCtx.flags & LX_I2C_FLAG_TRACE)
    {
-      TRACE_CALL("(Dev=0x%X, Flg=0x%04X, Buf={%u, %p}, Reg=x%02X)\n", dev, f, nB, pB, reg);
+      TRACE_CALL("(Dev=0x%X, Flg=0x%04X, Buf={%u, %p}, Reg=x%02X)\n", busAddr, f, nB, pB, reg);
       reportBytes(TRC1, pB, nB);
    }
    if (I2C_M_RD != (f & I2C_M_RD))
@@ -194,25 +194,6 @@ int lxi2cTrans (const LXI2CBusCtx *pBC, const U16 dev, const U16 f, U16 nB, U8 *
    return(r);
 } // lxi2cTrans
 
-void lxi2cSleepm (U32 ms)
-{
-   int r;
-   LX_TRC0("(%u)\n",ms);
-#ifdef __USE_POSIX199309
-//#warning __USE_POSIX199309 -> nanosleep()
-   struct timespec rq, rem={0};
-   rq.tv_sec= ms / 1000;
-   rq.tv_nsec= (ms % 1000) * 1000000;
-   r= nanosleep(&rq,&rem);
-#else
-   if (ms < 5000)
-   {
-      r= usleep(ms*1000); // deprecated on many x86 builds, but not on ARM...
-   }
-   else { r= sleep(ms / 1000); }
-#endif
-   if (0 != r) { WARN_CALL("(%u) -> %d\n", ms, r); }
-} // lxi2cSleepm
 
 Bool32 lxi2cOpenSMBUS (LXI2CBusCtx *pBC, const char *path, I8 devID)
 {
@@ -271,14 +252,36 @@ void lxi2cClose (LXI2CBusCtx *pC)
    }
 } // lxi2cClose
 
-void lxi2cDumpDevAddr (const LXI2CBusCtx *pC, U16 dev, U8 bytes, U8 addr)
+/***/
+
+void lxi2cSleepm (U32 ms)
+{
+   int r;
+   LX_TRC0("(%u)\n",ms);
+#ifdef __USE_POSIX199309
+//#warning __USE_POSIX199309 -> nanosleep()
+   struct timespec rq, rem={0};
+   rq.tv_sec= ms / 1000;
+   rq.tv_nsec= (ms % 1000) * 1000000;
+   r= nanosleep(&rq,&rem);
+#else
+   if (ms < 5000)
+   {
+      r= usleep(ms*1000); // deprecated on many x86 builds, but not on ARM...
+   }
+   else { r= sleep(ms / 1000); }
+#endif
+   if (0 != r) { WARN_CALL("(%u) -> %d\n", ms, r); }
+} // lxi2cSleepm
+
+void lxi2cDumpDevAddr (const LXI2CBusCtx *pC, U8 busAddr, U8 bytes, U8 addr)
 {
    int r;
    U8 buf[1<<8];
 
    memset(buf, 0xA5, 1<<8);
    // read into first 16byte row of buf
-   r= lxi2cTrans(pC, dev, I2C_M_RD, bytes, buf+(addr&0xF), addr);
+   r= lxi2cTrans(pC, busAddr, I2C_M_RD, bytes, buf+(addr&0xF), addr);
    if (r >= 0)
    {
       const int rl= addr & 0xF0;
@@ -344,8 +347,8 @@ int lxi2cPing (const LXI2CBusCtx *pC, U8 busAddr, const LXI2CPing *pP)
 
 int gSigCount[2]={0,0};
 void alarmHandler (int a) { gSigCount[(SIGALRM==a)]+= 1; }
-
-int initTimer (IOTimer *pT, F32 sec)
+/*
+int initTimer (itimerval *pT, F32 sec)
 {
    void *p= signal(SIGALRM,alarmHandler); // set up alarm handler to replace <itimer> default action (SigTerm)
    LOG_CALL("(%G) - %p\n", sec, p);
@@ -358,24 +361,77 @@ int initTimer (IOTimer *pT, F32 sec)
    }
    return(0);
 } // initTimer
-
-#define USECF(t1,t2) (((t2).tv_sec-(t1).tv_sec) + 1E-6*((t2).tv_usec-(t1).tv_usec))
-F32 elapsedTime (IOTimer *pT)
+*/
+#define DUSECF(t1,t2) (((t2).tv_sec-(t1).tv_sec) + 1E-6*((t2).tv_usec-(t1).tv_usec))
+#define DNSECF(t1,t2) (((t2).tv_sec-(t1).tv_sec) + 1E-9*((t2).tv_nsec-(t1).tv_nsec))
+F32 timeNow (IOTimer *pT)
 {
-   struct itimerval tNow;
-   F32 dt=-1;
-   if (getitimer(ITIMER_REAL, &tNow) >= 0)
+   if (clock_gettime(CLOCK_REALTIME, &(pT->tLast)) >= 0)
    {
-      dt= USECF(tNow.it_value, pT->tLast.it_value); // NB: countdown so last > now
+      return(pT->tLast.tv_sec + 1E-9 * pT->tLast.tv_nsec);
+   }
+   return(-1);
+} // timeNow
+
+F32 timeElapsed (IOTimer *pT)
+{
+   struct timespec tNow;
+   F32 dt=-1;
+   if (clock_gettime(CLOCK_REALTIME, &tNow) >= 0)
+   {
+      dt= DNSECF(pT->tLast, tNow);
       pT->tLast= tNow;
    }
    return(dt);
 } // elapsedTime
 
-#define CLOCK_GRANULARITY (2) // us
-#define ITIMER_GRANULARITY (4) // us
-#define USLEEP_GRANULARITY (2000) // us
-int spinSleep (int us)
+#define CLOCK_GRANULARITY_NS (500)  // nano, worst case ? typical <500ns
+#define SS_CLOCK_BIAS_NS (50)       // account for typical overheads
+#define ITIMER_GRANULARITY (4)      // micro
+#define USLEEP_GRANULARITY (2000)   // micro
+
+#define MILLI_TICKS  (1000)
+#define MICRO_TICKS  (MILLI_TICKS * 1000)
+#define NANO_TICKS   (MICRO_TICKS * 1000)
+
+#include <assert.h>
+
+long nsSpinSleep (long ns)
+{
+   assert(ns < (2*NANO_TICKS));  // 32bit long overflow check
+   if (ns > CLOCK_GRANULARITY_NS)
+   {
+      struct timespec ts[2];
+      int r= clock_gettime(CLOCK_REALTIME, ts+0);
+      if (r >= 0)
+      {  // set target
+         ts[1].tv_sec= ts[0].tv_sec;
+         ts[1].tv_nsec= ts[0].tv_nsec + ns; // SS_CLOCK_BIAS_NS);
+         if (ts[1].tv_nsec > NANO_TICKS)
+         {
+            ts[1].tv_sec+= ts[1].tv_nsec / NANO_TICKS;
+            ts[1].tv_nsec %= NANO_TICKS;
+         }
+         // Minimise wasted system clock cycles.
+         // NB: underestimation of sleep interval to minimise variability (significant overruns likely)
+         if (ns > (USLEEP_GRANULARITY*1000)) { usleep((ns >> 10) - 500); }
+
+         do // Now spin (system calls) to meet target
+         {
+            r= clock_gettime(CLOCK_REALTIME, ts+0);
+         } while ((r >= 0) && ((ts[1].tv_sec > ts[0].tv_sec) || (ts[1].tv_nsec > ts[0].tv_nsec))); // NB: relying on lazy eval
+
+         if ((r >= 0) && (ts[1].tv_sec == ts[0].tv_sec))
+         {
+            return(ts[1].tv_nsec - ts[0].tv_nsec); // -ve overrun, or (v.unlikely) +ve time remaining
+         }
+      }
+   }
+   return(ns);
+} // nsSpinSleep
+
+// DEPECATED: itimer version (high latency)
+int usSpinSleep (int us)
 {
    if (us >= ITIMER_GRANULARITY)
    {
@@ -394,7 +450,7 @@ int spinSleep (int us)
       }
    }
    return(us);
-} // spinSleep
+} // usSpinSleep
 
 #endif // LX_I2C_TEST
 
@@ -413,7 +469,7 @@ void th1 (int us)
 
    LOG_CALL("(%dus)\n",us);
    ivl.it_value.tv_sec= 0;
-   ivl.it_value.tv_usec= 1000;
+   ivl.it_value.tv_usec= 100000;
    ivl.it_interval= ivl.it_value;
    r= setitimer(ITIMER_REAL, &ivl, NULL);
    if (r >= 0)
@@ -432,7 +488,6 @@ void th1 (int us)
    } else { ERROR_CALL(" : setitimer() - %d\n", r); }
 } // th1
 
-#define NSECF(t1,t2) (((t2).tv_sec-(t1).tv_sec) + 1E-9*((t2).tv_nsec-(t1).tv_nsec))
 void th2 (int us)
 {
    struct timespec ts[2];
@@ -444,9 +499,9 @@ void th2 (int us)
       int i= n&1;
       //spinSleep(us);
       r= clock_gettime(CLOCK_REALTIME, ts+i);
-      dt[n++]= NSECF(ts[i^1],ts[i]);
+      dt[n++]= DNSECF(ts[i^1],ts[i]);
    }
-   LOG("th2: [%d]: mean=%G\n", n, 1E6 * rcpF(n) * sumNF(dt,n));
+   LOG("th2: [%d]: mean=%G\n", n, rcpF(n) * sumNF(dt,n));
    // for (int i=0; i<n; i++) { LOG("\t%d", dtus[i]); }
    LOG("%s\n","---");
 } // th2
@@ -454,11 +509,66 @@ void th2 (int us)
 void timerTestHacks (int us)
 {
    //initTimer(NULL,0);
+   IOTimer iot;
+
+   F32 tf[10];
+   tf[0]= timeNow(&iot);
+   for (int i=1; i<10; i++) { tf[i]= timeElapsed(&iot); }
+   LOG("timeNow: %G\n", tf[0]);
+   for (int i=1; i<10; i++) { LOG("[%d] : %G\n", i, tf[i]); }
+
    signal(SIGALRM,SIG_IGN); // <itimer> signal ignore (prevent default <SigTerm>)
    th1(us);
+   LOG("Sig=%d,%d\n%s\n",gSigCount[0],gSigCount[1],"***");
    th2(us);
+
+   long tl[10], ns= us*1000;
+   LOG("nsSpinSleep(%d) sizeof(long)=%d\n", ns, sizeof(long));
+   for (int i=0; i<10; i++) { tl[i]= nsSpinSleep(ns); }
+   for (int i=0; i<10; i++) { LOG("[%d] : %d\n", i, tl[i]); }
 } // timerTestHacks
 
+#ifdef RPI_VC4 // Broadcom VideoCore IV timestamp register(s) mapped into (root-only) process address space
+
+#include "rpiUtil.h"
+
+void rpivcts (void)
+{
+   uint64_t ts0, ts1;
+   if (vcAcquire(-1))
+   {
+      ts0= vcTimestamp();
+      ts1= vcTimestamp();
+      printf("dt=%d\n",(int)(ts1-ts0));
+   }
+} //
+
+#endif // RPI_VC4
+// Evaluate other timing mechanisms that should provide better-than-millisecond accuracy
+//#include <sys/time.h>
+#if 0
+#define USEC(t1,t2) (((t2).tv_sec-(t1).tv_sec)*1000000+((t2).tv_usec-(t1).tv_usec))
+
+ // not functional
+{  // Process clock
+   // CLOCK_REALTIME CLOCK_MONOTONIC
+   timer_t hT=NULL;
+   struct sigevent ev={SIGEV_NONE, };
+   struct itimerspec ts0={0}, ts1={0};
+
+   r= timer_create(CLOCK_REALTIME, &ev, &hT);
+   printf("r=%d %p\n", r, hT);
+   if (0 == r)
+   {
+      timer_gettime(hT, &ts0);
+      printf("%ld : %ld (%ld : %ld)\n", ts0.it_value.tv_sec, ts0.it_value.tv_nsec, ts0.it_interval.tv_sec, ts0.it_interval.tv_nsec);
+      //timer_settime(t, int flags, const struct itimerspec *new_value, struct itimerspec * old_value);
+      timer_gettime(hT, &ts1);
+      printf("%ld : %ld (%ld : %ld)\n", ts1.it_value.tv_sec, ts1.it_value.tv_nsec, ts1.it_interval.tv_sec, ts1.it_interval.tv_nsec);
+   }
+}
+
+#endif
 /*** PING ***/
 
 typedef struct
@@ -546,88 +656,7 @@ void pingArgTrans (LXI2CPingCLA *pPCLA, int argc, char *argv[])
    if (pPCLA->flags & PING_VERBOSE) { pingDump(pPCLA); }
 } // pingArgTrans
 
-#ifdef RPI_VC4 // Broadcom VideoCore IV timestamp register(s) mapped into (root-only) process address space
-
-#include "rpiUtil.h"
-
-void setup (void)
-{
-   uint64_t ts0, ts1;
-   if (vcAcquire(-1))
-   {
-      ts0= vcTimestamp();
-      ts1= vcTimestamp();
-      printf("dt=%d\n",(int)(ts1-ts0));
-   }
-} // setup
-
-#endif // RPI_VC4
-// Evaluate other timing mechanisms that should provide better-than-millisecond accuracy
-//#include <sys/time.h>
-#if 0
-#define USEC(t1,t2) (((t2).tv_sec-(t1).tv_sec)*1000000+((t2).tv_usec-(t1).tv_usec))
-
-void setup (void)
-{
-   int r, u, n, sdd, i;
-
-   //gettimeofday(&(t0.it_value),NULL);
-   //thrd_sleep();
-   //nanosleep();
-   {
-      struct timespec ts0, ts1;
-      struct timespec sr0={0}, sr1={0};
-      r= clock_getres(CLOCK_REALTIME, &ts0);
-      if (0 == r)
-      {
-         printf("r=%d, res: %ld %ld\n", r, ts0.tv_sec, ts0.tv_nsec);
-         r= clock_gettime(CLOCK_REALTIME, &ts0);
-         u= 2000;
-         i= 0;
-         sdd= 0;
-         printf("slept\tresid\tmeasure\tdiff (nsec)\n");
-         do
-         {
-            n= u * 1000;
-            //usleep(u);
-            sr0.tv_nsec= n;
-            nanosleep(&sr0, &sr1);
-            r= clock_gettime(CLOCK_REALTIME, &ts1);
-            if (0==r)
-            {
-               int dtn= NSEC(ts0, ts1);
-               int ddn= dtn - n;
-               sdd+= ddn; ++i;
-               printf("%d\t%ld:%ld\t%d\t%d\n", n, sr1.tv_sec,sr1.tv_nsec, dtn, ddn);
-            }
-            ts0= ts1; // delta, not cumulative
-            u-= 100;
-         } while ((0 == r) && (u > 0)); //<= 2000));
-         if (i > 0) { printf("%d : mean diff= %d\n", i, sdd / i); }
-      }
-   }
-   /***/
- // not functional
-   {  // Process clock
-      // CLOCK_REALTIME CLOCK_MONOTONIC
-      timer_t hT=NULL;
-      struct sigevent ev={SIGEV_NONE, };
-      struct itimerspec ts0={0}, ts1={0};
-
-      r= timer_create(CLOCK_REALTIME, &ev, &hT);
-      printf("r=%d %p\n", r, hT);
-      if (0 == r)
-      {
-         timer_gettime(hT, &ts0);
-         printf("%ld : %ld (%ld : %ld)\n", ts0.it_value.tv_sec, ts0.it_value.tv_nsec, ts0.it_interval.tv_sec, ts0.it_interval.tv_nsec);
-         //timer_settime(t, int flags, const struct itimerspec *new_value, struct itimerspec * old_value);
-         timer_gettime(hT, &ts1);
-         printf("%ld : %ld (%ld : %ld)\n", ts1.it_value.tv_sec, ts1.it_value.tv_nsec, ts1.it_interval.tv_sec, ts1.it_interval.tv_nsec);
-      }
-   }
-} // setup
-#endif
-
+/***/
 
 LXI2CBusCtx gBusCtx={0,-1};
 
@@ -635,8 +664,8 @@ int main (int argc, char *argv[])
 {
    int r= -1;
 
-   timerTestHacks(100);
-   LOG("Sig=%d,%d\n%s\n",gSigCount[0],gSigCount[1],"***");
+   timerTestHacks(2500);
+
    pingArgTrans(&gPCLA, argc, argv);
    if (lxi2cOpen(&gBusCtx, gPCLA.devPath, 400))
    {
