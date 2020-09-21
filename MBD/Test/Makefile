@@ -42,7 +42,7 @@ LSM_OBJ := $(LSM_MOD:%=$(OBJ_DIR)/%.o)
 LSM_HDR+= $(HDR_DIR)/lsm9ds1.h
 
 # Support modules
-SUPP_MOD := report util
+SUPP_MOD := report util sciFmt
 SUPP_SRC := $(SUPP_MOD:%=$(COM_DIR)/%.c)
 SUPP_HDR := $(SUPP_MOD:%=$(COM_DIR)/%.h)
 SUPP_OBJ := $(SUPP_MOD:%=$(OBJ_DIR)/%.o)

@@ -453,9 +453,9 @@ typedef struct
    ADSReadParam param;
    char devPath[15]; // host device path
    U8 flags;
-} ADS1XCLA;
+} ADS1XArgs;
 
-static ADS1XCLA gArgs=
+static ADS1XArgs gArgs=
 {
    {  100, 200,   // rate & samples
       {ADS1X_MUX0G, ADS1X_MUX1G, ADS1X_MUX2G, ADS1X_MUX3G}, 4,
@@ -487,7 +487,7 @@ static const char *desc[]=
    }
 } // usageMsg
 
-void argDump (ADS1XCLA *pA)
+void argDump (ADS1XArgs *pA)
 {
    LOG("arg: %s, Addr:%02X, HWID:%d R=%d maxS=%d FLAGS:%02X\n", pA->devPath, pA->param.busAddr, pA->param.hwID, pA->param.rate, pA->param.maxSamples, pA->flags);
 } // argDump
@@ -496,7 +496,7 @@ void argDump (ADS1XCLA *pA)
 #define ARG_HELP    (1<<1)
 #define ARG_VERBOSE (1<<0)
 
-void argTrans (ADS1XCLA *pA, int argc, char *argv[])
+void argTrans (ADS1XArgs *pA, int argc, char *argv[])
 {
    int c, t;
    do

@@ -304,23 +304,38 @@ void lxi2cDumpDevAddr (const LXI2CBusCtx *pC, U8 busAddr, U8 bytes, U8 addr)
    //else { printf(WARN/ERROR); }
 } // lxi2cDumpDevAddr
 
+#include "sciFmt.h"
 int lxi2cPing (const LXI2CBusCtx *pC, U8 busAddr, const LXI2CPing *pP)
 {
    struct i2c_msg m= { .addr= busAddr,  .flags= I2C_M_WR,  .len= pP->nB,  .buf= (void*)(pP->b) };
    struct i2c_rdwr_ioctl_data d={ &m, 1 };
-   RawTimeStamp ts[0];
-   int r, i=0, e=0;
+   RawTimeStamp ts[2];
+   int r, w, t, i=0, e=0;
 
-   r= I2C_BYTES_NCLK(m.len);
-   TRACE_CALL("(0x%02X, 1+[%d]) - %dclk -> %dus\n", m.addr, m.len, r, (1000000 * r) / pC->clk);
-   timeSetTarget(ts+1, NULL, 1000);
+   if (pP->modeFlags & I2C_PING_VERBOSE)
+   {
+      r= I2C_BYTES_NCLK(m.len);
+      t= (r * (float)NANO_TICKS) / pC->clk;
+      TRACE_CALL("(0x%02X, 1+[%d]) - %dclk ", m.addr, m.len, r);
+#ifdef SCI_FMT_H
+      char mCh[2];
+      LOG("@ %G%cHz -> %G%csec\n", sciFmtSetF(mCh+0,pC->clk), mCh[0], sciFmtSetF(mCh+1,1E-9*t), mCh[1]);
+#else
+      LOG("@ %dHz -> %dnsec\n", pC->clk, t);
+#endif
+   }
+   t= timeSetTarget(ts+1, NULL, 1000);
    do
    {
-      timeSpinWaitUntil(ts+0, ts+1);
+      w= timeSpinWaitUntil(ts+0, ts+1);
       r= ioctl(pC->fd, I2C_RDWR, &d);
       e+= (1 != r);
-      timeSetTarget(ts+1, ts+1, pP->ivlNanoSec);
+      t= timeSetTarget(ts+1, ts+1, pP->ivlNanoSec);
    } while ((++i < pP->maxIter) && (e <= pP->maxErr));
+   if ((e > 0) && (pP->modeFlags & I2C_PING_VERBOSE))
+   {
+      ERROR("w=%d, r=%d, t=%d\n",w,r,t);
+   }
    LOG("\t%d OK, %d Err\n", i-e,e);
    return(-e);
 } // lxi2cPing
@@ -329,6 +344,8 @@ int lxi2cPing (const LXI2CBusCtx *pC, U8 busAddr, const LXI2CPing *pP)
 #ifdef LX_I2C_MAIN
 
 /*** PING ***/
+#define ARG_HELP    (1<<1)
+#define ARG_VERBOSE (1<<0)
 
 typedef struct
 {
@@ -336,11 +353,14 @@ typedef struct
    char devPath[14]; // host device path
    U8 busAddr; // bus device address
    U8 flags;
-} LXI2CPingCLA;
+} LXI2CArgs;
 
-static LXI2CPingCLA gPCLA=
+static LXI2CArgs gArgs=
 {
-   { 0, {0,}, 1000, 0, 1000000 },
+   {  3, {0x00,}, 0,
+      1000, 10, // n, e
+      1000000  // interval (ns)
+   },
    "/dev/i2c-1", 0x48
 };
 
@@ -366,14 +386,21 @@ static const char *desc[]=
    }
 } // pingUsageMsg
 
-void pingDump (LXI2CPingCLA *pP)
+void argDump (LXI2CArgs *pP)
 {
-   report(OUT,"Device: path=%s, address=%02X, iter=%d, maxErr=%d\n", pP->devPath, pP->busAddr, pP->ping.maxIter, pP->ping.maxErr);
-} // pingDump
+   report(OUT,"Device: devPath=%s, busAddr=%02X, Flags=%02X\n", pP->devPath, pP->busAddr, pP->flags);
+   report(OUT,"\tmaxIter=%d, maxErr=%d\n", pP->ping.maxIter, pP->ping.maxErr);
+   report(OUT,"\tb[%d]={", pP->ping.nB); reportBytes(OUT, pP->ping.b, pP->ping.nB);
+   report(OUT,"}\n\tinterval=");
+#ifdef SCI_FMT_H
+   char mCh[1]={'m'};
+   report(OUT,"%G%csec\n", sciFmtSetF(mCh, 1E-9 * pP->ping.ivlNanoSec), mCh[0]);
+#else
+   report(OUT,"%dnsec\n", pP->ping.ivlNanoSec);
+#endif
+} // argDump
 
-#define PING_HELP    (1<<0)
-#define PING_VERBOSE (1<<1)
-void pingArgTrans (LXI2CPingCLA *pPCLA, int argc, char *argv[])
+void pingArgTrans (LXI2CArgs *pA, int argc, char *argv[])
 {
    int c, t;
    do
@@ -383,36 +410,37 @@ void pingArgTrans (LXI2CPingCLA *pPCLA, int argc, char *argv[])
       {
          case 'a' :
             sscanf(optarg, "%x", &t);
-            if (t <= 0x7F) { pPCLA->busAddr= t; }
+            if (t <= 0x7F) { pA->busAddr= t; }
             break;
          case 'c' :
             sscanf(optarg, "%d", &t);
-            if (t > 0) { pPCLA->ping.maxIter= t; }
+            if (t > 0) { pA->ping.maxIter= t; }
             break;
          case 'd' :
          {
             char ch= optarg[0];
-            if ((ch > '0') && (ch <= '9')) { pPCLA->devPath[9]= ch; }
+            if ((ch > '0') && (ch <= '9')) { pA->devPath[9]= ch; }
             break;
          }
          case 'e' :
             sscanf(optarg,"%d", &t);
-            pPCLA->ping.maxErr= t;
+            pA->ping.maxErr= t;
             break;
          case 't' :
             sscanf(optarg,"%d", &t);
-            if (t > 0) { pPCLA->ping.ivlNanoSec= t; }
+            if (t > 0) { pA->ping.ivlNanoSec= t; }
             break;
          case 'h' :
-            pPCLA->flags|= PING_HELP;
+            pA->flags|= ARG_HELP;
             break;
          case 'v' :
-            pPCLA->flags|= PING_VERBOSE;
+            pA->flags|= ARG_VERBOSE;
+            pA->ping.modeFlags|= I2C_PING_VERBOSE;
             break;
       }
    } while (c > 0);
-   if (pPCLA->flags & PING_HELP) { pingUsageMsg(argv[0]); }
-   if (pPCLA->flags & PING_VERBOSE) { pingDump(pPCLA); }
+   if (pA->flags & ARG_HELP) { pingUsageMsg(argv[0]); }
+   if (pA->flags & ARG_VERBOSE) { argDump(pA); }
 } // pingArgTrans
 
 /***/
@@ -423,11 +451,11 @@ int main (int argc, char *argv[])
 {
    int r= -1;
 
-   pingArgTrans(&gPCLA, argc, argv);
-   if (lxi2cOpen(&gBusCtx, gPCLA.devPath, 400))
+   pingArgTrans(&gArgs, argc, argv);
+   if (lxi2cOpen(&gBusCtx, gArgs.devPath, 400))
    {
       // lxi2cDumpDevAddr(&gBusCtx, 0x48, 0xFF,0x00);
-      r= lxi2cPing(&gBusCtx, gPCLA.busAddr, &(gPCLA.ping));
+      r= lxi2cPing(&gBusCtx, gArgs.busAddr, &(gArgs.ping));
       lxi2cClose(&gBusCtx);
    }
 

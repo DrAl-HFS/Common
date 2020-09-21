@@ -35,10 +35,13 @@ typedef struct
    int  clk; // bus clock rate used for transaction timing estimation
 } LXI2CBusCtx;
 
+// Flags
+#define I2C_PING_VERBOSE (1<<0)
+
 // "Ping" descriptor
 typedef struct
 {
-   U8    nB, b[3];   // "packet" bytes: count + content (max 3)
+   U8    nB, b[6], modeFlags; // "packet" bytes: count, content (max 3),
    int   maxIter, maxErr; // packets to send, error/failure limit
    long ivlNanoSec;  // interval (nanoseconds)
 } LXI2CPing;
