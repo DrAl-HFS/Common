@@ -1,4 +1,4 @@
-// Common/MBD/ads1xUtil.c - minimal utility code for TI I2C ADC devices (ADS1xxx series)
+// Common/MBD/ads1xUtil.c - low level utility code for TI I2C ADC devices (ADS1xxx series)
 // https://github.com/DrAl-HFS/Common.git
 // Licence: GPL V3
 // (c) Project Contributors Aug-Sept. 2020
@@ -71,20 +71,16 @@ void ads1xGenCfg (U8 cfg[2], enum ADS1xMux muxID, enum ADS1xGain gainID, enum AD
    cfg[1]= (rateID << ADS1X_SH1_DR) | (cmpID << ADS1X_SH1_CQ);
 } // ads1xGenCfg
 
-#endif // INLINE
+#endif // ifndef INLINE
 
 F32 ads1xGainToFSV (enum ADS1xGain gainID)
 {
-   //static const F32 gainFSV[]= { 6.144, 4.096, 2.048, 1.024, 0.512}; //, 0.256 };
    if (gainID < ADS1X_GAIN_0V256) return(gHC.gainFSV[gainID]); else return(0.256);
 } // ads1xGainToFSV
 
 U16 ads1xRateToU (enum ADS1xRate rateID, ADS1xHWID hwID)
 {
-/*static const U16 rateU[2][8]=
-   {  {128,250,490,920,1600,2400,3300,3300},
-      {8,16,32,64,128,250,475,860} };
-*/   return( gHC.rateU[ hwID ][ rateID ] );
+   return( gHC.rateU[ hwID ][ rateID ] );
 } // ads1xRateToU
 
 enum ADS1xRate ads1xSelectRate (const int targetRate, ADS1xHWID hwID)

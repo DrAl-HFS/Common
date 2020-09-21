@@ -79,6 +79,7 @@ extern enum ADS1xRate ads1xSelectRate (const int targetRate, ADS1xHWID hwID);
 // Lookup Full Scale Raw reading value for particular hardware
 extern I16 ads1xRawFSR (ADS1xHWID hwID);
 
+// Initialise device installation properties (determined by device type and actual supply voltage)
 extern const ADSInstProp *adsInitProp (ADSInstProp *pP, const F32 vdd, const U8 hwID);
 
 #endif // ADS1X_UTIL_H

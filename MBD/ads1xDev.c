@@ -11,9 +11,9 @@
 // Auto-gain raw reading group parameters
 typedef struct
 {
-   U8 *pCfgPB; // Config packet bytes - (pointer to outer level declaration eliminates copying)
-   U32 ivl;    // Delay for conversion interval (hardware rate dependant 303~125000 usec. for 400kHz bus clock)
-   I16 fsr;    // Full scale reading (hardware version dependant)
+   U8    *pCfgPB;    // Config packet bytes - (pointer to outer level declaration eliminates copying)
+   long  ivlNanoSec; // Conversion interval (hardware rate dependant 303usec~125msec. for 400kHz bus clock)
+   I16   fsr;    // Full scale raw reading (value is hardware version dependant)
    U8 busAddr; // I2C device address
    U8 maxT;    // Max transactions per mux channel
 } AutoRawCtx;
@@ -53,12 +53,12 @@ void ads1xTransCfg (ADS1xTrans *pT, const U8 cfg[2], const ADS1xHWID id)
    pT->cmp= (((cfg[1] >> ADS1X_SH1_CQ) & ADS1X_CMP_M) + 1 ) & ADS1X_CMP_M; // rotate by +1 so 0->off
 } // ads1xTransCfg
 
-// Conversion interval (us), rate stored optionally (else NULL)
-int ads1xConvIvl (int *pRate, const U8 cfg[2], const ADS1xHWID id)
+// Conversion interval (ns), rate stored optionally (else NULL)
+long ads1xConvIvl (int *pRate, const U8 cfg[2], const ADS1xHWID id)
 {
    int rate= ads1xRateToU( ads1xGetRate(cfg), id);
    if (pRate) { *pRate= rate; }
-   if (rate > 0) { return(1000000 / rate); }
+   if (rate > 0) { return(1000000000 / rate); }
    // else
    return(0);
 } // ads1xConvIvl
@@ -108,9 +108,11 @@ void ads1xDumpAll (const ADS1xFullPB *pFPB, const ADS1xHWID id)
 // Performs multiple reads per channel as appropriate, if permitted.
 int readAutoRawADS1x (RawAGR rmg[], int nR, AutoRawCtx *pARC, const LXI2CBusCtx *pC)
 {
+   RawTimeStamp ts[2];
    int n=0, r=-1, vr, tFSR; // intermediate values at machine word-length: intended to reduce operations
    U8 resPB[ADS1X_NRB], gainID, iT;
 
+   timeSetTarget(ts+1, NULL, 0);
    resPB[0]= ADS1X_REG_RES;
    for (int i=0; i<nR; i++)
    {  // per-mux iteration
@@ -124,7 +126,9 @@ int readAutoRawADS1x (RawAGR rmg[], int nR, AutoRawCtx *pARC, const LXI2CBusCtx 
          if (r > 0)
          {  // working
             iT++;
-            usleep(pARC->ivl);
+            timeSetTarget(ts+1, ts+1, pARC->ivlNanoSec);
+            timeSpinWaitUntil(ts+0, ts+1);
+            //usleep(pARC->ivl);
             r= lxi2cReadRB(pC, pARC->busAddr, resPB, ADS1X_NRB);
             if (r > 0)
             {  // got result
@@ -228,7 +232,7 @@ int readAutoADS1X
          //else
          arc.pCfgPB= cfgPB;
       }
-      arc.ivl= ads1xConvIvl(&r, arc.pCfgPB+1, pP->hwID);
+      arc.ivlNanoSec= ads1xConvIvl(&r, arc.pCfgPB+1, pP->hwID);
       //LOG_CALL("() - rate=%d -> ivl=%d\n", r, arc.ivl);
       arc.fsr= ads1xRawFSR(pP->hwID);
       arc.busAddr= busAddr;
@@ -282,10 +286,11 @@ int testAuto
    const U16   rate
 )
 {
+   RawTimeStamp   ts;
    const U8 mux[TEST_AUTO_MUX_N]= { ADS1X_MUX0G, ADS1X_MUX1G, ADS1X_MUX2G };//, ADS1X_MUX3G };
    const U8 rateID= ads1xSelectRate(rate, pP->hwID);
    U8 cfgPB[ADS1X_NRB];
-   F32 f[TEST_AUTO_SAMPLES];
+   F32 dt=0, f[TEST_AUTO_SAMPLES];
    int r;
 
    r= ads1xRateToU(rateID, pP->hwID);
@@ -309,7 +314,10 @@ int testAuto
    {
       LOG("%s","\t\t");
       for (int j=0; j<TEST_AUTO_MUX_N; j++) { LOG("%s%c", ads1xMuxStr(mux[j]), gSepCh[j >= (TEST_AUTO_MUX_N-1)] ); }
+      timeNow(&ts);
       r= readAutoADS1X(f, TEST_AUTO_SAMPLES, mux, TEST_AUTO_MUX_N, cfgPB, pC, busAddr, pP);
+      dt= timeElapsed(&ts);
+      LOG("%d samples, dt= %G sec : mean rate= %G Hz\n\n", r, dt, r * rcpF(dt));
    }
    return(r);
 } // testAuto
@@ -318,7 +326,6 @@ int testAuto
 
 #ifdef ADS1X_TEST
 
-// Testing indicates usleep() granularity 1.5~2ms...
 int testADS1x15
 (
    const LXI2CBusCtx *pC,
@@ -359,7 +366,7 @@ int testADS1x15
       {
          if (convWait > i2cDelay) { expectWait= convWait-i2cDelay; } // Hacky : conversion time seems less than sample interval...
          if (i2cWait < minWaitStep) { minWaitStep= i2cWait; }
-      }
+      } else { expectWait= 0; }
       if (mode & ADS1X_TEST_MODE_TIMER) { timeNow(&timer); }
       LOG("%s\n","***");
       n= 0;
@@ -476,7 +483,7 @@ int main (int argc, char *argv[])
    if (lxi2cOpen(&gBusCtx, devPath, 400))
    {
       const ADSInstProp *pP= adsInitProp(NULL, 3.3065, hwID);
-#if 1
+#if 0
       U8 adcMF= ADS1X_TEST_MODE_VERIFY|ADS1X_TEST_MODE_SLEEP|ADS1X_TEST_MODE_POLL|ADS1X_TEST_MODE_TIMER|ADS1X_TEST_MODE_ROTMUX;
       //adcMF|= ADS1X_TEST_MODE_VERBOSE;
 
