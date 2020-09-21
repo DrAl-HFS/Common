@@ -15,7 +15,10 @@ I16 rdI16LE (const U8 b[2]) { return((b[1] << 8) | b[0]); }
 
 U8 setMaskU8 (U8 b, U8 m, U8 v, U8 s) { assert((v&m)==v); return((b & ~(m << s)) | (v << s)); }
 
-#endif // INLINE
+float rcpI (int x) { if (0 != x) { return(1.0 / (float)x); } else return(0); }
+float rcpF (float x) { if (0 != x) { return(1.0 / x); } else return(0); }
+
+#endif // indef INLINE
 
 /* DEPRECATED Read n bytes big-endian
 int rdnbe (const U8 b[], const int n)
