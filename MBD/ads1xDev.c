@@ -457,7 +457,7 @@ typedef struct
 
 static ADS1XArgs gArgs=
 {
-   {  100, 200,   // rate & samples
+   {  10, 40,   // rate & samples
       {ADS1X_MUX0G, ADS1X_MUX1G, ADS1X_MUX2G, ADS1X_MUX3G}, 4,
       0x48, ADS11, 0
    },
@@ -467,17 +467,19 @@ static ADS1XArgs gArgs=
 
 void usageMsg (const char name[])
 {
-static const char optCh[]="adinrvh";
-static const char argCh[]="#####  ";
+static const char optCh[]="adimnrAvh";
+static const char argCh[]="######   ";
 static const char *desc[]=
 {
    "I2C bus address: 2digit hex (no prefix)",
    "device index (-> path /dev/i2c-# )",
-   "hardware ID 0 -> ads10xx 1 -> .ads11xx",
+   "hardware ID: 0 -> ads10xx, 1 -> ads11xx",
+   "multiplexer channel count",
    "max samples",
    "sample rate",
+   "auto gain test",
    "verbose diagnostic messages",
-   "help - diplay this text"
+   "help - display this text"
 };
    const int n= sizeof(desc)/sizeof(desc[0]);
    report(OUT,"Usage : %s [-%s]\n", name, optCh);
@@ -489,7 +491,10 @@ static const char *desc[]=
 
 void argDump (ADS1XArgs *pA)
 {
-   LOG("arg: %s, Addr:%02X, HWID:%d R=%d maxS=%d FLAGS:%02X\n", pA->devPath, pA->param.busAddr, pA->param.hwID, pA->param.rate, pA->param.maxSamples, pA->flags);
+   report(OUT,"Device: devPath=%s, busAddr=%02X, Flags=%02X\n", pA->devPath, pA->param.busAddr, pA->flags);
+   report(OUT,"\tHWID:%d Rate=%dHz maxS=%d\n", pA->param.hwID, pA->param.rate, pA->param.maxSamples);
+   report(OUT,"\tmux[%d]={", pA->param.nMux); reportBytes(OUT, pA->param.mux, pA->param.nMux);
+   report(OUT,"\t%s", "}\n");
 } // argDump
 
 #define ARG_AUTO    (1<<2)
@@ -498,10 +503,10 @@ void argDump (ADS1XArgs *pA)
 
 void argTrans (ADS1XArgs *pA, int argc, char *argv[])
 {
-   int c, t;
+   int i, c, t;
    do
    {
-      c= getopt(argc,argv,"a:d:i:n:r:hvA");
+      c= getopt(argc,argv,"a:d:i:n:r:Ahv");
       switch(c)
       {
          case 'a' :
@@ -518,13 +523,21 @@ void argTrans (ADS1XArgs *pA, int argc, char *argv[])
             sscanf(optarg, "%d", &t);
             if ((0x1 & t) == t) { pA->param.hwID= t; }
             break;
+         case 'm' :
+            sscanf(optarg, "%d", &t);
+            i= t-1;
+            if ((i & 0x3) == i) { pA->param.nMux= t; }
+            break;
          case 'n' :
             sscanf(optarg, "%d", &t);
             if (t > 0) { pA->param.maxSamples= t; }
             break;
-          case 'r' :
+         case 'r' :
             sscanf(optarg, "%d", &t);
             if (t > 0) { pA->param.rate= t; }
+            break;
+         case 'A' :
+            pA->flags|= ARG_AUTO;
             break;
          case 'h' :
             pA->flags|= ARG_HELP;
@@ -532,9 +545,6 @@ void argTrans (ADS1XArgs *pA, int argc, char *argv[])
          case 'v' :
             pA->flags|= ARG_VERBOSE;
             pA->param.modeFlags|= ADS1X_TEST_MODE_VERBOSE;
-            break;
-         case 'A' :
-            pA->flags|= ARG_AUTO;
             break;
      }
    } while (c > 0);
