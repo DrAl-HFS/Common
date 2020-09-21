@@ -214,11 +214,10 @@ int readAutoADS1X
    const int nF,
    const U8 mux[],
    int       nMux,
-   U16      rate,
    U8       * pCfgPB,
    const LXI2CBusCtx *pC,
-   const U8 busAddr,
-   const ADSInstProp *pP
+   const ADSInstProp *pP,
+   const ADSReadParam *pM
 )
 {
    RawTimeStamp targetTS;
@@ -233,17 +232,17 @@ int readAutoADS1X
       else
       {
          cfgPB[0]= ADS1X_REG_CFG;
-         r= lxi2cReadRB(pC, busAddr, cfgPB, ADS1X_NRB);
+         r= lxi2cReadRB(pC, pM->busAddr, cfgPB, ADS1X_NRB);
          //LOG_CALL(" : lxi2cReadRB() - r=%d\n", r);
          if (r <= 0) { return(r); }
          //else
          arc.pCfgPB= cfgPB;
       }
       arc.ivlNanoSec[0]= ads1xConvIvl(&r, arc.pCfgPB+1, pP->hwID);
-      arc.ivlNanoSec[1]= NANO_TICKS / rate;
+      arc.ivlNanoSec[1]= NANO_TICKS / pM->rate;
       //LOG_CALL("() - rate=%d -> ivl=%d\n", r, arc.ivl);
       arc.fsr= ads1xRawFSR(pP->hwID);
-      arc.busAddr= busAddr;
+      arc.busAddr= pM->busAddr;
       arc.maxT= 10; // => 5 iterations * 2 transactions
 
       if (nMux > 4) { WARN_CALL("(..nMux=%u..) - clamped to 4\n", nMux); nMux= 4; }
@@ -284,29 +283,27 @@ int readAutoADS1X
    return(n);
 } // readAutoADS1X
 
-
-#define TEST_AUTO_MUX_N 3
-#define TEST_AUTO_SAMPLES 8*TEST_AUTO_MUX_N
 int testAuto
 (
    const LXI2CBusCtx *pC,
-   const U8 busAddr,
    const ADSInstProp *pP,
-   U16   rate
+   const ADSReadParam *pM
 )
 {
    RawTimeStamp   ts;
-   const U8 mux[TEST_AUTO_MUX_N]= { ADS1X_MUX0G, ADS1X_MUX1G, ADS1X_MUX2G };//, ADS1X_MUX3G };
-   const U8 rateID= ads1xSelectRate(rate, pP->hwID);
+   const U8 rateID= ads1xSelectRate(pM->rate, pP->hwID);
    U8 cfgPB[ADS1X_NRB];
-   F32 dt=0, f[TEST_AUTO_SAMPLES];
+   F32 dt=0, *pF;
    int r;
 
+   pF= malloc(pM->maxSamples * sizeof(*pF));
+   if (NULL == pF) return(-1);
+
    r= ads1xRateToU(rateID, pP->hwID);
-   LOG_CALL("(..rate=%d) - selected id=%d -> %d\n", rate, rateID, r);
-   if (rate > r) { rate= r; }
+   LOG_CALL("(..rate=%d) - selected id=%d -> %d\n", pM->rate, rateID, r);
+   //if (pM->rate > r) { pM->rate= r; }
    cfgPB[0]= ADS1X_REG_CFG;
-   r= lxi2cReadRB(pC, busAddr, cfgPB, ADS1X_NRB);
+   r= lxi2cReadRB(pC, pM->busAddr, cfgPB, ADS1X_NRB);
    //LOG_CALL("(...rateID=%d...) : ReadRB() r=%d \n", rateID, r);
    if (r > 0)
    {
@@ -316,19 +313,20 @@ int testAuto
       else
       {
          ads1xSetRate(cfgPB+1, rateID);
-         r= lxi2cWriteRB(pC, busAddr, cfgPB, ADS1X_NRB);
+         r= lxi2cWriteRB(pC, pM->busAddr, cfgPB, ADS1X_NRB);
          //LOG_CALL(" : WriteRB() cfg=%02X%02X r=%d\n", cfgPB[1], cfgPB[2], r);
       }
    }
    if (r > 0)
    {
       LOG("%s","\t\t");
-      for (int j=0; j<TEST_AUTO_MUX_N; j++) { LOG("%s%c", ads1xMuxStr(mux[j]), gSepCh[j >= (TEST_AUTO_MUX_N-1)] ); }
+      for (int j=0; j<pM->nMux; j++) { LOG("%s%c", ads1xMuxStr(pM->mux[j]), gSepCh[j >= (pM->nMux-1)] ); }
       timeNow(&ts);
-      r= readAutoADS1X(f, TEST_AUTO_SAMPLES, mux, TEST_AUTO_MUX_N, rate, cfgPB, pC, busAddr, pP);
+      r= readAutoADS1X(pF, pM->maxSamples, pM->mux, pM->nMux, cfgPB, pC, pP, pM);
       dt= timeElapsed(&ts);
       LOG("%d samples, dt= %G sec : mean rate= %G Hz\n\n", r, dt, r * rcpF(dt));
    }
+   if (pF) { free(pF); }
    return(r);
 } // testAuto
 
@@ -340,44 +338,42 @@ int testADS1x15
 (
    const LXI2CBusCtx *pC,
    const MemBuff *pWS,
-   const U8 dev,
    const ADSInstProp *pP,
-   const U8 mode,
-   const U8 maxIter
+   const ADSReadParam *pM
 )
 {
    ADS1xFullPB fpb;
-   const int i2cWait= ADS1X_TRANS_NCLK * 1E6 / pC->clk;
+   const int i2cWait= ADS1X_TRANS_NCLK * (float)NANO_TICKS / pC->clk;
    RawTimeStamp timer;
    int i2cDelay=0, convWait=0, expectWait=0, minWaitStep=10;
    int r;
    float sv;
-   U8 n, cfgStatus[ADS1X_NRB];
+   U16 n;
+   U8 cfgStatus[ADS1X_NRB];
 
-   r= ads1xInitFPB(&fpb, pWS, pC, dev);
+   r= ads1xInitFPB(&fpb, pWS, pC, pM->busAddr);
    if (r >= 0)
    {
-      const enum ADS1xRate idRate[]={ADS10_DR920, ADS11_DR860};
-      //const enum ADS1xRate idRate[]={ADS10_DR128, ADS11_DR8};
+      const U8 rateID= ads1xSelectRate(pM->rate, pP->hwID);
       {
-         int nDelay= 1+bitCountZ(mode & (ADS1X_TEST_MODE_VERIFY|ADS1X_TEST_MODE_POLL));
+         int nDelay= 1+bitCountZ(pM->modeFlags & (ADS1X_TEST_MODE_VERIFY|ADS1X_TEST_MODE_POLL));
          i2cDelay= nDelay * i2cWait;
       }
       ads1xDumpCfg(fpb.rc.cfg+1, 0);
       memcpy(cfgStatus, fpb.rc.cfg, ADS1X_NRB);
-      ads1xGenCfg(fpb.rc.cfg+1, ADS1X_MUX0G, ADS1X_GAIN_6V144, idRate[pP->hwID], ADS1X_CMP_DISABLE);
+      ads1xGenCfg(fpb.rc.cfg+1, ADS1X_MUX0G, ADS1X_GAIN_6V144, rateID, ADS1X_CMP_DISABLE);
       fpb.rc.cfg[1]|= ADS1X_FL0_OS|ADS1X_FL0_MODE; // Now enable single-shot conversion
       // NB: Config packet written to device in loop that follows
       convWait= ads1xConvIvl(NULL,fpb.rc.cfg+1, pP->hwID);
       sv= ads1xGainScaleV(fpb.rc.cfg+1, pP->hwID);
       ads1xDumpAll(&fpb, pP->hwID);
-      LOG("Ivl: conv=%dus comm=%dus\n", convWait, i2cWait);
-      if (mode & ADS1X_TEST_MODE_SLEEP)
+      LOG("Ivl: conv=%d ns comm=%d ns\n", convWait, i2cWait);
+      if (pM->modeFlags & ADS1X_TEST_MODE_SLEEP)
       {
          if (convWait > i2cDelay) { expectWait= convWait-i2cDelay; } // Hacky : conversion time seems less than sample interval...
          if (i2cWait < minWaitStep) { minWaitStep= i2cWait; }
       } else { expectWait= 0; }
-      if (mode & ADS1X_TEST_MODE_TIMER) { timeNow(&timer); }
+      if (pM->modeFlags & ADS1X_TEST_MODE_TIMER) { timeNow(&timer); }
       LOG("%s\n","***");
       n= 0;
       do
@@ -386,33 +382,33 @@ int testADS1x15
          U8 cfgVer=FALSE;
          do
          {
-            r= lxi2cWriteRB(pC, dev, fpb.rc.cfg, ADS1X_NRB);
-            if ((mode & ADS1X_TEST_MODE_VERIFY) && (r >= 0))
+            r= lxi2cWriteRB(pC, pM->busAddr, fpb.rc.cfg, ADS1X_NRB);
+            if ((pM->modeFlags & ADS1X_TEST_MODE_VERIFY) && (r >= 0))
             {
-               r= lxi2cReadRB(pC, dev, cfgStatus, ADS1X_NRB);
+               r= lxi2cReadRB(pC, pM->busAddr, cfgStatus, ADS1X_NRB);
                if (r >= 0)
                {  // Device goes busy (OS1->0) immediately on write, so merge back in for check
                   cfgStatus[1] |= (fpb.rc.cfg[1] & ADS1X_FL0_OS);
                   cfgVer= (0 == memcmp(cfgStatus, fpb.rc.cfg, ADS1X_NRB));
-                  if (mode & ADS1X_TEST_MODE_VERBOSE) { LOG("ver%d=%d: ", iR0, cfgVer); ads1xDumpCfg(cfgStatus+1, pP->hwID); }
+                  if (pM->modeFlags & ADS1X_TEST_MODE_VERBOSE) { LOG("ver%d=%d: ", iR0, cfgVer); ads1xDumpCfg(cfgStatus+1, pP->hwID); }
                }
             }
-         } while ((mode & ADS1X_TEST_MODE_VERIFY) && ((r < 0) || !cfgVer) && (++iR0 < 10));
+         } while ((pM->modeFlags & ADS1X_TEST_MODE_VERIFY) && ((r < 0) || !cfgVer) && (++iR0 < 10));
 
-         if (expectWait > 0) { timeSpinSleep(expectWait*1000); }
+         if (expectWait > 0) { timeSpinSleep(expectWait); }
 
-         if (mode & ADS1X_TEST_MODE_POLL)
+         if (pM->modeFlags & ADS1X_TEST_MODE_POLL)
          {
             do { // poll status
-               r= lxi2cReadRB(pC, dev, cfgStatus, ADS1X_NRB);
+               r= lxi2cReadRB(pC, pM->busAddr, cfgStatus, ADS1X_NRB);
             } while (((r < 0) || (0 == (cfgStatus[1] & ADS1X_FL0_OS))) && (++iR1 < 10));
          }
 
-         r= lxi2cReadRB(pC, dev, fpb.rc.res, ADS1X_NRB); // read result
+         r= lxi2cReadRB(pC, pM->busAddr, fpb.rc.res, ADS1X_NRB); // read result
          if (r >= 0)
          {
             F32 dt=-1;
-            if (mode & ADS1X_TEST_MODE_TIMER) { dt= timeElapsed(&timer); }
+            if (pM->modeFlags & ADS1X_TEST_MODE_TIMER) { dt= timeElapsed(&timer); }
             int raw=  rdI16BE(fpb.rc.res+1);
             F32 v= raw * sv;
             const char muxVerCh[]={'?','V'};
@@ -420,18 +416,17 @@ int testADS1x15
             if (cfgVer) { m= ads1xGetMux(cfgStatus+1); }
             else { m= ads1xGetMux(fpb.rc.cfg+1); }
             LOG("%s (%c) (i=%d,%d) W%d dt%G [%d] : 0x%x -> %GV\n", ads1xMuxStr(m), muxVerCh[cfgVer], iR0, iR1, expectWait, dt, n, raw, v);
-            if (mode & ADS1X_TEST_MODE_ROTMUX)
+            if (pM->nMux > 1)
             {
-               static const U8 muxRot[]= { ADS1X_MUX0G, ADS1X_MUX1G, ADS1X_MUX2G, ADS1X_MUX3G };
-               const int iNM= (1+n) & 0x3;
-               ads1xSetMux(fpb.rc.cfg+1, muxRot[iNM]); // 99999999);
-               if (mode & ADS1X_TEST_MODE_VERBOSE)
+               const U8 mux= pM->mux[ n % pM->nMux ];
+               ads1xSetMux(fpb.rc.cfg+1, mux);
+               if (pM->modeFlags & ADS1X_TEST_MODE_VERBOSE)
                {
-                  LOG("%d -> 0x%02x -> %s chk: %s\n", iNM, muxRot[iNM], ads1xMuxStr(muxRot[iNM]), ads1xMuxStr(ads1xGetMux(fpb.rc.cfg+1)));
+                  LOG("0x%02x -> %s chk: %s\n", mux, ads1xMuxStr(mux), ads1xMuxStr(ads1xGetMux(fpb.rc.cfg+1)));
                }
             }
          }
-         if ((mode & ADS1X_TEST_MODE_TUNE) && (0 == iR0))
+         if ((pM->modeFlags & ADS1X_TEST_MODE_TUNE) && (0 == iR0))
          {
             if (expectWait > minWaitStep)
             {
@@ -442,7 +437,7 @@ int testADS1x15
                else { expectWait+= i2cWait; }
             }
          }
-      } while (++n < maxIter);
+      } while (++n < pM->maxSamples);
       LOG("%s\n","---");
    }
    return(r);
@@ -450,61 +445,125 @@ int testADS1x15
 
 #endif // ADS1X_TEST
 
+
 #ifdef ADS1X_MAIN
 
-void argTrans (char devPath[], U8 busAddr[1], U8 hwID[1], int argc, char *argv[])
+typedef struct
+{
+   ADSReadParam param;
+   char devPath[15]; // host device path
+   U8 flags;
+} ADS1XCLA;
+
+static ADS1XCLA gArgs=
+{
+   {  100, 200,   // rate & samples
+      {ADS1X_MUX0G, ADS1X_MUX1G, ADS1X_MUX2G, ADS1X_MUX3G}, 4,
+      0x48, ADS11, 0
+   },
+   "/dev/i2c-1", 0
+};
+
+
+void usageMsg (const char name[])
+{
+static const char optCh[]="adinrvh";
+static const char argCh[]="#####  ";
+static const char *desc[]=
+{
+   "I2C bus address: 2digit hex (no prefix)",
+   "device index (-> path /dev/i2c-# )",
+   "hardware ID 0 -> ads10xx 1 -> .ads11xx",
+   "max samples",
+   "sample rate",
+   "verbose diagnostic messages",
+   "help - diplay this text"
+};
+   const int n= sizeof(desc)/sizeof(desc[0]);
+   report(OUT,"Usage : %s [-%s]\n", name, optCh);
+   for (int i= 0; i<n; i++)
+   {
+      report(OUT,"\t%c %c - %s\n", optCh[i], argCh[i], desc[i]);
+   }
+} // usageMsg
+
+void argDump (ADS1XCLA *pA)
+{
+   LOG("arg: %s, Addr:%02X, HWID:%d R=%d maxS=%d FLAGS:%02X\n", pA->devPath, pA->param.busAddr, pA->param.hwID, pA->param.rate, pA->param.maxSamples, pA->flags);
+} // argDump
+
+#define ARG_AUTO    (1<<2)
+#define ARG_HELP    (1<<1)
+#define ARG_VERBOSE (1<<0)
+
+void argTrans (ADS1XCLA *pA, int argc, char *argv[])
 {
    int c, t;
    do
    {
-      c= getopt(argc,argv,"a:d:i:"); // c:d:e:t:hv");
+      c= getopt(argc,argv,"a:d:i:n:r:hvA");
       switch(c)
       {
          case 'a' :
             sscanf(optarg, "%x", &t);
-            if (t <= 0x7F) { busAddr[0]= t; }
+            if (t <= 0x7F) { pA->param.busAddr= t; }
             break;
          case 'd' :
          {
             char ch= optarg[0];
-            if ((ch > '0') && (ch <= '9')) { devPath[9]= ch; }
+            if ((ch > '0') && (ch <= '9')) { pA->devPath[9]= ch; }
             break;
          }
          case 'i' :
             sscanf(optarg, "%d", &t);
-            if ((0x1 & t) == t) { hwID[0]= t; }
+            if ((0x1 & t) == t) { pA->param.hwID= t; }
+            break;
+         case 'n' :
+            sscanf(optarg, "%d", &t);
+            if (t > 0) { pA->param.maxSamples= t; }
+            break;
+          case 'r' :
+            sscanf(optarg, "%d", &t);
+            if (t > 0) { pA->param.rate= t; }
+            break;
+         case 'h' :
+            pA->flags|= ARG_HELP;
+            break;
+         case 'v' :
+            pA->flags|= ARG_VERBOSE;
+            pA->param.modeFlags|= ADS1X_TEST_MODE_VERBOSE;
+            break;
+         case 'A' :
+            pA->flags|= ARG_AUTO;
             break;
      }
    } while (c > 0);
-   LOG("arg: %s, %02X, %d\n", devPath, busAddr[0], hwID[0]);
+   if (pA->flags & ARG_HELP) { usageMsg(argv[0]); }
+   if (pA->flags & ARG_VERBOSE) { argDump(pA); }
 } // argTrans
 
 LXI2CBusCtx gBusCtx={0,-1};
 
 int main (int argc, char *argv[])
 {
-   char devPath[]="/dev/i2c-1";
-   U8 busAddr= 0x48;
-   U8 hwID=ADS11;
    int r= -1;
 
-   argTrans(devPath, &busAddr, &hwID, argc, argv);
+   argTrans(&gArgs, argc, argv);
 
-   if (lxi2cOpen(&gBusCtx, devPath, 400))
+   if (lxi2cOpen(&gBusCtx, gArgs.devPath, 400))
    {
-      const ADSInstProp *pP= adsInitProp(NULL, 3.3065, hwID);
-#if 0
-      U8 adcMF= ADS1X_TEST_MODE_VERIFY|ADS1X_TEST_MODE_SLEEP|ADS1X_TEST_MODE_POLL|ADS1X_TEST_MODE_TIMER|ADS1X_TEST_MODE_ROTMUX;
-      //adcMF|= ADS1X_TEST_MODE_VERBOSE;
+      const ADSInstProp *pP= adsInitProp(NULL, 3.3065, gArgs.param.hwID);
 
-      // Paranoid enum check: for (int i=ADS11_DR8; i<=ADS11_DR860; i++) { printf("%d -> %d\n", i, ads1xRateToU(i,1) ); }
-      //MemBuff ws={0,};
-      //allocMemBuff(&ws, 4<<10);//
-      r= testADS1x15(&gBusCtx, NULL, busAddr, pP, adcMF, 100);
-      //releaseMemBuff(&ws);
-#else
-      r= testAuto(&gBusCtx, busAddr, pP, 100);
-#endif
+      if (gArgs.flags & ARG_AUTO) { r= testAuto(&gBusCtx, pP, &(gArgs.param)); }
+      else
+      {
+         gArgs.param.modeFlags|= ADS1X_TEST_MODE_VERIFY|ADS1X_TEST_MODE_SLEEP|ADS1X_TEST_MODE_POLL|ADS1X_TEST_MODE_TIMER;
+         // Paranoid enum check: for (int i=ADS11_DR8; i<=ADS11_DR860; i++) { printf("%d -> %d\n", i, ads1xRateToU(i,1) ); }
+         //MemBuff ws={0,};
+         //allocMemBuff(&ws, 4<<10);//
+         r= testADS1x15(&gBusCtx, NULL, pP, &(gArgs.param));
+         //releaseMemBuff(&ws);
+      }
       lxi2cClose(&gBusCtx);
    }
 

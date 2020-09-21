@@ -12,6 +12,7 @@
 #include <linux/i2c-dev.h>
 
 #include "lxI2C.h"
+#include "lxTiming.h"
 
 
 /***/
@@ -256,7 +257,7 @@ void lxi2cClose (LXI2CBusCtx *pC)
 
 void lxi2cSleepm (U32 milliSec)
 {
-   int r;
+   int r=0;
    LX_TRC0("(%u)\n",milliSec);
 #ifdef LX_TIMING_H
    if (milliSec < 100) { timeSpinSleep(milliSec * 1000000); } else
@@ -305,28 +306,20 @@ void lxi2cDumpDevAddr (const LXI2CBusCtx *pC, U8 busAddr, U8 bytes, U8 addr)
 
 int lxi2cPing (const LXI2CBusCtx *pC, U8 busAddr, const LXI2CPing *pP)
 {
-   //if (NULL == pP) { pP= &gPing; }
    struct i2c_msg m= { .addr= busAddr,  .flags= I2C_M_WR,  .len= pP->nB,  .buf= (void*)(pP->b) };
    struct i2c_rdwr_ioctl_data d={ &m, 1 };
-   //int t[2]={0,0};
+   RawTimeStamp ts[0];
    int r, i=0, e=0;
 
    r= I2C_BYTES_NCLK(m.len);
    TRACE_CALL("(0x%02X, 1+[%d]) - %dclk -> %dus\n", m.addr, m.len, r, (1000000 * r) / pC->clk);
+   timeSetTarget(ts+1, NULL, 1000);
    do
    {
+      timeSpinWaitUntil(ts+0, ts+1);
       r= ioctl(pC->fd, I2C_RDWR, &d);
       e+= (1 != r);
-      if (pP->ivl_us > 0)
-      {
-/*       if ((t[1] - t[0]) >= 1000)
-         {
-            //printf("%d / %d -> %d\n", i, max, r);
-            t[0]= t[1];
-         }
-*/       usleep(pP->ivl_us);
-         //t[1]+= pP->ivl_us;
-      }
+      timeSetTarget(ts+1, ts+1, pP->ivlNanoSec);
    } while ((++i < pP->maxIter) && (e <= pP->maxErr));
    LOG("\t%d OK, %d Err\n", i-e,e);
    return(-e);
@@ -347,7 +340,7 @@ typedef struct
 
 static LXI2CPingCLA gPCLA=
 {
-   { 0, {0,}, 3, 0, 1000 },
+   { 0, {0,}, 1000, 0, 1000000 },
    "/dev/i2c-1", 0x48
 };
 
@@ -361,7 +354,7 @@ static const char *desc[]=
    "message count (max pings to send)",
    "device index (-> path /dev/i2c-# )",
    "maximum errors to ignore (-1 -> all)",
-   "interval (microseconds) between messages",
+   "interval (nanoseconds) between messages",
    "verbose diagnostic messages",
    "help - diplay this text"
 };
@@ -373,9 +366,9 @@ static const char *desc[]=
    }
 } // pingUsageMsg
 
-void pingDump (LXI2CPingCLA *pCLA)
+void pingDump (LXI2CPingCLA *pP)
 {
-   report(OUT,"Device: path=%s, address=%02X\n", pCLA->devPath, pCLA->busAddr);
+   report(OUT,"Device: path=%s, address=%02X, iter=%d, maxErr=%d\n", pP->devPath, pP->busAddr, pP->ping.maxIter, pP->ping.maxErr);
 } // pingDump
 
 #define PING_HELP    (1<<0)
@@ -408,7 +401,7 @@ void pingArgTrans (LXI2CPingCLA *pPCLA, int argc, char *argv[])
             break;
          case 't' :
             sscanf(optarg,"%d", &t);
-            if (t > 0) { pPCLA->ping.ivl_us= t; }
+            if (t > 0) { pPCLA->ping.ivlNanoSec= t; }
             break;
          case 'h' :
             pPCLA->flags|= PING_HELP;

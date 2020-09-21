@@ -38,9 +38,9 @@ typedef struct
 #define ADS1X_TEST_MODE_VERIFY  (1<<7)
 #define ADS1X_TEST_MODE_SLEEP   (1<<6)
 #define ADS1X_TEST_MODE_POLL    (1<<5)
-#define ADS1X_TEST_MODE_ROTMUX  (1<<4)
+#define ADS1X_TEST_MODE_TIMER   (1<<4)
 #define ADS1X_TEST_MODE_TUNE    (1<<3)
-#define ADS1X_TEST_MODE_TIMER   (1<<1)
+//define ADS1X_TEST_MODE_        (1<<1)
 #define ADS1X_TEST_MODE_VERBOSE (1<<0)
 
 
@@ -53,7 +53,18 @@ extern void ads1xDumpCfg (const U8 cfg[2], const ADS1xHWID id);
 extern int ads1xInitRB (ADS1xFullPB *pFPB, const MemBuff *pWS, const LXI2CBusCtx *pC, const U8 dev);
 
 #ifdef ADS1X_TEST
-extern int testADS1x15 (const LXI2CBusCtx *pC, const MemBuff *pWS, const U8 dev, const ADSInstProp *pP, const U8 mode, const U8 maxIter);
+
+typedef struct
+{
+   U16 rate, maxSamples;
+   U8 mux[4];
+   U8 nMux;
+   U8 busAddr; // device bus address
+   U8 hwID;
+   U8 modeFlags;
+} ADSReadParam;
+
+extern int testADS1x15 (const LXI2CBusCtx *pC, const MemBuff *pWS, const ADSInstProp *pP, const ADSReadParam *pM);
 #endif // ADS1X_TEST
 
 #endif // ADS1X_DEV_H

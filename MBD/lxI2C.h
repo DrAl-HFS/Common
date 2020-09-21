@@ -25,7 +25,7 @@ extern "C" {
 
 #define I2C_M_WR  (0x0)   // Dummy for code readability
 
-typedef unsigned long UL;
+typedef unsigned long UL; // For compatibility with kernel I2C flag def.
 
 // Bus context
 typedef struct
@@ -39,7 +39,8 @@ typedef struct
 typedef struct
 {
    U8    nB, b[3];   // "packet" bytes: count + content (max 3)
-   U32   maxIter, maxErr, ivl_us;   // packets to send, error/failure limit, interval (microseconds)
+   int   maxIter, maxErr; // packets to send, error/failure limit
+   long ivlNanoSec;  // interval (nanoseconds)
 } LXI2CPing;
 
 
