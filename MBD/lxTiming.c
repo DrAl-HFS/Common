@@ -15,15 +15,16 @@
 #define ITIMER_GRANULARITY (4)      // micro
 #define USLEEP_GRANULARITY (2000)   // micro
 
-#define MILLI_TICKS  (1000)
-#define MICRO_TICKS  (MILLI_TICKS * 1000)
-#define NANO_TICKS   (MICRO_TICKS * 1000)
 
 #define DUSECF(t1,t2) (((t2).tv_sec-(t1).tv_sec) + 1E-6*((t2).tv_usec-(t1).tv_usec))
 #define DNSECF(t1,t2) (((t2).tv_sec-(t1).tv_sec) + 1E-9*((t2).tv_nsec-(t1).tv_nsec))
 
 
 /***/
+
+#ifndef INLINE
+int timeStamp (RawTimeStamp *pNow) { return clock_gettime(CLOCK_REALTIME, pNow); }
+#endif
 
 F32 timeNow (RawTimeStamp *pNow)
 {

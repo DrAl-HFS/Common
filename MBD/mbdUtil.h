@@ -26,8 +26,8 @@ extern I16 rdI16LE (const U8 b[2]);
 extern U8 setMaskU8 (U8 b, U8 m, U8 v, U8 s);
 
 // Return reciprocal of x as float, or zero if x is zero
-INLINE float rcpI (int x);
-INLINE float rcpF (float x);
+extern float rcpI (int x);
+extern float rcpF (float x);
 
 #else // INLINE
 

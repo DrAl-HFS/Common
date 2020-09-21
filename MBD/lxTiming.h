@@ -16,12 +16,22 @@
 extern "C" {
 #endif
 
+#define MILLI_TICKS  (1000)
+#define MICRO_TICKS  (MILLI_TICKS * 1000)
+#define NANO_TICKS   (MICRO_TICKS * 1000)
+
 // Posix structure permitting nanosecond precision on capable architectures.
 // (Permits userland timing accuracy of ~0.5us in practice.)
 typedef struct timespec RawTimeStamp;
 
 
 /***/
+
+#ifndef INLINE
+extern int timeStamp (RawTimeStamp *pNow);
+#else
+INLINE int timeStamp (RawTimeStamp *pNow) { return clock_gettime(CLOCK_REALTIME, pNow); }
+#endif
 
 // Capture timestamp and return typical "seconds since start of epoch" measure (00:00 Jan 1st 1970)
 extern F32 timeNow (RawTimeStamp *pT);

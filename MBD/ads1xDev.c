@@ -11,8 +11,8 @@
 // Auto-gain raw reading group parameters
 typedef struct
 {
-   U8    *pCfgPB;    // Config packet bytes - (pointer to outer level declaration eliminates copying)
-   long  ivlNanoSec; // Conversion interval (hardware rate dependant 303usec~125msec. for 400kHz bus clock)
+   U8    *pCfgPB;       // Config packet bytes - (pointer to outer level declaration eliminates copying)
+   long  ivlNanoSec[2]; // Conversion interval (hardware rate dependant 303usec~125msec. for 400kHz bus clock)
    I16   fsr;    // Full scale raw reading (value is hardware version dependant)
    U8 busAddr; // I2C device address
    U8 maxT;    // Max transactions per mux channel
@@ -58,7 +58,7 @@ long ads1xConvIvl (int *pRate, const U8 cfg[2], const ADS1xHWID id)
 {
    int rate= ads1xRateToU( ads1xGetRate(cfg), id);
    if (pRate) { *pRate= rate; }
-   if (rate > 0) { return(1000000000 / rate); }
+   if (rate > 0) { return(NANO_TICKS / rate); }
    // else
    return(0);
 } // ads1xConvIvl
@@ -108,7 +108,7 @@ void ads1xDumpAll (const ADS1xFullPB *pFPB, const ADS1xHWID id)
 // Performs multiple reads per channel as appropriate, if permitted.
 int readAutoRawADS1x (RawAGR rmg[], int nR, RawTimeStamp *pTarget, AutoRawCtx *pARC, const LXI2CBusCtx *pC)
 {
-   RawTimeStamp last;
+   RawTimeStamp wait[2];
    int n=0, r=-1, vr, tFSR; // intermediate values at machine word-length: intended to reduce operations
    U8 resPB[ADS1X_NRB], gainID, iT;
 
@@ -125,10 +125,13 @@ int readAutoRawADS1x (RawAGR rmg[], int nR, RawTimeStamp *pTarget, AutoRawCtx *p
          if (r > 0)
          {  // working
             iT++;
-            timeSpinWaitUntil(&last, pTarget);
+            //timeStamp(wait+0);
+            timeSetTarget(wait+1, NULL, pARC->ivlNanoSec[0]);
+            timeSpinWaitUntil(wait+0, wait+1);
             r= lxi2cReadRB(pC, pARC->busAddr, resPB, ADS1X_NRB);
             if (r > 0)
             {  // got result
+               //timeStamp(wait+1); // mean of 0,1 gives stable estimate of sample time
                iT++;
                vr= rdI16BE(resPB+1);
                if ((vr < 0) && (rmg[i].flSt & AGR_FLAG_SGND))
@@ -173,7 +176,11 @@ int readAutoRawADS1x (RawAGR rmg[], int nR, RawTimeStamp *pTarget, AutoRawCtx *p
          rmg[i].res= vr;
          rmg[i].flSt|= RMG_MASK_TRNS & iT;
        }
-       timeSetTarget(pTarget, pTarget, pARC->ivlNanoSec);
+       if (pARC->ivlNanoSec[1] > 0)
+       {
+         timeSpinWaitUntil(wait+0, pTarget);
+         timeSetTarget(pTarget, pTarget, pARC->ivlNanoSec[1]);
+      }
    }
    return(n);
 } // readAutoRawADS1x
@@ -207,6 +214,7 @@ int readAutoADS1X
    const int nF,
    const U8 mux[],
    int       nMux,
+   U16      rate,
    U8       * pCfgPB,
    const LXI2CBusCtx *pC,
    const U8 busAddr,
@@ -218,7 +226,7 @@ int readAutoADS1X
    RawAGR rmg[4];
    int n=0, r=-1;
    U8 cfgPB[ADS1X_NRB];
-   F32 R1[]={2200, 330, 330, 0};
+   F32 R1[]={2200, 330, 330, 0}; // resistance measure hack
    if ((nF > 0) && (nMux > 0))
    {
       if (pCfgPB) { arc.pCfgPB= pCfgPB; } // Paranoid VALIDATE ?
@@ -231,7 +239,8 @@ int readAutoADS1X
          //else
          arc.pCfgPB= cfgPB;
       }
-      arc.ivlNanoSec= ads1xConvIvl(&r, arc.pCfgPB+1, pP->hwID);
+      arc.ivlNanoSec[0]= ads1xConvIvl(&r, arc.pCfgPB+1, pP->hwID);
+      arc.ivlNanoSec[1]= NANO_TICKS / rate;
       //LOG_CALL("() - rate=%d -> ivl=%d\n", r, arc.ivl);
       arc.fsr= ads1xRawFSR(pP->hwID);
       arc.busAddr= busAddr;
@@ -241,7 +250,7 @@ int readAutoADS1X
       setupRawAGR(rmg, mux, nMux, ADS1X_GAIN_4V096);
 
       // Messy debug dump...
-      timeSetTarget(&targetTS, NULL, arc.ivlNanoSec);
+      timeSetTarget(&targetTS, NULL, arc.ivlNanoSec[0]);
       do
       {
          r= readAutoRawADS1x(rmg, nMux, &targetTS, &arc, pC); //LOG("readAutoRawADS1x() - r=%d\n", r);
@@ -283,7 +292,7 @@ int testAuto
    const LXI2CBusCtx *pC,
    const U8 busAddr,
    const ADSInstProp *pP,
-   const U16   rate
+   U16   rate
 )
 {
    RawTimeStamp   ts;
@@ -295,6 +304,7 @@ int testAuto
 
    r= ads1xRateToU(rateID, pP->hwID);
    LOG_CALL("(..rate=%d) - selected id=%d -> %d\n", rate, rateID, r);
+   if (rate > r) { rate= r; }
    cfgPB[0]= ADS1X_REG_CFG;
    r= lxi2cReadRB(pC, busAddr, cfgPB, ADS1X_NRB);
    //LOG_CALL("(...rateID=%d...) : ReadRB() r=%d \n", rateID, r);
@@ -315,7 +325,7 @@ int testAuto
       LOG("%s","\t\t");
       for (int j=0; j<TEST_AUTO_MUX_N; j++) { LOG("%s%c", ads1xMuxStr(mux[j]), gSepCh[j >= (TEST_AUTO_MUX_N-1)] ); }
       timeNow(&ts);
-      r= readAutoADS1X(f, TEST_AUTO_SAMPLES, mux, TEST_AUTO_MUX_N, cfgPB, pC, busAddr, pP);
+      r= readAutoADS1X(f, TEST_AUTO_SAMPLES, mux, TEST_AUTO_MUX_N, rate, cfgPB, pC, busAddr, pP);
       dt= timeElapsed(&ts);
       LOG("%d samples, dt= %G sec : mean rate= %G Hz\n\n", r, dt, r * rcpF(dt));
    }
