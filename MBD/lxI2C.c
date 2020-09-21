@@ -305,14 +305,14 @@ void lxi2cDumpDevAddr (const LXI2CBusCtx *pC, U8 busAddr, U8 bytes, U8 addr)
 } // lxi2cDumpDevAddr
 
 #include "sciFmt.h"
-int lxi2cPing (const LXI2CBusCtx *pC, U8 busAddr, const LXI2CPing *pP)
+int lxi2cPing (const LXI2CBusCtx *pC, U8 busAddr, const LXI2CPing *pP, U8 modeFlags)
 {
    struct i2c_msg m= { .addr= busAddr,  .flags= I2C_M_WR,  .len= pP->nB,  .buf= (void*)(pP->b) };
    struct i2c_rdwr_ioctl_data d={ &m, 1 };
    RawTimeStamp ts[2];
    int r, w, t, i=0, e=0;
 
-   if (pP->modeFlags & I2C_PING_VERBOSE)
+   if (modeFlags & I2C_PING_VERBOSE)
    {
       r= I2C_BYTES_NCLK(m.len);
       t= (r * (float)NANO_TICKS) / pC->clk;
@@ -332,7 +332,7 @@ int lxi2cPing (const LXI2CBusCtx *pC, U8 busAddr, const LXI2CPing *pP)
       e+= (1 != r);
       t= timeSetTarget(ts+1, ts+1, pP->ivlNanoSec);
    } while ((++i < pP->maxIter) && (e <= pP->maxErr));
-   if ((e > 0) && (pP->modeFlags & I2C_PING_VERBOSE))
+   if ((e > 0) && (modeFlags & I2C_PING_VERBOSE))
    {
       ERROR("w=%d, r=%d, t=%d\n",w,r,t);
    }
@@ -357,7 +357,7 @@ typedef struct
 
 static LXI2CArgs gArgs=
 {
-   {  3, {0x00,}, 0,
+   {  1, {0x00,}, // FLAGS???,
       1000, 10, // n, e
       1000000  // interval (ns)
    },
@@ -366,11 +366,12 @@ static LXI2CArgs gArgs=
 
 void pingUsageMsg (const char name[])
 {
-static const char optCh[]="acdetvh";
+static const char optCh[]="abcdetvh";
 static const char argCh[]="#####  ";
 static const char *desc[]=
 {
    "I2C bus address: 2digit hex (no prefix)",
+   "payload byte count",
    "message count (max pings to send)",
    "device index (-> path /dev/i2c-# )",
    "maximum errors to ignore (-1 -> all)",
@@ -405,12 +406,16 @@ void pingArgTrans (LXI2CArgs *pA, int argc, char *argv[])
    int c, t;
    do
    {
-      c= getopt(argc,argv,"a:c:d:e:t:hv");
+      c= getopt(argc,argv,"a:b:c:d:e:t:hv");
       switch(c)
       {
          case 'a' :
             sscanf(optarg, "%x", &t);
             if (t <= 0x7F) { pA->busAddr= t; }
+            break;
+         case 'b' :
+            sscanf(optarg, "%d", &t);
+            if ((t & 0x07) == t) { pA->ping.nB= t; }
             break;
          case 'c' :
             sscanf(optarg, "%d", &t);
@@ -435,7 +440,7 @@ void pingArgTrans (LXI2CArgs *pA, int argc, char *argv[])
             break;
          case 'v' :
             pA->flags|= ARG_VERBOSE;
-            pA->ping.modeFlags|= I2C_PING_VERBOSE;
+            //pA->ping.modeFlags|= I2C_PING_VERBOSE;
             break;
       }
    } while (c > 0);
@@ -455,7 +460,7 @@ int main (int argc, char *argv[])
    if (lxi2cOpen(&gBusCtx, gArgs.devPath, 400))
    {
       // lxi2cDumpDevAddr(&gBusCtx, 0x48, 0xFF,0x00);
-      r= lxi2cPing(&gBusCtx, gArgs.busAddr, &(gArgs.ping));
+      r= lxi2cPing(&gBusCtx, gArgs.busAddr, &(gArgs.ping), gArgs.flags);
       lxi2cClose(&gBusCtx);
    }
 

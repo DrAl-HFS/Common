@@ -41,9 +41,9 @@ typedef struct
 // "Ping" descriptor
 typedef struct
 {
-   U8    nB, b[6], modeFlags; // "packet" bytes: count, content (max 3),
+   U8    nB, b[7];	// "packet" bytes: count, content
    int   maxIter, maxErr; // packets to send, error/failure limit
-   long ivlNanoSec;  // interval (nanoseconds)
+   long  ivlNanoSec;	// interval (nanoseconds)
 } LXI2CPing;
 
 
@@ -100,7 +100,7 @@ extern void lxi2cSleepm (U32 milliSec);
 extern void lxi2cDumpDevAddr (const LXI2CBusCtx *pC, U8 busAddr, U8 bytes, U8 addr);
 
 // Write packets to bus for debug purposes
-extern int lxi2cPing (const LXI2CBusCtx *pC, U8 busAddr, const LXI2CPing *pP);
+extern int lxi2cPing (const LXI2CBusCtx *pC, U8 busAddr, const LXI2CPing *pP, U8 modeFlags);
 
 #ifdef __cplusplus
 } // extern "C"
