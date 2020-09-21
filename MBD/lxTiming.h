@@ -7,6 +7,7 @@
 #define LX_TIMING_H
 
 #include "util.h" // necessary ?
+// #include <unistd.h>
 
 
 /***/
@@ -15,14 +16,27 @@
 extern "C" {
 #endif
 
+// Posix structure permitting nanosecond precision on capable architectures.
+// (Permits userland timing accuracy of ~0.5us in practice.)
 typedef struct timespec RawTimeStamp;
 
 
 /***/
 
+// Capture timestamp and return typical "seconds since start of epoch" measure (00:00 Jan 1st 1970)
 extern F32 timeNow (RawTimeStamp *pT);
 
+// Update timestamp and return elapsed time (since last call) in seconds
 extern F32 timeElapsed (RawTimeStamp *pLast);
+
+// Set a target as base+offset. If pBase is NULL the current time used
+// Returns >=0 if successful
+extern int timeSetTarget (RawTimeStamp *pTarget, const RawTimeStamp *pBase, const long offsetNanoSec);
+
+// Busy wait, updating timestamp "Now" until target is reached
+// Typical overrun 0~100ns, occasionally up to 500ns (system under high load?)
+// Returns >=0 if successful
+extern int timeSpinWaitUntil (RawTimeStamp *pNow, const RawTimeStamp *pTarget);
 
 // Hybrid delay of up to 1 second implemented as sleep (for 2+ millisecond
 // delays) and spin-wait (using clock) to achieve improved time resolution
