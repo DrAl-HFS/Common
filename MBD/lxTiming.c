@@ -11,7 +11,7 @@
 /***/
 
 #define CLOCK_GRANULARITY_NS (500)  // nano, worst case ? typical <500ns
-#define SS_CLOCK_BIAS_NS (50)       // account for typical overheads
+//#define SS_CLOCK_BIAS_NS (50)       // account for typical overheads
 #define ITIMER_GRANULARITY (4)      // micro
 #define USLEEP_GRANULARITY (2000)   // micro
 

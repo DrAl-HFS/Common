@@ -106,13 +106,12 @@ void ads1xDumpAll (const ADS1xFullPB *pFPB, const ADS1xHWID id)
 // DISPLACE : ads1xUtil ?
 // Read a set of mux channels, updating the gain setting for each to maximise precison.
 // Performs multiple reads per channel as appropriate, if permitted.
-int readAutoRawADS1x (RawAGR rmg[], int nR, AutoRawCtx *pARC, const LXI2CBusCtx *pC)
+int readAutoRawADS1x (RawAGR rmg[], int nR, RawTimeStamp *pTarget, AutoRawCtx *pARC, const LXI2CBusCtx *pC)
 {
-   RawTimeStamp ts[2];
+   RawTimeStamp last;
    int n=0, r=-1, vr, tFSR; // intermediate values at machine word-length: intended to reduce operations
    U8 resPB[ADS1X_NRB], gainID, iT;
 
-   timeSetTarget(ts+1, NULL, 0);
    resPB[0]= ADS1X_REG_RES;
    for (int i=0; i<nR; i++)
    {  // per-mux iteration
@@ -126,9 +125,7 @@ int readAutoRawADS1x (RawAGR rmg[], int nR, AutoRawCtx *pARC, const LXI2CBusCtx 
          if (r > 0)
          {  // working
             iT++;
-            timeSetTarget(ts+1, ts+1, pARC->ivlNanoSec);
-            timeSpinWaitUntil(ts+0, ts+1);
-            //usleep(pARC->ivl);
+            timeSpinWaitUntil(&last, pTarget);
             r= lxi2cReadRB(pC, pARC->busAddr, resPB, ADS1X_NRB);
             if (r > 0)
             {  // got result
@@ -176,6 +173,7 @@ int readAutoRawADS1x (RawAGR rmg[], int nR, AutoRawCtx *pARC, const LXI2CBusCtx 
          rmg[i].res= vr;
          rmg[i].flSt|= RMG_MASK_TRNS & iT;
        }
+       timeSetTarget(pTarget, pTarget, pARC->ivlNanoSec);
    }
    return(n);
 } // readAutoRawADS1x
@@ -215,6 +213,7 @@ int readAutoADS1X
    const ADSInstProp *pP
 )
 {
+   RawTimeStamp targetTS;
    AutoRawCtx arc;
    RawAGR rmg[4];
    int n=0, r=-1;
@@ -241,10 +240,11 @@ int readAutoADS1X
       if (nMux > 4) { WARN_CALL("(..nMux=%u..) - clamped to 4\n", nMux); nMux= 4; }
       setupRawAGR(rmg, mux, nMux, ADS1X_GAIN_4V096);
 
-	// Messy debug dump...
+      // Messy debug dump...
+      timeSetTarget(&targetTS, NULL, arc.ivlNanoSec);
       do
       {
-         r= readAutoRawADS1x(rmg, nMux, &arc, pC); //LOG("readAutoRawADS1x() - r=%d\n", r);
+         r= readAutoRawADS1x(rmg, nMux, &targetTS, &arc, pC); //LOG("readAutoRawADS1x() - r=%d\n", r);
          if (r > 0)
          {
             LOG("\nRaw[%d]\t\t",n);
@@ -493,7 +493,7 @@ int main (int argc, char *argv[])
       r= testADS1x15(&gBusCtx, NULL, busAddr, pP, adcMF, 100);
       //releaseMemBuff(&ws);
 #else
-      r= testAuto(&gBusCtx, busAddr, pP, 10);
+      r= testAuto(&gBusCtx, busAddr, pP, 100);
 #endif
       lxi2cClose(&gBusCtx);
    }
