@@ -1,12 +1,12 @@
 // Common/MBD/lxI2C.h - I2C bus utils for Linux
 // https://github.com/DrAl-HFS/Common.git
 // Licence: GPL V3
-// (c) Project Contributors Feb 2018 - Aug 2020
+// (c) Project Contributors Feb 2018 - Sept 2020
 
 #ifndef LX_I2C_H
 #define LX_I2C_H
 
-#include "util.h"
+#include "util.h" // necessary ?
 #include <linux/i2c.h>
 //#include <linux/i2c-dev.h>
 
@@ -88,31 +88,15 @@ extern int lxi2cTransSMBUS (const LXI2CBusCtx *pBC, const U16 f, U16 nB, U8 *pB,
 extern void lxi2cClose (LXI2CBusCtx *pC);
 
 /***/
+
 // millisecond sleep for compatibility with "black box" driver code eg. Bosch Sensortech
-extern void lxi2cSleepm (U32 ms);
+extern void lxi2cSleepm (U32 milliSec);
 
 // Dump device registers
 extern void lxi2cDumpDevAddr (const LXI2CBusCtx *pC, U8 busAddr, U8 bytes, U8 addr);
 
 // Write packets to bus for debug purposes
 extern int lxi2cPing (const LXI2CBusCtx *pC, U8 busAddr, const LXI2CPing *pP);
-
-/***/
-
-#ifdef LX_I2C_TEST
-// DISPLACE: Hacks awaiting evaluation
-typedef struct { struct timespec tLast; } IOTimer;
-
-extern F32 timeNow (IOTimer *pT);
-
-extern F32 timeElapsed (IOTimer *pT);
-
-// Hybrid delay of up to 1 second implemented as sleep (for 2+ millisecond
-// delays) and spin-wait (using clock) to achieve improved time resolution
-// with a (limited) degree of efficiency.
-extern long nsSpinSleep (long ns);
-
-#endif // LX_I2C_TEST
 
 #ifdef __cplusplus
 } // extern "C"

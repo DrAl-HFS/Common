@@ -8,6 +8,7 @@
 
 #include "ads1xUtil.h"
 #include "lxI2C.h"
+#include "lxTiming.h"
 
 
 /***/

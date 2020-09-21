@@ -331,7 +331,7 @@ int testADS1x15
 {
    ADS1xFullPB fpb;
    const int i2cWait= ADS1X_TRANS_NCLK * 1E6 / pC->clk;
-   IOTimer timer;
+   RawTimeStamp timer;
    int i2cDelay=0, convWait=0, expectWait=0, minWaitStep=10;
    int r;
    float sv;
@@ -382,7 +382,7 @@ int testADS1x15
             }
          } while ((mode & ADS1X_TEST_MODE_VERIFY) && ((r < 0) || !cfgVer) && (++iR0 < 10));
 
-         if (expectWait > 0) { nsSpinSleep(expectWait*1000); }
+         if (expectWait > 0) { timeSpinSleep(expectWait*1000); }
 
          if (mode & ADS1X_TEST_MODE_POLL)
          {
