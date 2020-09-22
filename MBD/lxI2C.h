@@ -42,7 +42,7 @@ typedef struct
 typedef struct
 {
    U8    nB, b[7];	// "packet" bytes: count, content
-   int   maxIter, maxErr; // packets to send, error/failure limit
+   U32   maxIter, maxErr; // packets to send, error/failure limit
    long  ivlNanoSec;	// interval (nanoseconds)
 } LXI2CPing;
 
@@ -97,7 +97,7 @@ extern void lxi2cClose (LXI2CBusCtx *pC);
 extern void lxi2cSleepm (U32 milliSec);
 
 // Dump device registers
-extern void lxi2cDumpDevAddr (const LXI2CBusCtx *pC, U8 busAddr, U8 bytes, U8 addr);
+extern int lxi2cDumpDevAddr (const LXI2CBusCtx *pC, U8 busAddr, U8 bytes, U8 addr);
 
 // Write packets to bus for debug purposes
 extern int lxi2cPing (const LXI2CBusCtx *pC, U8 busAddr, const LXI2CPing *pP, U8 modeFlags);

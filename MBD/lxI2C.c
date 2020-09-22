@@ -266,17 +266,17 @@ void lxi2cSleepm (U32 milliSec)
    if (0 != r) { WARN_CALL("(%u) -> %d\n", milliSec, r); }
 } // lxi2cSleepm
 
-void lxi2cDumpDevAddr (const LXI2CBusCtx *pC, U8 busAddr, U8 bytes, U8 addr)
+int lxi2cDumpDevAddr (const LXI2CBusCtx *pC, U8 busAddr, U8 bytes, U8 regAddr)
 {
    int r;
    U8 buf[1<<8];
 
    memset(buf, 0xA5, 1<<8);
    // read into first 16byte row of buf
-   r= lxi2cTrans(pC, busAddr, I2C_M_RD, bytes, buf+(addr&0xF), addr);
+   r= lxi2cTrans(pC, busAddr, I2C_M_RD, bytes, buf+(regAddr&0xF), regAddr);
    if (r >= 0)
    {
-      const int rl= addr & 0xF0;
+      const int rl= regAddr & 0xF0;
       const int rh= bytes & 0xF0;
       char row[17]; row[16]= 0;
 
@@ -301,7 +301,7 @@ void lxi2cDumpDevAddr (const LXI2CBusCtx *pC, U8 busAddr, U8 bytes, U8 addr)
       }
       printf("\n");
    }
-   //else { printf(WARN/ERROR); }
+   return(r);
 } // lxi2cDumpDevAddr
 
 #include "sciFmt.h"
@@ -310,7 +310,8 @@ int lxi2cPing (const LXI2CBusCtx *pC, U8 busAddr, const LXI2CPing *pP, U8 modeFl
    struct i2c_msg m= { .addr= busAddr,  .flags= I2C_M_WR,  .len= pP->nB,  .buf= (void*)(pP->b) };
    struct i2c_rdwr_ioctl_data d={ &m, 1 };
    RawTimeStamp ts[2];
-   int r, w, t, i=0, e=0;
+   int r, w, t;
+   U32 i=0, e=0;
 
    if (modeFlags & I2C_PING_VERBOSE)
    {
@@ -336,7 +337,7 @@ int lxi2cPing (const LXI2CBusCtx *pC, U8 busAddr, const LXI2CPing *pP, U8 modeFl
    {
       ERROR("w=%d, r=%d, t=%d\n",w,r,t);
    }
-   LOG("\t%d OK, %d Err\n", i-e,e);
+   LOG("\t%u OK, %u Err\n", i-e,e);
    return(-e);
 } // lxi2cPing
 
@@ -344,6 +345,8 @@ int lxi2cPing (const LXI2CBusCtx *pC, U8 busAddr, const LXI2CPing *pP, U8 modeFl
 #ifdef LX_I2C_MAIN
 
 /*** PING ***/
+#define ARG_PING    (1<<7)
+#define ARG_DUMP    (1<<6)
 #define ARG_HELP    (1<<1)
 #define ARG_VERBOSE (1<<0)
 
@@ -361,13 +364,13 @@ static LXI2CArgs gArgs=
       1000, 10, // n, e
       1000000  // interval (ns)
    },
-   "/dev/i2c-1", 0x48
+   "/dev/i2c-1", 0x48, ARG_PING
 };
 
 void pingUsageMsg (const char name[])
 {
 static const char optCh[]="abcdetvh";
-static const char argCh[]="#####  ";
+static const char argCh[]="###### ";
 static const char *desc[]=
 {
    "I2C bus address: 2digit hex (no prefix)",
@@ -377,7 +380,7 @@ static const char *desc[]=
    "maximum errors to ignore (-1 -> all)",
    "interval (nanoseconds) between messages",
    "verbose diagnostic messages",
-   "help - diplay this text"
+   "help (display this text)"
 };
    const int n= sizeof(desc)/sizeof(desc[0]);
    report(OUT,"Usage : %s [-%s]\n", name, optCh);
@@ -401,52 +404,64 @@ void argDump (LXI2CArgs *pP)
 #endif
 } // argDump
 
-void pingArgTrans (LXI2CArgs *pA, int argc, char *argv[])
+void i2cArgTrans (LXI2CArgs *pA, int argc, char *argv[])
 {
-   int c, t;
+   F64 f;
+   int t, n[3]={0,0,0};
+   signed char ch, nCh;
    do
    {
-      c= getopt(argc,argv,"a:b:c:d:e:t:hv");
-      switch(c)
+      ch= getopt(argc,argv,"a:b:c:d:e:t:hv");
+      if (ch > 0)
       {
-         case 'a' :
-            sscanf(optarg, "%x", &t);
-            if (t <= 0x7F) { pA->busAddr= t; }
-            break;
-         case 'b' :
-            sscanf(optarg, "%d", &t);
-            if ((t & 0x07) == t) { pA->ping.nB= t; }
-            break;
-         case 'c' :
-            sscanf(optarg, "%d", &t);
-            if (t > 0) { pA->ping.maxIter= t; }
-            break;
-         case 'd' :
+         switch(ch)
          {
-            char ch= optarg[0];
-            if ((ch > '0') && (ch <= '9')) { pA->devPath[9]= ch; }
-            break;
+            case 'a' :
+               sscanf(optarg, "%x", &t);
+               if ((t & 0x7F) == t) { pA->busAddr= t; }
+               break;
+            case 'b' :
+               sscanf(optarg, "%d", &t);
+               if ((t & 0x07) == t) { pA->ping.nB= t; }
+               break;
+            case 'c' :
+               sscanf(optarg, "%d", &t);
+               pA->ping.maxIter= t;
+               break;
+            case 'd' :
+               ch= optarg[0];
+               if ((ch > '0') && (ch <= '9')) { pA->devPath[9]= ch; }
+               break;
+            case 'e' :
+               sscanf(optarg,"%d", &t);
+               pA->ping.maxErr= t;
+               break;
+            case 't' :
+#ifdef SCI_FMT_H
+               nCh= sciFmtScanF64(&f, optarg, strlen(optarg));
+               if ((nCh > 0) && (nCh < 6) && (f > 1E-9) && (f < 2)) { t= 1.000001E9 * f; } else
+#endif // SCI_FMT_H
+               sscanf(optarg,"%d", &t);
+               if (t > 0) { pA->ping.ivlNanoSec= t; }
+               break;
+            case 'h' : n[1]++; pA->flags|= ARG_HELP; break;
+            case 'v' : n[1]++; pA->flags|= ARG_VERBOSE; break;
+            default : n[2]++; break;
          }
-         case 'e' :
-            sscanf(optarg,"%d", &t);
-            pA->ping.maxErr= t;
-            break;
-         case 't' :
-            sscanf(optarg,"%d", &t);
-            if (t > 0) { pA->ping.ivlNanoSec= t; }
-            break;
-         case 'h' :
-            pA->flags|= ARG_HELP;
-            break;
-         case 'v' :
-            pA->flags|= ARG_VERBOSE;
-            //pA->ping.modeFlags|= I2C_PING_VERBOSE;
-            break;
+         n[0]++;
       }
-   } while (c > 0);
-   if (pA->flags & ARG_HELP) { pingUsageMsg(argv[0]); }
-   if (pA->flags & ARG_VERBOSE) { argDump(pA); }
-} // pingArgTrans
+   } while (ch > 0);
+   if (n[1] >= n[0]) { pA->flags&= 0x0F; } // disable processing if only help/verbose specified
+   if (pA->flags & ARG_VERBOSE)
+   {
+      //report(OUT,"nArg: P%d A%d ?%d\n", n[0]-(n[1]+n[2]), n[1], n[2]);
+      argDump(pA);
+   } // pA->ping.modeFlags|= I2C_PING_VERBOSE;
+   if (pA->flags & ARG_HELP)
+   {
+      pingUsageMsg(argv[0]);
+   }
+} // i2cArgTrans
 
 /***/
 
@@ -456,14 +471,17 @@ int main (int argc, char *argv[])
 {
    int r= -1;
 
-   pingArgTrans(&gArgs, argc, argv);
-   if (lxi2cOpen(&gBusCtx, gArgs.devPath, 400))
+   i2cArgTrans(&gArgs, argc, argv);
+   if (gArgs.flags & 0xF0)
    {
-      // lxi2cDumpDevAddr(&gBusCtx, 0x48, 0xFF,0x00);
-      r= lxi2cPing(&gBusCtx, gArgs.busAddr, &(gArgs.ping), gArgs.flags);
-      lxi2cClose(&gBusCtx);
-   }
+      if (lxi2cOpen(&gBusCtx, gArgs.devPath, 400))
+      {
+         if (gArgs.flags & ARG_PING) { r= lxi2cPing(&gBusCtx, gArgs.busAddr, &(gArgs.ping), gArgs.flags); }
+         if (gArgs.flags & ARG_DUMP) { r= lxi2cDumpDevAddr(&gBusCtx, gArgs.busAddr, 0xFF,0x00); }
 
+         lxi2cClose(&gBusCtx);
+      }
+   }
    return(r);
 } // main
 

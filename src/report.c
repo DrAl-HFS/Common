@@ -29,6 +29,11 @@ static B32 notMasked (const U8 fcid, const U8 lnid)
    return ((fcid & FRCD) || (gRC.filterMask[fcid & ERR0] & (1 << lnid)));
 } // masked
 
+static B32 displayable (const U8 id)
+{
+   return((id >= DBG) || notMasked((id & REPORT_FCID_MASK) >> REPORT_FCID_SHIFT, (id & REPORT_LNID_MASK) >> REPORT_LNID_SHIFT));
+} // displayable
+
 static const char * getPrefix (const U8 fcid, const U8 lnid)
 {
 static const char *pfx[]=
@@ -78,7 +83,7 @@ int reportBytes (const U8 id, const U8 *pB, int nB)
    char chBuff[8*REPORT_WIDTH_BYTES];
    const int mCh= sizeof(chBuff)-1;
    int r= 0;
-   if (pB && (nB > 0))
+   if (displayable(id) && pB && (nB > 0))
    {
       int iB=0;
       do

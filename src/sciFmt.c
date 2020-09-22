@@ -81,7 +81,7 @@ int sciFmtScanF64 (double *pF, const char s[], const int max)
 #ifdef PERMIT_ELEC_FMT
             register int m= n++;
             if (findIdxChN('.', s, m) >= m)
-            { // no decimal point scanned, allow "10k4" etc.
+            {  // no decimal point scanned, allow "10k4" etc.
                int n1;
                double f1;
 
