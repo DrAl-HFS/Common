@@ -304,47 +304,100 @@ int lxi2cDumpDevAddr (const LXI2CBusCtx *pC, U8 busAddr, U8 bytes, U8 regAddr)
    return(r);
 } // lxi2cDumpDevAddr
 
+/*** PING ***/
+
+typedef struct
+{
+   //const LXI2CPing *pP;
+   U32 maxP, nP, nE;
+   int rT, rIO;
+} PingState;
+
+static PingState gPS;
+
+
+#include <signal.h>
 #include "sciFmt.h"
+
+int pingReport (const PingState *pS, const LXI2CPing *pP)
+{
+   if (pS) // (pS->maxP > 0) || pS->pSig)
+   {
+      U32 maxP= pS->maxP;
+      if (pP && (0 == maxP)) { maxP= pP->maxIter; }
+      LOG("\tI2C-Ping: sent %u of %u frames: %d OK, %u Errors\n", pS->nP, maxP, pS->nP-pS->nE, pS->nE);
+      if (pS->nE > 0)
+      {
+         ERROR("I2C-Ping: result return values: rT=%d, rIO=%d\n", pS->rT, pS->rIO);
+         return(-1);
+      }
+   }
+   return(0);
+} // pingReport
+
+void sigHandler (int sigV)
+{
+   switch (sigV)
+   {
+      case SIGINT : gPS.maxP= 0; break;
+      case SIGTSTP : pingReport(&gPS, NULL); break;
+   }
+} // sigHandler
+
+void initPS (PingState *pS, const LXI2CPing *pP)
+{
+   memset(pS, 0, sizeof(*pS));
+   pS->maxP= pP->maxIter;
+   signal(SIGINT,sigHandler);
+   signal(SIGTSTP,sigHandler);
+   //pS->pP= pP;
+} // initPS
+
+void cleanPS (PingState *pS)
+{
+   signal(SIGINT,SIG_DFL);
+   signal(SIGTSTP,SIG_DFL);
+} // cleanPS
+
 int lxi2cPing (const LXI2CBusCtx *pC, U8 busAddr, const LXI2CPing *pP, U8 modeFlags)
 {
    struct i2c_msg m= { .addr= busAddr,  .flags= I2C_M_WR,  .len= pP->nB,  .buf= (void*)(pP->b) };
    struct i2c_rdwr_ioctl_data d={ &m, 1 };
    RawTimeStamp ts[2];
-   int r, w, t;
-   U32 i=0, e=0;
+   PingState *pS= &gPS;
+   int r= -1;
 
+   initPS(pS, pP);
    if (modeFlags & I2C_PING_VERBOSE)
    {
-      r= I2C_BYTES_NCLK(m.len);
-      t= (r * (float)NANO_TICKS) / pC->clk;
-      TRACE_CALL("(0x%02X, 1+[%d]) - %dclk ", m.addr, m.len, r);
+      U32 nClk= I2C_BYTES_NCLK(m.len);
+      U32 tns= (nClk * (float)NANO_TICKS) / pC->clk;
+      TRACE_CALL("(0x%02X, 1+[%d]) - %dclk ", m.addr, m.len, nClk);
 #ifdef SCI_FMT_H
       char mCh[2];
-      LOG("@ %G%cHz -> %G%csec\n", sciFmtSetF(mCh+0,pC->clk), mCh[0], sciFmtSetF(mCh+1,1E-9*t), mCh[1]);
+      LOG("@ %G%cHz -> %G%csec\n", sciFmtSetF(mCh+0,pC->clk), mCh[0], sciFmtSetF(mCh+1,1E-9*tns), mCh[1]);
 #else
-      LOG("@ %dHz -> %dnsec\n", pC->clk, t);
+      LOG("@ %dHz -> %dnsec\n", pC->clk, tns);
 #endif
    }
-   t= timeSetTarget(ts+1, NULL, 1000);
+   pS->rT= timeSetTarget(ts+1, NULL, 1000);
    do
    {
-      w= timeSpinWaitUntil(ts+0, ts+1);
-      r= ioctl(pC->fd, I2C_RDWR, &d);
-      e+= (1 != r);
-      t= timeSetTarget(ts+1, ts+1, pP->ivlNanoSec);
-   } while ((++i < pP->maxIter) && (e <= pP->maxErr));
-   if ((e > 0) && (modeFlags & I2C_PING_VERBOSE))
-   {
-      ERROR("w=%d, r=%d, t=%d\n",w,r,t);
-   }
-   LOG("\t%u OK, %u Err\n", i-e,e);
-   return(-e);
+      pS->rT= timeSpinWaitUntil(ts+0, ts+1);
+      pS->rIO= ioctl(pC->fd, I2C_RDWR, &d);
+      pS->nE+= (1 != pS->rIO);
+      pS->rT= timeSetTarget(ts+1, ts+1, pP->ivlNanoSec);
+   } while ((++(pS->nP) < pS->maxP) && (pS->nE <= pP->maxErr));
+   r= pingReport(pS,pP);
+   cleanPS(pS);
+   return(r);
 } // lxi2cPing
 
 
 #ifdef LX_I2C_MAIN
 
-/*** PING ***/
+/*** PING ARGS ***/
+
 #define ARG_PING    (1<<7)
 #define ARG_DUMP    (1<<6)
 #define ARG_HELP    (1<<1)
