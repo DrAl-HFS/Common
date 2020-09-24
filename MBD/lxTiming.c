@@ -14,10 +14,13 @@
 //#define SS_CLOCK_BIAS_NS (50)       // account for typical overheads
 #define ITIMER_GRANULARITY (4)      // micro
 #define USLEEP_GRANULARITY (2000)   // micro
+#ifndef MAX_LONG
+#define MAX_LONG 0x7FFFFFFF // 2^32-1, a double Mersenne prime (!?)
+#endif
+#define MAX_OFFSET (MAX_LONG-NANO_TICKS)
 
-
-#define DUSECF(t1,t2) (((t2).tv_sec-(t1).tv_sec) + 1E-6*((t2).tv_usec-(t1).tv_usec))
-#define DNSECF(t1,t2) (((t2).tv_sec-(t1).tv_sec) + 1E-9*((t2).tv_nsec-(t1).tv_nsec))
+#define DUSECF(t1,t2) (((t2).tv_sec-(t1).tv_sec) + (float)1E-6*((t2).tv_usec-(t1).tv_usec))
+#define DNSECF(t1,t2) (((t2).tv_sec-(t1).tv_sec) + (float)1E-9*((t2).tv_nsec-(t1).tv_nsec))
 
 
 /***/
@@ -35,6 +38,11 @@ F32 timeNow (RawTimeStamp *pNow)
    return(-1);
 } // timeNow
 
+F32 timeDiff (const RawTimeStamp *pT1, const RawTimeStamp *pT2)
+{
+   return DNSECF(*pT1, *pT2);
+} // timeNow
+
 F32 timeElapsed (RawTimeStamp *pLast)
 {
    RawTimeStamp now;
@@ -47,12 +55,12 @@ F32 timeElapsed (RawTimeStamp *pLast)
    return(dt);
 } // elapsedTime
 
-int timeSetTarget (RawTimeStamp *pTarget, const RawTimeStamp *pBase, const long offsetNanoSec)
+int timeSetTarget (RawTimeStamp *pTarget, RawTimeStamp *pBase, const long offsetNanoSec, U8 modeFlags)
 {
-   RawTimeStamp base;
    int r=0;
-   //if (offsetNanoSec >= (2*NANO_TICKS)) { return(-1); }
-   if (NULL == pBase) { r= clock_gettime(CLOCK_REALTIME, &base); pBase= &base; }
+   assert(offsetNanoSec <= MAX_OFFSET); // or risk overflow
+   if (NULL == pBase) { pBase= pTarget; }
+   if (modeFlags & TIME_MODE_NOW) { r= clock_gettime(CLOCK_REALTIME, pBase); }
    if (r >= 0)
    {
       pTarget->tv_sec= pBase->tv_sec;
@@ -82,29 +90,14 @@ long timeSpinSleep (long nanoSec)
    if (nanoSec > CLOCK_GRANULARITY_NS)
    {
       struct timespec ts[2];
-      int r= clock_gettime(CLOCK_REALTIME, ts+0);
+      int r= timeSetTarget(ts+1, ts+0, nanoSec, TIME_MODE_NOW);
       if (r >= 0)
       {
-         timeSetTarget(ts+1,ts+0,nanoSec);
-         #if 0
-         // set target
-         ts[1].tv_sec= ts[0].tv_sec;
-         ts[1].tv_nsec= ts[0].tv_nsec + nanoSec; // SS_CLOCK_BIAS_NS);
-         if (ts[1].tv_nsec > NANO_TICKS)
-         {  // correction needed
-            ts[1].tv_sec+= ts[1].tv_nsec / NANO_TICKS;
-            ts[1].tv_nsec %= NANO_TICKS;
-         }
-         #endif
-         // Minimise wasted system clock cycles.
+         // Reduce wasted system clock cycles.
          // NB: underestimation of sleep interval to minimise variability (significant overruns likely)
          if (nanoSec > (USLEEP_GRANULARITY*1000)) { usleep((nanoSec >> 10) - 500); }
 
          r= timeSpinWaitUntil(ts+0,ts+1);
-         //o // Now spin (system calls) to meet target
-         //{
-         //   r= clock_gettime(CLOCK_REALTIME, ts+0);
-         //} while ((r >= 0) && ((ts[1].tv_sec > ts[0].tv_sec) || (ts[1].tv_nsec > ts[0].tv_nsec))); // NB: relying on lazy eval
 
          if ((r >= 0) && (ts[1].tv_sec == ts[0].tv_sec))
          {

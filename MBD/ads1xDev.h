@@ -54,17 +54,37 @@ extern int ads1xInitRB (ADS1xFullPB *pFPB, const MemBuff *pWS, const LXI2CBusCtx
 
 #ifdef ADS1X_TEST
 
+#define ADS1X_MUX_MAX 4
+
 typedef struct
 {
-   U16 rate, maxSamples;
-   U8 mux[4];
+   U16 rate[2]; // outer, inner
+   U8 mux[ADS1X_MUX_MAX];
    U8 nMux;
    U8 busAddr; // device bus address
    U8 hwID;
    U8 modeFlags;
 } ADSReadParam;
 
-extern int testADS1x15 (const LXI2CBusCtx *pC, const MemBuff *pWS, const ADSInstProp *pP, const ADSReadParam *pM);
+// Auto gain, & accurate timing test
+int testAuto
+(
+   const int maxSamples,
+   const LXI2CBusCtx *pC,
+   const ADSInstProp *pP,
+   const ADSReadParam *pM
+);
+
+// Multi-mode test
+int testADS1x15
+(
+   const int maxSamples,
+   const LXI2CBusCtx *pC,
+   const MemBuff      *pWS,
+   const ADSInstProp *pP,
+   const ADSReadParam *pM
+);
+
 #endif // ADS1X_TEST
 
 #endif // ADS1X_DEV_H

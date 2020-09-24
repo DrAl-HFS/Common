@@ -339,7 +339,7 @@ void sigHandler (int sigV)
 {
    switch (sigV)
    {
-      case SIGINT : gPS.maxP= 0; break;
+      case SIGINT :  gPS.maxP= 0; break;
       case SIGTSTP : pingReport(&gPS, NULL); break;
    }
 } // sigHandler
@@ -363,7 +363,7 @@ int lxi2cPing (const LXI2CBusCtx *pC, U8 busAddr, const LXI2CPing *pP, U8 modeFl
 {
    struct i2c_msg m= { .addr= busAddr,  .flags= I2C_M_WR,  .len= pP->nB,  .buf= (void*)(pP->b) };
    struct i2c_rdwr_ioctl_data d={ &m, 1 };
-   RawTimeStamp ts[2];
+   RawTimeStamp ts[3];
    PingState *pS= &gPS;
    int r= -1;
 
@@ -380,13 +380,13 @@ int lxi2cPing (const LXI2CBusCtx *pC, U8 busAddr, const LXI2CPing *pP, U8 modeFl
       LOG("@ %dHz -> %dnsec\n", pC->clk, tns);
 #endif
    }
-   pS->rT= timeSetTarget(ts+1, NULL, 1000);
+   pS->rT= timeSetTarget(ts+1, ts+0, 1000, TIME_MODE_NOW);
    do
    {
-      pS->rT= timeSpinWaitUntil(ts+0, ts+1);
+      pS->rT= timeSpinWaitUntil(ts+2, ts+1);
       pS->rIO= ioctl(pC->fd, I2C_RDWR, &d);
       pS->nE+= (1 != pS->rIO);
-      pS->rT= timeSetTarget(ts+1, ts+1, pP->ivlNanoSec);
+      pS->rT= timeSetTarget(ts+1, ts+1, pP->ivlNanoSec, TIME_MODE_RELATIVE);
    } while ((++(pS->nP) < pS->maxP) && (pS->nE <= pP->maxErr));
    r= pingReport(pS,pP);
    cleanPS(pS);

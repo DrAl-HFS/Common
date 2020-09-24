@@ -20,6 +20,9 @@ extern "C" {
 #define MICRO_TICKS  (MILLI_TICKS * 1000)
 #define NANO_TICKS   (MICRO_TICKS * 1000)
 
+#define TIME_MODE_NOW      (1<<7)
+#define TIME_MODE_RELATIVE (0)
+
 // Posix structure permitting nanosecond precision on capable architectures.
 // (Permits userland timing accuracy of ~0.5us in practice.)
 typedef struct timespec RawTimeStamp;
@@ -39,9 +42,13 @@ extern F32 timeNow (RawTimeStamp *pT);
 // Update timestamp and return elapsed time (since last call) in seconds
 extern F32 timeElapsed (RawTimeStamp *pLast);
 
-// Set a target as base+offset. If pBase is NULL the current time used
+// T2 - T1 seconds
+extern F32 timeDiff (const RawTimeStamp *pT1, const RawTimeStamp *pT2);
+
+// Set a target as base+offset. If pBase is NULL pTarget is used as base.
+// If flag MODE_TIMENOW is given then *pBase is set to current timestamp.
 // Returns >=0 if successful
-extern int timeSetTarget (RawTimeStamp *pTarget, const RawTimeStamp *pBase, const long offsetNanoSec);
+extern int timeSetTarget (RawTimeStamp *pTarget, RawTimeStamp *pBase, const long offsetNanoSec, U8 modeFlags);
 
 // Busy wait, updating timestamp "Now" until target is reached
 // Typical overrun 0~100ns, occasionally up to 500ns (system under high load?)
