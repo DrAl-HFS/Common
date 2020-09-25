@@ -275,7 +275,7 @@ int readAutoADS1X
       }
 
       // Set hard & soft rates
-      U16 hardRate;
+      U16 hardRate, softRate=0;
       arc.ivlNanoSec[0]= ads1xConvIvl(&hardRate, arc.pCfgPB+1, pP->hwID);
       if (pM->rate[1] >= hardRate) { arc.ivlNanoSec[1]= 0; } // no extra delays
       else { arc.ivlNanoSec[1]= NANO_TICKS / (long)(pM->rate[1]); }
@@ -285,14 +285,21 @@ int readAutoADS1X
          if (pM->rate[0] > consRate) { WARN_CALL("() - requested rate %d exceeds constraint %d\n", pM->rate[0], consRate); }
          if (pM->rate[0] < consRate)
          {  // delay required
-            outerIvlNanoSec= NANO_TICKS / (long)(pM->rate[0]);
+            softRate= pM->rate[0];
+            outerIvlNanoSec= NANO_TICKS / (long)softRate;
          }
       }
-
       //LOG_CALL("() - rate=%d -> ivl=%d\n", r, arc.ivl);
       arc.fsr= ads1xRawFSR(pP->hwID);
       arc.busAddr= pM->busAddr;
-      arc.maxTrans= 10; // => 5 iterations * 2 transactions
+      if (softRate > 0)
+      {
+         const long i2cTransWait= ADS1X_TRANS_NCLK * (float)NANO_TICKS / pC->clk;
+         const long hardTime= (arc.ivlNanoSec[0] + 2 * i2cTransWait);
+         const long window= outerIvlNanoSec / nMux;
+         arc.maxTrans= 2*(window / hardTime);
+         LOG("transWait=%d, hardTime=%d, window=%d -> maxTrans=%d\n", i2cTransWait, hardTime, window, arc.maxTrans);
+      } else { arc.maxTrans= 2; }
 
       timeSetTarget(targetTS+1, targetTS+0, 100, TIME_MODE_NOW);
       refTS= targetTS[0];
@@ -412,7 +419,7 @@ int testADS1x15
 )
 {
    ADS1xFullPB fpb;
-   const int i2cWait= ADS1X_TRANS_NCLK * (float)NANO_TICKS / pC->clk;
+   const long i2cWait= ADS1X_TRANS_NCLK * (float)NANO_TICKS / pC->clk;
    RawTimeStamp timer;
    int i2cDelay=0, convWait=0, expectWait=0, minWaitStep=10;
    int r, n;
