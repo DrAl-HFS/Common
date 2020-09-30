@@ -72,7 +72,8 @@ int testAuto
    const int maxSamples,
    const LXI2CBusCtx *pC,
    const ADSInstProp *pP,
-   const ADSReadParam *pM
+   const ADSReadParam *pM,
+   const F32      *pResDiv
 );
 
 // Multi-mode test

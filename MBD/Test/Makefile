@@ -89,5 +89,5 @@ clean :
 	rm -f ti2c ads1x lsm9ds1 $(OBJ_DIR)/*
 
 run : ti2c
-	./$<
+	./$< -v
 

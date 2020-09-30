@@ -398,8 +398,11 @@ int lxi2cPing (const LXI2CBusCtx *pC, U8 busAddr, const LXI2CPing *pP, U8 modeFl
 
 /*** PING ARGS ***/
 
+#define ARG_ACTION   0xF0  // Mask
 #define ARG_PING    (1<<7)
 #define ARG_DUMP    (1<<6)
+
+#define ARG_OPTION   0x0F  // Mask
 #define ARG_HELP    (1<<1)
 #define ARG_VERBOSE (1<<0)
 
@@ -525,15 +528,13 @@ int main (int argc, char *argv[])
    int r= -1;
 
    i2cArgTrans(&gArgs, argc, argv);
-   if (gArgs.flags & 0xF0)
+   if (0 == (gArgs.flags & ~ARG_VERBOSE)) { gArgs.flags|= ARG_PING; }
+   if (lxi2cOpen(&gBusCtx, gArgs.devPath, 400))
    {
-      if (lxi2cOpen(&gBusCtx, gArgs.devPath, 400))
-      {
-         if (gArgs.flags & ARG_PING) { r= lxi2cPing(&gBusCtx, gArgs.busAddr, &(gArgs.ping), gArgs.flags); }
-         if (gArgs.flags & ARG_DUMP) { r= lxi2cDumpDevAddr(&gBusCtx, gArgs.busAddr, 0xFF,0x00); }
+      if (gArgs.flags & ARG_PING) { r= lxi2cPing(&gBusCtx, gArgs.busAddr, &(gArgs.ping), gArgs.flags); }
+      if (gArgs.flags & ARG_DUMP) { r= lxi2cDumpDevAddr(&gBusCtx, gArgs.busAddr, 0xFF,0x00); }
 
-         lxi2cClose(&gBusCtx);
-      }
+      lxi2cClose(&gBusCtx);
    }
    return(r);
 } // main

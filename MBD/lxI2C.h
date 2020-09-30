@@ -17,9 +17,10 @@ extern "C" {
 #endif
 
 // I2C clock cycles for a address bits plus b payload bits
-// assumes single ACK following address, thereafter one ACK
-// per 8 bits plus final NACK to end transaction.
-#define I2C_ADDR_BITS_NCLK(a,b) ((a)+1+(b)+(((b)+7)>>3) + 1)
+// assumes single START preceding and ACK following address,
+// thereafter one ACK per 8 payload bits (or part thereof
+// when padding is required) plus final NACK to end transaction.
+#define I2C_ADDR_BITS_NCLK(a,b) ((a)+3+9*(((b)+7)>>3))
 // I2C clock cycles for byte addressed n byte message
 #define I2C_BYTES_NCLK(n) I2C_ADDR_BITS_NCLK(8,(n<<3))
 
