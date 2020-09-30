@@ -35,13 +35,14 @@ typedef struct
    U8 cLo[ADS1X_NRB], cHi[ADS1X_NRB];
 } ADS1xFullPB;
 
-#define ADS1X_TEST_MODE_VERIFY  (1<<7)
-#define ADS1X_TEST_MODE_SLEEP   (1<<6)
-#define ADS1X_TEST_MODE_POLL    (1<<5)
-#define ADS1X_TEST_MODE_TIMER   (1<<4)
-#define ADS1X_TEST_MODE_TUNE    (1<<3)
-//define ADS1X_TEST_MODE_        (1<<1)
-#define ADS1X_TEST_MODE_VERBOSE (1<<0)
+#define ADS1X_TEST_MODE_VERIFY  (1<<7) // Verify transactions (paranoid / faulty bus test)
+#define ADS1X_TEST_MODE_SLEEP   (1<<6) // Sleep for expected conversion interval
+#define ADS1X_TEST_MODE_POLL    (1<<5) // Poll the device for conversion ready flag
+#define ADS1X_TEST_MODE_TUNE    (1<<4) // Primitive performance tuning attempt
+#define ADS1X_MODE_X3      (1<<3)
+#define ADS1X_MODE_X2      (1<<2)
+#define ADS1X_MODE_XTIMING (1<<1)   // Extended timing information
+#define ADS1X_MODE_VERBOSE (1<<0)
 
 
 /***/
@@ -67,7 +68,7 @@ typedef struct
 } ADSReadParam;
 
 // Auto gain, & accurate timing test
-int testAuto
+int testAutoGain
 (
    const int maxSamples,
    const LXI2CBusCtx *pC,
@@ -76,7 +77,7 @@ int testAuto
    const F32      *pResDiv
 );
 
-// Multi-mode test
+// Hacky mode tests
 int testADS1x15
 (
    const int maxSamples,

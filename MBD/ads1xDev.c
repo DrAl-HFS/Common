@@ -22,7 +22,7 @@ typedef struct
 #define AGR_FLAG_SGND 1<<6 // Mux selects single ended operation
 #define AGR_FLAG_VROK 1<<5 // Valid result
 #define AGR_FLAG_ORNG 1<<4 // out of range (uncorrectable over/under-flow)
-#define RMG_MASK_TRNS 0xF
+#define RMG_MASK_TRNS 0xF  // Transaction count mask
 typedef struct
 {
    I16 res;       // raw result (target hardware format)
@@ -114,7 +114,7 @@ int idxMaxNU16 (const U16 u[], int n)
 #define EXT_TIMING_N (5)
 
 typedef struct {
-   RawTimeStamp ts[EXT_TIMING_N]; // begin-end for two transactions (setup & read)
+   RawTimeStamp ts[EXT_TIMING_N]; // channel start plus begin-end for two transactions (setup & read)
 } ExtTiming;
 
 // DISPLACE : ads1xUtil ?
@@ -138,18 +138,18 @@ int readAutoRawADS1x (RawAGR agr[], ExtTiming *pT, int nR, RawTimeStamp *pTarget
          timeSpinWaitUntil(wait+0, pTarget);
          if (pT) { pT[i].ts[0]= wait[0]; }
          timeSetTarget(pTarget, NULL, pARC->ivlNanoSec[1], TIME_MODE_RELATIVE);
-      } else if (pT) { timeStamp(pT[i].ts+0); } // Start MUX channel
+      } else if (pT) { timeStamp(pT[i].ts+0); } // MUX channel begin
 
       do
       {  // Get best available reading
          pARC->pCfgPB[1]= agr[i].cfgRB0[0]; // Sets Gain, Mux, flags (Single Shot & Start)
-         if (pT) { timeStamp(pT[i].ts+1); }  // Write start
+         if (pT) { timeStamp(pT[i].ts+1); }  // Config write begin
          r= lxi2cWriteRB(pC, pARC->busAddr, pARC->pCfgPB, ADS1X_NRB);
          if (r > 0)
-         {  // working
+         {  // Config write complete, conversion started
             timeSetTarget(wait+1, wait+0, pARC->ivlNanoSec[0], TIME_MODE_NOW);
             iTrans++;
-            timeSpinWaitUntil(wait+2, wait+1);
+            timeSpinWaitUntil(wait+2, wait+1); // Wait for conversion
             r= lxi2cReadRB(pC, pARC->busAddr, resPB, ADS1X_NRB);
             if (r > 0)
             {  // got result
@@ -207,13 +207,13 @@ int readAutoRawADS1x (RawAGR agr[], ExtTiming *pT, int nR, RawTimeStamp *pTarget
    return(n);
 } // readAutoRawADS1x
 
-U8 setupRawAGR (RawAGR r[], const U8 mux[], U8 n, const enum ADS1xGain initGain)
+U8 setupRawAGR (RawAGR r[], const U8 mux[], U8 n, const U8 maskAG, const enum ADS1xGain initGain)
 {
    if (n > ADS1X_MUX_MAX) { WARN_CALL("(..nMux=%u..) - clamped to ADS_MUX_MAX=%d\n", n, ADS1X_MUX_MAX); n= ADS1X_MUX_MAX; }
    for (int i=0; i<n; i++)
-   {
+   {  // set config byte to start single conversion (plus gain & mux)
       ads1xGenCfgRB0(r[i].cfgRB0, mux[i], initGain, ADS1X_FL0_OS|ADS1X_FL0_MODE);
-      r[i].flSt= AGR_FLAG_AUTO;
+      if (maskAG & (1<<n)) { r[i].flSt= AGR_FLAG_AUTO; }
       if (mux[i] >= ADS1X_MUX0G) { r[i].flSt|= AGR_FLAG_SGND; }
    }
    return(n);
@@ -243,7 +243,7 @@ int elapsedRawTimeStamp
    if (stride > 1)
    {
       const int nI= nTS / stride;
-      for (int j=0; j<stride; j++)
+      for (int j=0; j<stride; j++)  // 2D transposition
       {
          for (int i=0; i<nI; i++) { f[iR++]= timeScale * timeDiff(pRef, rawTS + j + i*stride); }
       }
@@ -253,6 +253,19 @@ int elapsedRawTimeStamp
 } // elapsedRawTimeStamp
 
 /***/
+
+#include "util.h"
+
+void reportStat (F32 x[3], F32 timeScale, F32 dof)
+{
+   StatMomD1R2 sm={ { x[0], x[1] * timeScale, x[2] * timeScale * timeScale } };
+   StatResD1R2 sr;
+   statMom1Res1(&sr, &sm, dof);
+   F32 s= sqrt(sr.v);
+   report(LOG0,"Transaction mean, stdev : %G, %G, D=%G\n", sr.m, s, s * rcpF(sr.m));
+}
+
+#define FLAGS_ARE_SET(f,x) (((f) & (x)) == (f))
 
 static const char gSepCh[2]={'\t','\n'};
 
@@ -268,15 +281,16 @@ int readAutoADS1X
    const ADSReadParam *pM
 )
 {
-   ExtTiming et[ADS1X_MUX_MAX];
+   ExtTiming extT[ADS1X_MUX_MAX], *pET=NULL;
+   F32 sumTransDT[3]={0};  // StatMomD1R2 md1r2;
    RawTimeStamp targetTS[2];
    long outerIvlNanoSec=0;
    AutoRawCtx arc;
    RawAGR rawAGR[ADS1X_MUX_MAX];
    int n=0, r=-1;
    U8 cfgPB[ADS1X_NRB];
-
-   const U8 nMux= setupRawAGR(rawAGR, pM->mux, pM->nMux, ADS1X_GAIN_4V096);
+   //pM->maskAG ???
+   const U8 nMux= setupRawAGR(rawAGR, pM->mux, pM->nMux, 0xF, ADS1X_GAIN_4V096);
    if ((nMax > 0) && (nMux > 0))
    {
       if (pCfgPB) { arc.pCfgPB= pCfgPB; } // Paranoid VALIDATE ?
@@ -318,39 +332,52 @@ int readAutoADS1X
       } else { arc.maxTrans= 2; }
 
       timeSetTarget(targetTS+1, targetTS+0, 100, TIME_MODE_NOW);
-      if (pDT && (NULL == pRefTS)) { pRefTS= targetTS+0; }
+      if (pDT || (pM->modeFlags & ADS1X_MODE_XTIMING))
+      {
+         pET= extT+0;
+         if (NULL == pRefTS) { pRefTS= targetTS+0; }
+      }
       do
       {
-         r= readAutoRawADS1x(rawAGR, et, nMux, targetTS+1, &arc, pC); //LOG("readAutoRawADS1x() - r=%d\n", r);
+         r= readAutoRawADS1x(rawAGR, pET, nMux, targetTS+1, &arc, pC); //LOG("readAutoRawADS1x() - r=%d\n", r);
          if (r > 0)
          {
             convertRawAGR(rV+n, rawAGR, nMux, pP);
-            if (pDT) { elapsedRawTimeStamp(pDT+n, et[0].ts+EXT_TIMING_N-1, nMux, 1, pRefTS, 1000); }
-
-#if 0       // Messy extended debug dump...
-            report(LOG0,"%d..%d\n",n,n+nMux-1);
-            report(LOG0,"Raw\t");
-            for (int i=0; i<nMux; i++)
-            {
-               U8 g= ads1xGetGain(rawAGR[i].cfgRB0);
-               U8 t= rawAGR[i].flSt & RMG_MASK_TRNS;
-               U8 f= rawAGR[i].flSt >> 4;	// rawAGR[i].res,
-               report(LOG0,"%d,%X,%d%c", g, f, t, gSepCh[i >= (nMux-1)]);
+            if (pDT)
+            {  // Convert post-reading time stamp to elapsed since reference
+               elapsedRawTimeStamp(pDT+n, pET[0].ts+EXT_TIMING_N-1, nMux, 1, pRefTS, 1000);
             }
 
-            {
+            if FLAGS_ARE_SET( ADS1X_MODE_XTIMING|ADS1X_MODE_VERBOSE, pM->modeFlags)
+            { // extended raw data debug dump...
                F32 t[EXT_TIMING_N*ADS1X_MUX_MAX];
-               elapsedRawTimeStamp(t, et[0].ts+0, nMux * EXT_TIMING_N, EXT_TIMING_N, pRefTS, 1000);
-
                int k= 0;
+
+               report(LOG0,"%d..%d\n",n,n+nMux-1);
+               report(LOG0,"Raw\t");
+               for (int i=0; i<nMux; i++)
+               {
+                  U8 g= ads1xGetGain(rawAGR[i].cfgRB0);
+                  U8 t= rawAGR[i].flSt & RMG_MASK_TRNS;
+                  U8 f= rawAGR[i].flSt >> 4;	// rawAGR[i].res,
+                  report(LOG0,"%d,%X,%d%c", g, f, t, gSepCh[i >= (nMux-1)]);
+               }
+
+               elapsedRawTimeStamp(t, pET[0].ts+0, nMux * EXT_TIMING_N, EXT_TIMING_N, pRefTS, 1000);
                for (int j=0; j<EXT_TIMING_N; j++)
                {
-                  report(LOG0,"dt%d\t", j);
+                  report(LOG0,"dt (ms)\t");
                   for (int i=0; i<nMux; i++) { report(LOG0,"%G%c", t[k+i], gSepCh[i >= (nMux-1)]); }
                   k+= nMux;
                }
+               for (int i=0; i<nMux; i++)
+               {
+                  F32 dt1= timeDiff(pET[i].ts+1, pET[i].ts+2), dt2= timeDiff(pET[i].ts+3, pET[i].ts+4);
+                  //sumTransDT[0]+= 2;
+                  sumTransDT[1]+= dt1 + dt2;
+                  sumTransDT[2]+= dt1*dt1 + dt2*dt2;
+               }
             }
-#endif
             n+= nMux;
          }
          if (outerIvlNanoSec > 0)
@@ -360,11 +387,16 @@ int readAutoADS1X
          }
       } while ((n <= (nMax-nMux)) && (r > 0));
       //if (refTS.tv_nsec > 0) { ; } ???
+      if FLAGS_ARE_SET( ADS1X_MODE_XTIMING|ADS1X_MODE_VERBOSE, pM->modeFlags)
+      {
+         sumTransDT[0]= 2 * n;
+         reportStat(sumTransDT, 1000, sumTransDT[0]-1);
+      }
    }
    return(n);
 } // readAutoADS1X
 
-int testAuto
+int testAutoGain
 (
    const int maxSamples,
    const LXI2CBusCtx *pC,
@@ -404,23 +436,22 @@ int testAuto
    }
    if (r > 0)
    {
-      LOG("%s","\t\t");
-      for (int i=0; i<pM->nMux; i++) { LOG("%s%c", ads1xMuxStr(pM->mux[i]), gSepCh[i >= (pM->nMux-1)] ); }
       timeNow(&ts);
-      r= readAutoADS1X(pV, pDT, maxSM, NULL, cfgPB, pC, pP, pM);
+      r= readAutoADS1X(pV, pDT, maxSM, &ts, cfgPB, pC, pP, pM);
       dt= timeElapsed(&ts);
-      LOG("%d samples, dt= %G sec : mean rate= %G Hz\n\n", r, dt, r * rcpF(dt));
+      report(LOG0,"%d samples, dt= %G sec : mean rate= %G Hz\n\n", r, dt, r * rcpF(dt));
       {
-
          const U8 nMux= pM->nMux; // Hacky...
          int n= 0;
+         report(LOG0,"\t");
+         for (int i=0; i<nMux; i++) { LOG("%s%c", ads1xMuxStr(pM->mux[i]), gSepCh[i >= (nMux-1)] ); }
          while (n < r)
          {
-            report(LOG0,"%d..%d\n",n,n+nMux-1);
+            report(LOG0,"[ %d..%d ] : \n", n, n+nMux-1);
             report(LOG0,"DT\t");
-            for (int i=0; i<nMux; i++) { LOG("%G%c", pDT[n+i], gSepCh[i >= (nMux-1)]); }
+            for (int i=0; i<nMux; i++) { report(LOG0,"%G%c", pDT[n+i], gSepCh[i >= (nMux-1)]); }
             report(LOG0,"V\t");
-            for (int i=0; i<nMux; i++) { LOG("%G%c", pV[n+i], gSepCh[i >= (nMux-1)]); }
+            for (int i=0; i<nMux; i++) { report(LOG0,"%G%c", pV[n+i], gSepCh[i >= (nMux-1)]); }
 
             if (pResDiv)
             {
@@ -438,7 +469,7 @@ int testAuto
    }
    if (pV) { free(pV); }
    return(r);
-} // testAuto
+} // testAutoGain
 
 /***/
 
@@ -486,7 +517,7 @@ int testADS1x15
          if (convWait > i2cDelay) { expectWait= convWait-i2cDelay; } // Hacky : conversion time seems less than sample interval...
          if (i2cWait < minWaitStep) { minWaitStep= i2cWait; }
       } else { expectWait= 0; }
-      if (pM->modeFlags & ADS1X_TEST_MODE_TIMER) { timeNow(&timer); }
+      if (pM->modeFlags & ADS1X_MODE_XTIMING) { timeNow(&timer); }
       LOG("%s\n","***");
       n= 0;
       do
@@ -503,7 +534,7 @@ int testADS1x15
                {  // Device goes busy (OS1->0) immediately on write, so merge back in for check
                   cfgStatus[1] |= (fpb.rc.cfg[1] & ADS1X_FL0_OS);
                   cfgVer= (0 == memcmp(cfgStatus, fpb.rc.cfg, ADS1X_NRB));
-                  if (pM->modeFlags & ADS1X_TEST_MODE_VERBOSE) { LOG("ver%d=%d: ", iR0, cfgVer); ads1xDumpCfg(cfgStatus+1, pP->hwID); }
+                  if (pM->modeFlags & ADS1X_MODE_VERBOSE) { LOG("ver%d=%d: ", iR0, cfgVer); ads1xDumpCfg(cfgStatus+1, pP->hwID); }
                }
             }
          } while ((pM->modeFlags & ADS1X_TEST_MODE_VERIFY) && ((r < 0) || !cfgVer) && (++iR0 < 10));
@@ -521,7 +552,7 @@ int testADS1x15
          if (r >= 0)
          {
             F32 dt=-1;
-            if (pM->modeFlags & ADS1X_TEST_MODE_TIMER) { dt= timeElapsed(&timer); }
+            if (pM->modeFlags & ADS1X_MODE_XTIMING) { dt= timeElapsed(&timer); }
             int raw=  rdI16BE(fpb.rc.res+1);
             F32 v= raw * sv;
             const char muxVerCh[]={'?','V'};
@@ -533,7 +564,7 @@ int testADS1x15
             {
                const U8 mux= pM->mux[ n % pM->nMux ];
                ads1xSetMux(fpb.rc.cfg+1, mux);
-               if (pM->modeFlags & ADS1X_TEST_MODE_VERBOSE)
+               if (pM->modeFlags & ADS1X_MODE_VERBOSE)
                {
                   LOG("0x%02x -> %s chk: %s\n", mux, ads1xMuxStr(mux), ads1xMuxStr(ads1xGetMux(fpb.rc.cfg+1)));
                }
@@ -659,7 +690,7 @@ void argTrans (ADS1XArgs *pA, int argc, char *argv[])
             break;
          case 'v' :
             pA->flags|= ARG_VERBOSE;
-            pA->param.modeFlags|= ADS1X_TEST_MODE_VERBOSE;
+            pA->param.modeFlags|= ADS1X_MODE_VERBOSE;
             break;
      }
    } while (c > 0);
@@ -683,15 +714,15 @@ int main (int argc, char *argv[])
    if (lxi2cOpen(&gBusCtx, gArgs.devPath, 400))
    {
       const ADSInstProp *pP= adsInitProp(NULL, 3.3065, gArgs.param.hwID);
-
+      gArgs.param.modeFlags|= ADS1X_MODE_XTIMING;
       if (gArgs.flags & ARG_AUTO)
       {
          F32 rDiv[]= {2200, 330, 330, 0};
-         r= testAuto(gArgs.maxSamples, &gBusCtx, pP, &(gArgs.param), rDiv);
+         r= testAutoGain(gArgs.maxSamples, &gBusCtx, pP, &(gArgs.param), rDiv);
       }
       else
       {
-         gArgs.param.modeFlags|= ADS1X_TEST_MODE_VERIFY|ADS1X_TEST_MODE_SLEEP|ADS1X_TEST_MODE_POLL|ADS1X_TEST_MODE_TIMER;
+         gArgs.param.modeFlags|= ADS1X_TEST_MODE_VERIFY|ADS1X_TEST_MODE_SLEEP|ADS1X_TEST_MODE_POLL;
          // Paranoid enum check: for (int i=ADS11_DR8; i<=ADS11_DR860; i++) { printf("%d -> %d\n", i, ads1xRateToU(i,1) ); }
          //MemBuff ws={0,};
          //allocMemBuff(&ws, 4<<10);//
