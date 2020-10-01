@@ -615,7 +615,7 @@ static ADS1XArgs gArgs=
 {
    {  { 20, 250 },   // inner & outer rates
       { ADS1X_MUX0G, ADS1X_MUX1G, ADS1X_MUX2G, ADS1X_MUX3G }, 4,
-      0x0F, EXT_RTS_COUNT-1, 0    // maskAG, timeEst, modeFlags
+      0x0F, EXT_RTS_RDVAL_END, 0    // maskAG, timeEst, modeFlags
 
    },
    32,   // samples
