@@ -347,6 +347,26 @@ void reportStat (F32 x[3], F32 timeScale, F32 dof)
    report(LOG0,"Transaction mean, stdev : %G, %G, D=%G\n", sr.m, s, s * rcpF(sr.m));
 }
 
+void analyseInterval (const F32 t[], const int nM, const int nN)
+{
+   StatMomD1R2 sm={0,};
+   StatResD1R2 sr;
+   for (int i=0; i<nM; i++)
+   {
+      for (int j=1; j<nN; j++)
+      {
+         int k= i + j * nM;
+         F32 dt= t[k] - t[k-nM];
+         sm.m[1]+= dt;
+         sm.m[2]+= dt * dt;
+      }
+   }
+   sm.m[0]= (nN-1) * nM;
+   statMom1Res1(&sr, &sm, sm.m[0]-1);
+   F32 s= sqrt(sr.v), r= rcpF(sr.m);
+   report(LOG0,"Mux channel inter-sample mean, stdev : %G, %G, D=%G, rate=%G\n", sr.m, s, s * r, r);
+} // analyseInterval
+
 #define FLAGS_ARE_SET(f,x) (((f) & (x)) == (f))
 
 static const char gSepCh[2]={'\t','\n'};
@@ -530,7 +550,8 @@ int testAutoGain
       r= readAutoADS1X(pV, pDT, maxSM, &ts, cfgPB, pC, pP, pM);
       dt= timeElapsed(&ts);
       report(LOG0,"%d samples, dt= %G sec : mean rate= %G Hz\n\n", r, dt, r * rcpF(dt));
-      {
+      analyseInterval(pDT, pM->nMux, maxSamples);
+      {  // dump
          const U8 nMux= pM->nMux; // Hacky...
          const F32 timeScale= 1000;
          int n= 0;
