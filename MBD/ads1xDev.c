@@ -695,8 +695,8 @@ static ADS1XArgs gArgs=
 
 void usageMsg (const char name[])
 {
-static const char optCh[]="adimnrAvhX";
-static const char argCh[]="######   ";
+static const char optCh[]="adimnrAvhT";
+static const char argCh[]="######   #";
 static const char *desc[]=
 {
    "I2C bus address: 2digit hex (no prefix)",
@@ -705,9 +705,10 @@ static const char *desc[]=
    "multiplexer channel count",
    "max samples",
    "sample rate",
-   "auto gain test",
+   "auto gain mode",
    "verbose diagnostic messages",
-   "help (display this text)"
+   "help (display this text)",
+   "timestamp control"
 };
    const int n= sizeof(desc)/sizeof(desc[0]);
    report(OUT,"Usage : %s [-%s]\n", name, optCh);
@@ -741,7 +742,7 @@ void argTrans (ADS1XArgs *pA, int argc, char *argv[])
    int i, c, t;
    do
    {
-      c= getopt(argc,argv,"a:d:i:n:r:AhvX");
+      c= getopt(argc,argv,"a:d:i:m:n:r:T:Ahv");
       switch(c)
       {
          case 'a' :
@@ -771,6 +772,12 @@ void argTrans (ADS1XArgs *pA, int argc, char *argv[])
             sscanf(optarg, "%d", &t);
             if (t > 0) { pA->param.rate[0]= t; }
             break;
+         case 'T' : //
+            sscanf(optarg, "%d", &t);
+            if ((t < 0) || (t > EXT_RTS_COUNT)) { pA->param.timeEst= EXT_RTS_COUNT; }
+            else { pA->param.timeEst= t; }
+            //packTE(EXT_RTS_WRCFG_END, EXT_RTS_RDVAL_BGN, 0.5); // EXT_RTS_RDVAL_END;
+           break;
          case 'A' :
             pA->testFlags|= ARG_AUTO;
             break;
@@ -781,9 +788,6 @@ void argTrans (ADS1XArgs *pA, int argc, char *argv[])
             pA->testFlags|= ARG_VERBOSE;
             pA->param.modeFlags|= ADS1X_MODE_VERBOSE;
             break;
-         case 'X' : //
-            pA->param.timeEst= EXT_RTS_COUNT; //packTE(EXT_RTS_WRCFG_END, EXT_RTS_RDVAL_BGN, 0.5); // EXT_RTS_RDVAL_END;
-           break;
      }
    } while (c > 0);
    if (1 != idxMaxNU16(pA->param.rate, 2))
