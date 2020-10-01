@@ -42,8 +42,11 @@ extern F32 timeNow (RawTimeStamp *pT);
 // Update timestamp and return elapsed time (since last call) in seconds
 extern F32 timeElapsed (RawTimeStamp *pLast);
 
-// T2 - T1 seconds
-extern F32 timeDiff (const RawTimeStamp *pT1, const RawTimeStamp *pT2);
+// Simple time difference from reference: T - R seconds
+extern F32 timeDiff (const RawTimeStamp *pR, const RawTimeStamp *pT);
+
+// Estimate time difference (in seconds) as a linear combination of two timestamps measure from some reference
+extern F32 timeEstDiff (const RawTimeStamp *pR, const RawTimeStamp *pT1, const RawTimeStamp *pT2, const F32 r[2]);
 
 // Set a target as base+offset. If pBase is NULL pTarget is used as base.
 // If flag MODE_TIMENOW is given then *pBase is set to current timestamp.

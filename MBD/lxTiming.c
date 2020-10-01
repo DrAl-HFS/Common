@@ -38,9 +38,17 @@ F32 timeNow (RawTimeStamp *pNow)
    return(-1);
 } // timeNow
 
-F32 timeDiff (const RawTimeStamp *pT1, const RawTimeStamp *pT2)
+F32 timeDiff (const RawTimeStamp *pR, const RawTimeStamp *pT)
 {
-   return DNSECF(*pT1, *pT2);
+   return DNSECF(*pR, *pT);
+} // timeNow
+
+F32 timeEstDiff (const RawTimeStamp *pR, const RawTimeStamp *pT1, const RawTimeStamp *pT2, const F32 r[2])
+{
+   F32 d[2];
+   d[0]= DNSECF(*pR, *pT1);
+   d[1]= DNSECF(*pR, *pT2);
+   return(r[0]*d[0] + r[1]*d[1]);
 } // timeNow
 
 F32 timeElapsed (RawTimeStamp *pLast)

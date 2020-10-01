@@ -110,7 +110,6 @@ int idxMaxNU16 (const U16 u[], int n)
 } // idxMaxNU16
 
 /***/
-
 #define EXT_RTS_COUNT (5)
 #define EXT_RTS_MUXCH_BGN (4)
 #define EXT_RTS_WRCFG_BGN (3)
@@ -120,13 +119,48 @@ int idxMaxNU16 (const U16 u[], int n)
 
 typedef struct {  // TODO: reverse order
    RawTimeStamp ts[EXT_RTS_COUNT]; // channel start plus begin-end for two transactions (setup & read)
-} ExtTiming;
+} ExtRawTiming;
+
+typedef struct
+{
+   U8 idx[2], pad[2];
+   F32 r[2];
+} EstimatorRTS;
+
+EstimatorRTS *getTimeEstimator (U8 timeEst)
+{
+static EstimatorRTS e; // Haaack!!!
+   EstimatorRTS *pE= NULL;
+   if (timeEst >= EXT_RTS_COUNT)
+   {
+      pE= &e;
+      pE->idx[0]= EXT_RTS_WRCFG_END,
+      pE->idx[1]= EXT_RTS_RDVAL_BGN;
+      pE->r[0]=   0.5;
+      pE->r[1]=   1.0 - pE->r[0];
+      LOG_CALL("(%d) -> %d, %d, %G, %G\n", timeEst, pE->idx[0], pE->idx[1], pE->r[0], pE->r[1]);
+   }
+   return(pE);
+} // getTimeEstimator
+
+/*
+U8 packTE (U8 ta, U8 tb, F32 f)
+{
+   U8 v;
+   if (tb > ta) { SWAP(U8, ta, tb); f= 1.0 - f; }
+
+   v= (tb & 0x3) | (((ta-tb) & 0x3) << 2);
+   v|= (U8)(f * 0xF0) & 0xF0;
+   return(v);
+} // packTE
+*/
+
 
 // DISPLACE : ads1xUtil ?
 // Read a set of mux channels, updating the gain setting for each to maximise precison.
 // Performs multiple reads per channel as appropriate, if permitted.
 // Optionally provides transaction timing information
-int readAutoRawADS1x (RawAGR agr[], ExtTiming *pT, int nR, RawTimeStamp *pTarget, AutoRawCtx *pARC, const LXI2CBusCtx *pC)
+int readAutoRawADS1x (RawAGR agr[], ExtRawTiming *pT, int nR, RawTimeStamp *pTarget, AutoRawCtx *pARC, const LXI2CBusCtx *pC)
 {
    RawTimeStamp wait[3];
    int n=0, r=-1, vr, tFSR; // intermediate values at machine word-length: intended to reduce operations
@@ -234,28 +268,59 @@ int convertRawAGR (F32 f[], const RawAGR r[], const int n, const ADSInstProp *pP
    return(n);
 } // convertRawAGR
 
-int elapsedRawTimeStamp
+int elapsedStrideRTS
 (
-   F32 f[],
-   const RawTimeStamp rawTS[],
-   const int nTS,
-   const int stride,
-   const RawTimeStamp *pRef,
-   const F32 timeScale  // scale from sec. to eg. milliSec
+   F32   f[],
+   const int   nF,
+   const RawTimeStamp   rawTS[],
+   const int   stride,
+   const RawTimeStamp   *pRef
 )
 {
-   int iR=0;
-   if (stride > 1)
+   for (int i=0; i<nF; i++) { f[i]= timeDiff(pRef, rawTS + i * stride); }
+   return(nF);
+} // elapsedStrideRTS
+
+int elapsedEstStrideRTS
+(
+   F32   f[],
+   const int   nF,
+   const RawTimeStamp   rawTS[],
+   const int   stride,
+   const RawTimeStamp   *pRef,
+   const EstimatorRTS   *pEst
+)
+{
+   for (int i=0; i<nF; i++)
    {
-      const int nI= nTS / stride;
-      for (int j=0; j<stride; j++)  // 2D transposition
-      {
-         for (int i=0; i<nI; i++) { f[iR++]= timeScale * timeDiff(pRef, rawTS + j + i*stride); }
-      }
+      f[i]= timeEstDiff(pRef, rawTS + pEst->idx[0] + i * stride, rawTS + pEst->idx[1] + i * stride, pEst->r);
    }
-   else { for (int i=0; i<nTS; i++) { f[i]= timeScale * timeDiff(pRef, rawTS + i); } }
-   return(iR);
-} // elapsedRawTimeStamp
+   return(nF);
+} // elapsedStrideRTS
+
+int elapsedTrnStrdRTS
+(
+   F32   f[],
+   const int   nF,
+   const RawTimeStamp   rawTS[],
+   const int   nRow,
+   const int   stride,
+   const RawTimeStamp   *pRef
+)
+{ // strided access / 2D transposition
+   int offs=0, nR= 0;
+   if (nRow > 0)
+   {
+      do
+      {
+         for (int i=0; i<nRow; i++) { f[nR++]= timeDiff(pRef, rawTS + offs + i*stride); }
+         offs++;
+      } while (nR < nF);
+   }
+   return(nR);
+} // elapsedTrnStrdRTS
+
+
 
 /***/
 
@@ -286,7 +351,8 @@ int readAutoADS1X
    const ADSReadParam *pM
 )
 {
-   ExtTiming extT[ADS1X_MUX_MAX], *pET=NULL;
+   EstimatorRTS *pEstRTS=NULL;
+   ExtRawTiming extT[ADS1X_MUX_MAX], *pET=NULL;
    F32 sumTransDT[3]={0};  // StatMomD1R2 md1r2;
    RawTimeStamp targetTS[2];
    long outerIvlNanoSec=0;
@@ -336,6 +402,8 @@ int readAutoADS1X
          LOG("transWait=%d, hardTime=%d, window=%d -> maxTrans=%d\n", i2cTransWait, hardTime, window, arc.maxTrans);
       } else { arc.maxTrans= 2; }
 
+      pEstRTS= getTimeEstimator(pM->timeEst);
+
       timeSetTarget(targetTS+1, targetTS+0, 100, TIME_MODE_NOW);
       if (pDT || (pM->modeFlags & ADS1X_MODE_XTIMING))
       {
@@ -350,16 +418,16 @@ int readAutoADS1X
             convertRawAGR(rV+n, rawAGR, nMux, pP);
             if (pDT)
             {  // Convert post-reading time stamp to elapsed since reference
-               if (pM->timeEst < EXT_RTS_COUNT)
-               { elapsedRawTimeStamp(pDT+n, pET[0].ts+pM->timeEst, nMux, 1, pRefTS, 1000); }
+               if (NULL == pEstRTS) // pM->timeEst < EXT_RTS_COUNT)
+               { elapsedStrideRTS(pDT+n, nMux, pET[0].ts+pM->timeEst, EXT_RTS_COUNT, pRefTS); }
                else
-               {
-               }
+               { elapsedEstStrideRTS(pDT+n, nMux, pET[0].ts, EXT_RTS_COUNT, pRefTS, pEstRTS); }
             }
 
             if FLAGS_ARE_SET( ADS1X_MODE_XTIMING|ADS1X_MODE_VERBOSE, pM->modeFlags)
             { // extended raw data debug dump...
-               F32 t[EXT_RTS_COUNT*ADS1X_MUX_MAX];
+static const char *dtID[]= {"rdvE","rdvB","cfgE","cfgB","muxB"};
+               F32 t[EXT_RTS_COUNT*ADS1X_MUX_MAX], timeScale= 1000;
                int k= 0;
 
                report(LOG0,"%d..%d\n",n,n+nMux-1);
@@ -371,17 +439,18 @@ int readAutoADS1X
                   U8 f= rawAGR[i].flSt >> 4;	// rawAGR[i].res,
                   report(LOG0,"%d,%X,%d%c", g, f, t, gSepCh[i >= (nMux-1)]);
                }
-
-               elapsedRawTimeStamp(t, pET[0].ts+0, nMux * EXT_RTS_COUNT, EXT_RTS_COUNT, pRefTS, 1000);
+               // Transpose timings into mux then category order
+               elapsedTrnStrdRTS(t, nMux * EXT_RTS_COUNT, pET[0].ts+0, nMux, EXT_RTS_COUNT, pRefTS);
                for (int j=0; j<EXT_RTS_COUNT; j++)
                {
-                  report(LOG0,"dt (ms)\t");
-                  for (int i=0; i<nMux; i++) { report(LOG0,"%G%c", t[k+i], gSepCh[i >= (nMux-1)]); }
+                  report(LOG0,"%s (ms)\t", dtID[j]);
+                  for (int i=0; i<nMux; i++) { report(LOG0,"%G%c", t[k+i] * timeScale, gSepCh[i >= (nMux-1)]); }
                   k+= nMux;
                }
                for (int i=0; i<nMux; i++)
                {
-                  F32 dt1= timeDiff(pET[i].ts+1, pET[i].ts+2), dt2= timeDiff(pET[i].ts+3, pET[i].ts+4);
+                  const F32 dt1= timeDiff(pET[i].ts+EXT_RTS_WRCFG_BGN, pET[i].ts+EXT_RTS_WRCFG_END);
+                  const F32 dt2= timeDiff(pET[i].ts+EXT_RTS_RDVAL_BGN, pET[i].ts+EXT_RTS_RDVAL_END);
                   //sumTransDT[0]+= 2;
                   sumTransDT[1]+= dt1 + dt2;
                   sumTransDT[2]+= dt1*dt1 + dt2*dt2;
@@ -451,25 +520,27 @@ int testAutoGain
       report(LOG0,"%d samples, dt= %G sec : mean rate= %G Hz\n\n", r, dt, r * rcpF(dt));
       {
          const U8 nMux= pM->nMux; // Hacky...
+         const F32 timeScale= 1000;
          int n= 0;
          report(LOG0,"\t");
          for (int i=0; i<nMux; i++) { LOG("%s%c", ads1xMuxStr(pM->mux[i]), gSepCh[i >= (nMux-1)] ); }
          while (n < r)
          {
             report(LOG0,"[ %d..%d ] : \n", n, n+nMux-1);
-            report(LOG0,"DT\t");
-            for (int i=0; i<nMux; i++) { report(LOG0,"%G%c", pDT[n+i], gSepCh[i >= (nMux-1)]); }
-            report(LOG0,"V\t");
+            report(LOG0,"dt (ms)\t\t");
+            for (int i=0; i<nMux; i++) { report(LOG0,"%G%c", pDT[n+i] * timeScale, gSepCh[i >= (nMux-1)]); }
+            report(LOG0,"V (V)\t\t");
             for (int i=0; i<nMux; i++) { report(LOG0,"%G%c", pV[n+i], gSepCh[i >= (nMux-1)]); }
 
             if (pResDiv)
             {
-               report(LOG0,"R\t",n);
+               F32 rScale= 0.001;
+               report(LOG0,"R (kOhm)\t",n);
                for (int i=0; i<nMux; i++)
                {
                   F32 v0= pV[n+i]; // v1= pP->vdd - v0
                   F32 res= pResDiv[i] * v0 * rcpF(pP->vdd - v0);
-                  report(LOG0,"%G%c", res, gSepCh[i >= (nMux-1)]);
+                  report(LOG0,"%G%c", res * rScale, gSepCh[i >= (nMux-1)]);
                }
             }
             n+= nMux;
@@ -622,10 +693,9 @@ static ADS1XArgs gArgs=
    "/dev/i2c-1", ADS11, 0x48, 0
 };
 
-
 void usageMsg (const char name[])
 {
-static const char optCh[]="adimnrAvh";
+static const char optCh[]="adimnrAvhX";
 static const char argCh[]="######   ";
 static const char *desc[]=
 {
@@ -647,12 +717,19 @@ static const char *desc[]=
    }
 } // usageMsg
 
-void argDump (ADS1XArgs *pA)
+void paramDump (const ADSReadParam *pP)
 {
-   report(OUT,"Device: devPath=%s, busAddr=%02X, Flags=%02X\n", pA->devPath, pA->busAddr, pA->testFlags);
-   report(OUT,"\tHWID:%d Rate= %d, %d (Hz) maxS=%d\n", pA->hwID, pA->param.rate[0], pA->param.rate[1], pA->maxSamples);
-   report(OUT,"\tmux[%d]={", pA->param.nMux); reportBytes(OUT, pA->param.mux, pA->param.nMux);
-   report(OUT,"\t%s", "}\n");
+   report(OUT,"\trate= %d, %d (Hz)", pP->rate[0], pP->rate[1]);
+   report(OUT,"\tmux[%d]={", pP->nMux); reportBytes(OUT, pP->mux, pP->nMux);
+   report(OUT,"%s", "}\n");
+   report(OUT,"\tmaskAG= 0x%02X, timeEst= 0x%02X, modeFlags= 0x%02X\n", pP->maskAG, pP->timeEst, pP->modeFlags);
+} // paramDump
+
+void argDump (const ADS1XArgs *pA)
+{
+   report(OUT,"Device: devPath=%s, hwID:%d, busAddr=%02X\n", pA->devPath, pA->hwID, pA->busAddr);
+   report(OUT,"\tflags=%02X maxS=%d\n", pA->testFlags,  pA->maxSamples);
+   paramDump(&(pA->param));
 } // argDump
 
 #define ARG_AUTO    (1<<2)
@@ -664,7 +741,7 @@ void argTrans (ADS1XArgs *pA, int argc, char *argv[])
    int i, c, t;
    do
    {
-      c= getopt(argc,argv,"a:d:i:n:r:Ahv");
+      c= getopt(argc,argv,"a:d:i:n:r:AhvX");
       switch(c)
       {
          case 'a' :
@@ -704,6 +781,9 @@ void argTrans (ADS1XArgs *pA, int argc, char *argv[])
             pA->testFlags|= ARG_VERBOSE;
             pA->param.modeFlags|= ADS1X_MODE_VERBOSE;
             break;
+         case 'X' : //
+            pA->param.timeEst= EXT_RTS_COUNT; //packTE(EXT_RTS_WRCFG_END, EXT_RTS_RDVAL_BGN, 0.5); // EXT_RTS_RDVAL_END;
+           break;
      }
    } while (c > 0);
    if (1 != idxMaxNU16(pA->param.rate, 2))
