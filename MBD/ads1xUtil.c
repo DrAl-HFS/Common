@@ -100,14 +100,19 @@ I16 ads1xRawFSR (ADS1xHWID hwID)
    return(gHC.rawFS[hwID]);
 } // ads1xRawFSR
 
-const ADSInstProp * adsInitProp (ADSInstProp *pP, const F32 vdd, const U8 hwID)
+const ADSInstProp * adsInitProp (ADSInstProp *pP, const F32 vdd, const U8 hwID, const U8 busAddr)
 {
    U8 i=0;
    while ((gHC.gainFSV[i+1] > vdd) && (i < (ADS1X_GAIN_NID-2))) { ++i; }
    if (NULL == pP) { pP= &gDefaultADSIP; }
    pP->minUGID= i;
    pP->maxUGID= ADS1X_GAIN_0V256;
+#ifdef REPORT_H
+   if (hwID & 0xFE) { WARN_CALL("(hwID=0x%02X) - unrecognised\n", hwID); }
+   if (0x48 != (busAddr & 0xFE)) { WARN_CALL("(busAddr=0x%02X) - unrecognised\n", busAddr); }
+#endif // REPORT_H
    pP->hwID= hwID;
+   pP->busAddr= busAddr;
    pP->vdd= vdd;
    return(pP);
 } // adsInitProp

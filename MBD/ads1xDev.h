@@ -33,16 +33,8 @@ typedef struct
 {  // Full register set with compare values
    ADS1xRCPB rc;
    U8 cLo[ADS1X_NRB], cHi[ADS1X_NRB];
+   // U8 busAddr, pad[1];  // Complete info for device instance ? Considering...
 } ADS1xFullPB;
-
-#define ADS1X_TEST_MODE_VERIFY  (1<<7) // Verify transactions (paranoid / faulty bus test)
-#define ADS1X_TEST_MODE_SLEEP   (1<<6) // Sleep for expected conversion interval
-#define ADS1X_TEST_MODE_POLL    (1<<5) // Poll the device for conversion ready flag
-#define ADS1X_TEST_MODE_TUNE    (1<<4) // Primitive performance tuning attempt
-#define ADS1X_MODE_X3      (1<<3)
-#define ADS1X_MODE_X2      (1<<2)
-#define ADS1X_MODE_XTIMING (1<<1)   // Extended timing information
-#define ADS1X_MODE_VERBOSE (1<<0)
 
 
 /***/
@@ -55,6 +47,17 @@ extern int ads1xInitRB (ADS1xFullPB *pFPB, const MemBuff *pWS, const LXI2CBusCtx
 
 #ifdef ADS1X_TEST
 
+#define ADS1X_TEST_MODE_MASK    (0xF0) // Upper nybble mask (for original test mode only)
+#define ADS1X_TEST_MODE_VERIFY  (1<<7) // Verify transactions (paranoid / faulty bus test)
+#define ADS1X_TEST_MODE_SLEEP   (1<<6) // Sleep for expected conversion interval
+#define ADS1X_TEST_MODE_POLL    (1<<5) // Poll the device for conversion ready flag
+#define ADS1X_TEST_MODE_TUNE    (1<<4) // Primitive performance tuning attempt
+#define ADS1X_MODE_MASK    (0x0F)   // Lower nybble mask applies to all
+#define ADS1X_MODE_X3      (1<<3)   // Presently unused
+#define ADS1X_MODE_X2      (1<<2)   //   "         "
+#define ADS1X_MODE_XTIMING (1<<1)   // Extended timing information
+#define ADS1X_MODE_VERBOSE (1<<0)   // Diagnostic info (to console)
+
 #define ADS1X_MUX_MAX 4
 
 typedef struct
@@ -62,8 +65,9 @@ typedef struct
    U16 rate[2]; // outer, inner
    U8 mux[ADS1X_MUX_MAX];
    U8 nMux;
-   U8 busAddr; // device bus address
-   U8 hwID;
+   //U8 cfg[ADS1X_NRB]; ? consider ?
+   U8 maskAG;
+   U8 timeEst; // Sample timing measure/estimation method
    U8 modeFlags;
 } ADSReadParam;
 

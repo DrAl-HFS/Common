@@ -111,10 +111,15 @@ int idxMaxNU16 (const U16 u[], int n)
 
 /***/
 
-#define EXT_TIMING_N (5)
+#define EXT_RTS_COUNT (5)
+#define EXT_RTS_MUXCH_BGN (4)
+#define EXT_RTS_WRCFG_BGN (3)
+#define EXT_RTS_WRCFG_END (2)
+#define EXT_RTS_RDVAL_BGN (1)
+#define EXT_RTS_RDVAL_END (0)
 
-typedef struct {
-   RawTimeStamp ts[EXT_TIMING_N]; // channel start plus begin-end for two transactions (setup & read)
+typedef struct {  // TODO: reverse order
+   RawTimeStamp ts[EXT_RTS_COUNT]; // channel start plus begin-end for two transactions (setup & read)
 } ExtTiming;
 
 // DISPLACE : ads1xUtil ?
@@ -136,14 +141,14 @@ int readAutoRawADS1x (RawAGR agr[], ExtTiming *pT, int nR, RawTimeStamp *pTarget
       if (pARC->ivlNanoSec[1] > 0)
       {
          timeSpinWaitUntil(wait+0, pTarget);
-         if (pT) { pT[i].ts[0]= wait[0]; }
+         if (pT) { pT[i].ts[EXT_RTS_MUXCH_BGN]= wait[0]; }
          timeSetTarget(pTarget, NULL, pARC->ivlNanoSec[1], TIME_MODE_RELATIVE);
-      } else if (pT) { timeStamp(pT[i].ts+0); } // MUX channel begin
+      } else if (pT) { timeStamp(pT[i].ts+EXT_RTS_MUXCH_BGN); } // MUX channel begin
 
       do
       {  // Get best available reading
          pARC->pCfgPB[1]= agr[i].cfgRB0[0]; // Sets Gain, Mux, flags (Single Shot & Start)
-         if (pT) { timeStamp(pT[i].ts+1); }  // Config write begin
+         if (pT) { timeStamp(pT[i].ts+EXT_RTS_WRCFG_BGN); }  // Config write begin
          r= lxi2cWriteRB(pC, pARC->busAddr, pARC->pCfgPB, ADS1X_NRB);
          if (r > 0)
          {  // Config write complete, conversion started
@@ -155,9 +160,9 @@ int readAutoRawADS1x (RawAGR agr[], ExtTiming *pT, int nR, RawTimeStamp *pTarget
             {  // got result
                if (pT)
                {
-                  timeStamp(pT[i].ts+4);  // Read complete
-                  pT[i].ts[3]= wait[2];   // Wait complete
-                  pT[i].ts[2]= wait[0];   // Write complete
+                  timeStamp(pT[i].ts+EXT_RTS_RDVAL_END);  // Read complete
+                  pT[i].ts[EXT_RTS_RDVAL_BGN]= wait[2];   // Wait done / begin read
+                  pT[i].ts[EXT_RTS_WRCFG_END]= wait[0];   // Write complete
                }
                iTrans++;
                vr= rdI16BE(resPB+1);
@@ -255,7 +260,7 @@ int elapsedRawTimeStamp
 /***/
 
 #include "util.h"
-
+// Hackity hack..
 void reportStat (F32 x[3], F32 timeScale, F32 dof)
 {
    StatMomD1R2 sm={ { x[0], x[1] * timeScale, x[2] * timeScale * timeScale } };
@@ -289,15 +294,15 @@ int readAutoADS1X
    RawAGR rawAGR[ADS1X_MUX_MAX];
    int n=0, r=-1;
    U8 cfgPB[ADS1X_NRB];
-   //pM->maskAG ???
-   const U8 nMux= setupRawAGR(rawAGR, pM->mux, pM->nMux, 0xF, ADS1X_GAIN_4V096);
+
+   const U8 nMux= setupRawAGR(rawAGR, pM->mux, pM->nMux, pM->maskAG, ADS1X_GAIN_4V096);
    if ((nMax > 0) && (nMux > 0))
    {
       if (pCfgPB) { arc.pCfgPB= pCfgPB; } // Paranoid VALIDATE ?
       else
       {
          cfgPB[0]= ADS1X_REG_CFG;
-         r= lxi2cReadRB(pC, pM->busAddr, cfgPB, ADS1X_NRB);
+         r= lxi2cReadRB(pC, pP->busAddr, cfgPB, ADS1X_NRB);
          //LOG_CALL(" : lxi2cReadRB() - r=%d\n", r);
          if (r <= 0) { return(r); }
          //else
@@ -321,7 +326,7 @@ int readAutoADS1X
       }
       //LOG_CALL("() - rate=%d -> ivl=%d\n", r, arc.ivl);
       arc.fsr= ads1xRawFSR(pP->hwID);
-      arc.busAddr= pM->busAddr;
+      arc.busAddr= pP->busAddr;
       if (softRate > 0)
       {
          const long i2cTransWait= ADS1X_TRANS_NCLK * (float)NANO_TICKS / pC->clk;
@@ -345,12 +350,16 @@ int readAutoADS1X
             convertRawAGR(rV+n, rawAGR, nMux, pP);
             if (pDT)
             {  // Convert post-reading time stamp to elapsed since reference
-               elapsedRawTimeStamp(pDT+n, pET[0].ts+EXT_TIMING_N-1, nMux, 1, pRefTS, 1000);
+               if (pM->timeEst < EXT_RTS_COUNT)
+               { elapsedRawTimeStamp(pDT+n, pET[0].ts+pM->timeEst, nMux, 1, pRefTS, 1000); }
+               else
+               {
+               }
             }
 
             if FLAGS_ARE_SET( ADS1X_MODE_XTIMING|ADS1X_MODE_VERBOSE, pM->modeFlags)
             { // extended raw data debug dump...
-               F32 t[EXT_TIMING_N*ADS1X_MUX_MAX];
+               F32 t[EXT_RTS_COUNT*ADS1X_MUX_MAX];
                int k= 0;
 
                report(LOG0,"%d..%d\n",n,n+nMux-1);
@@ -363,8 +372,8 @@ int readAutoADS1X
                   report(LOG0,"%d,%X,%d%c", g, f, t, gSepCh[i >= (nMux-1)]);
                }
 
-               elapsedRawTimeStamp(t, pET[0].ts+0, nMux * EXT_TIMING_N, EXT_TIMING_N, pRefTS, 1000);
-               for (int j=0; j<EXT_TIMING_N; j++)
+               elapsedRawTimeStamp(t, pET[0].ts+0, nMux * EXT_RTS_COUNT, EXT_RTS_COUNT, pRefTS, 1000);
+               for (int j=0; j<EXT_RTS_COUNT; j++)
                {
                   report(LOG0,"dt (ms)\t");
                   for (int i=0; i<nMux; i++) { report(LOG0,"%G%c", t[k+i], gSepCh[i >= (nMux-1)]); }
@@ -420,7 +429,7 @@ int testAutoGain
    r= ads1xRateToU(rateID, pP->hwID);
    LOG_CALL("(..rate=[%d,%d]) - selected id=%d -> %d\n", pM->rate[0], pM->rate[1], rateID, r);
    cfgPB[0]= ADS1X_REG_CFG;
-   r= lxi2cReadRB(pC, pM->busAddr, cfgPB, ADS1X_NRB);
+   r= lxi2cReadRB(pC, pP->busAddr, cfgPB, ADS1X_NRB);
    //LOG_CALL("(...rateID=%d...) : ReadRB() r=%d \n", rateID, r);
    if (r > 0)
    {
@@ -430,7 +439,7 @@ int testAutoGain
       else
       {
          ads1xSetRate(cfgPB+1, rateID);
-         r= lxi2cWriteRB(pC, pM->busAddr, cfgPB, ADS1X_NRB);
+         r= lxi2cWriteRB(pC, pP->busAddr, cfgPB, ADS1X_NRB);
          //LOG_CALL(" : WriteRB() cfg=%02X%02X r=%d\n", cfgPB[1], cfgPB[2], r);
       }
    }
@@ -494,7 +503,7 @@ int testADS1x15
    float sv;
    U8 cfgStatus[ADS1X_NRB];
 
-   r= ads1xInitFPB(&fpb, pWS, pC, pM->busAddr);
+   r= ads1xInitFPB(&fpb, pWS, pC, pP->busAddr);
    if (r >= 0)
    {
       const U8 idxMaxRate= idxMaxNU16(pM->rate, 2);
@@ -526,10 +535,10 @@ int testADS1x15
          U8 cfgVer=FALSE;
          do
          {
-            r= lxi2cWriteRB(pC, pM->busAddr, fpb.rc.cfg, ADS1X_NRB);
+            r= lxi2cWriteRB(pC, pP->busAddr, fpb.rc.cfg, ADS1X_NRB);
             if ((pM->modeFlags & ADS1X_TEST_MODE_VERIFY) && (r >= 0))
             {
-               r= lxi2cReadRB(pC, pM->busAddr, cfgStatus, ADS1X_NRB);
+               r= lxi2cReadRB(pC, pP->busAddr, cfgStatus, ADS1X_NRB);
                if (r >= 0)
                {  // Device goes busy (OS1->0) immediately on write, so merge back in for check
                   cfgStatus[1] |= (fpb.rc.cfg[1] & ADS1X_FL0_OS);
@@ -544,11 +553,11 @@ int testADS1x15
          if (pM->modeFlags & ADS1X_TEST_MODE_POLL)
          {
             do { // poll status
-               r= lxi2cReadRB(pC, pM->busAddr, cfgStatus, ADS1X_NRB);
+               r= lxi2cReadRB(pC, pP->busAddr, cfgStatus, ADS1X_NRB);
             } while (((r < 0) || (0 == (cfgStatus[1] & ADS1X_FL0_OS))) && (++iR1 < 10));
          }
 
-         r= lxi2cReadRB(pC, pM->busAddr, fpb.rc.res, ADS1X_NRB); // read result
+         r= lxi2cReadRB(pC, pP->busAddr, fpb.rc.res, ADS1X_NRB); // read result
          if (r >= 0)
          {
             F32 dt=-1;
@@ -596,18 +605,21 @@ typedef struct
 {
    ADSReadParam param;
    int maxSamples;
-   char devPath[15]; // host device path
-   U8 flags;
+   char devPath[14]; // host device path
+   U8 hwID;
+   U8 busAddr;
+   U8 testFlags;
 } ADS1XArgs;
 
 static ADS1XArgs gArgs=
 {
    {  { 20, 250 },   // inner & outer rates
       { ADS1X_MUX0G, ADS1X_MUX1G, ADS1X_MUX2G, ADS1X_MUX3G }, 4,
-      0x48, ADS11, 0
+      0x0F, EXT_RTS_COUNT-1, 0    // maskAG, timeEst, modeFlags
+
    },
    32,   // samples
-   "/dev/i2c-1", 0
+   "/dev/i2c-1", ADS11, 0x48, 0
 };
 
 
@@ -625,7 +637,7 @@ static const char *desc[]=
    "sample rate",
    "auto gain test",
    "verbose diagnostic messages",
-   "help - display this text"
+   "help (display this text)"
 };
    const int n= sizeof(desc)/sizeof(desc[0]);
    report(OUT,"Usage : %s [-%s]\n", name, optCh);
@@ -637,8 +649,8 @@ static const char *desc[]=
 
 void argDump (ADS1XArgs *pA)
 {
-   report(OUT,"Device: devPath=%s, busAddr=%02X, Flags=%02X\n", pA->devPath, pA->param.busAddr, pA->flags);
-   report(OUT,"\tHWID:%d Rate= %d,%d (Hz) maxS=%d\n", pA->param.hwID, pA->param.rate[0], pA->param.rate[1], pA->maxSamples);
+   report(OUT,"Device: devPath=%s, busAddr=%02X, Flags=%02X\n", pA->devPath, pA->busAddr, pA->testFlags);
+   report(OUT,"\tHWID:%d Rate= %d, %d (Hz) maxS=%d\n", pA->hwID, pA->param.rate[0], pA->param.rate[1], pA->maxSamples);
    report(OUT,"\tmux[%d]={", pA->param.nMux); reportBytes(OUT, pA->param.mux, pA->param.nMux);
    report(OUT,"\t%s", "}\n");
 } // argDump
@@ -657,7 +669,7 @@ void argTrans (ADS1XArgs *pA, int argc, char *argv[])
       {
          case 'a' :
             sscanf(optarg, "%x", &t);
-            if (t <= 0x7F) { pA->param.busAddr= t; }
+            if (t <= 0x7F) { pA->busAddr= t; }
             break;
          case 'd' :
          {
@@ -667,7 +679,7 @@ void argTrans (ADS1XArgs *pA, int argc, char *argv[])
          }
          case 'i' :
             sscanf(optarg, "%d", &t);
-            if ((0x1 & t) == t) { pA->param.hwID= t; }
+            if ((0x1 & t) == t) { pA->hwID= t; }
             break;
          case 'm' :
             sscanf(optarg, "%d", &t);
@@ -683,13 +695,13 @@ void argTrans (ADS1XArgs *pA, int argc, char *argv[])
             if (t > 0) { pA->param.rate[0]= t; }
             break;
          case 'A' :
-            pA->flags|= ARG_AUTO;
+            pA->testFlags|= ARG_AUTO;
             break;
          case 'h' :
-            pA->flags|= ARG_HELP;
+            pA->testFlags|= ARG_HELP;
             break;
          case 'v' :
-            pA->flags|= ARG_VERBOSE;
+            pA->testFlags|= ARG_VERBOSE;
             pA->param.modeFlags|= ADS1X_MODE_VERBOSE;
             break;
      }
@@ -699,8 +711,8 @@ void argTrans (ADS1XArgs *pA, int argc, char *argv[])
       WARN_CALL("() - swapping rate order [%d,%d]\n", pA->param.rate[0], pA->param.rate[1]);
       SWAP(U16, pA->param.rate[0], pA->param.rate[1]);
    }
-   if (pA->flags & ARG_HELP) { usageMsg(argv[0]); }
-   if (pA->flags & ARG_VERBOSE) { argDump(pA); }
+   if (pA->testFlags & ARG_HELP) { usageMsg(argv[0]); }
+   if (pA->testFlags & ARG_VERBOSE) { argDump(pA); }
 } // argTrans
 
 LXI2CBusCtx gBusCtx={0,-1};
@@ -713,9 +725,9 @@ int main (int argc, char *argv[])
 
    if (lxi2cOpen(&gBusCtx, gArgs.devPath, 400))
    {
-      const ADSInstProp *pP= adsInitProp(NULL, 3.3065, gArgs.param.hwID);
+      const ADSInstProp *pP= adsInitProp(NULL, 3.3065, gArgs.hwID, gArgs.busAddr);
       gArgs.param.modeFlags|= ADS1X_MODE_XTIMING;
-      if (gArgs.flags & ARG_AUTO)
+      if (gArgs.testFlags & ARG_AUTO)
       {
          F32 rDiv[]= {2200, 330, 330, 0};
          r= testAutoGain(gArgs.maxSamples, &gBusCtx, pP, &(gArgs.param), rDiv);

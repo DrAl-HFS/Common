@@ -12,15 +12,16 @@
 
 /***/
 
-// Device installation reference data
+// Device installation reference data: deliberately transport-agnostic
+// (I2C bus device/interface descriptors belong to higher level).
 // Additional input conditioning (e.g. voltage divider)
-// might be described using this struct
+// might be described/linked to this struct?
 #define ADS_INST_FLAGS_DEFAULT 0
 typedef struct
 {
    F32 vdd; // Supply voltage, determines useful gain ID (measurement range)
    U8 hwID; // Hardware version
-   U8 flags; // Unused so far - serves as 32b alignment padding at present
+   U8 busAddr; // I2C bus address
    U8 minUGID, maxUGID; // Limits of useful gainID (derived from vdd)
 } ADSInstProp;
 
@@ -80,6 +81,6 @@ extern enum ADS1xRate ads1xSelectRate (const int targetRate, ADS1xHWID hwID);
 extern I16 ads1xRawFSR (ADS1xHWID hwID);
 
 // Initialise device installation properties (determined by device type and actual supply voltage)
-extern const ADSInstProp *adsInitProp (ADSInstProp *pP, const F32 vdd, const U8 hwID);
+extern const ADSInstProp *adsInitProp (ADSInstProp *pP, const F32 vdd, const U8 hwID, const U8 busAddr);
 
 #endif // ADS1X_UTIL_H
