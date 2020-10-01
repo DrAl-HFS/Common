@@ -116,6 +116,13 @@ int idxMaxNU16 (const U16 u[], int n)
 #define EXT_RTS_WRCFG_END (2)
 #define EXT_RTS_RDVAL_BGN (1)
 #define EXT_RTS_RDVAL_END (0)
+// Special extended values used to generate estimator parameters
+#define EXT_RTS_GEP01  (5) // EXT_RTS_RDVAL_END -> EXT_RTS_RDVAL_BGN
+#define EXT_RTS_GEP02  (6) // EXT_RTS_RDVAL_END -> EXT_RTS_WRCFG_END
+#define EXT_RTS_GEP03  (7) // EXT_RTS_RDVAL_END -> EXT_RTS_WRCFG_BGN
+#define EXT_RTS_GEP_BITS   (3)
+#define EXT_RTS_GEP_MASK   ((1<<EXT_RTS_GEP_BITS)-1)
+#define EXT_RTS_VAL_SHIFT  EXT_RTS_GEP_BITS
 
 typedef struct {  // TODO: reverse order
    RawTimeStamp ts[EXT_RTS_COUNT]; // channel start plus begin-end for two transactions (setup & read)
@@ -134,10 +141,15 @@ static EstimatorRTS e; // Haaack!!!
    if (timeEst >= EXT_RTS_COUNT)
    {
       pE= &e;
-      pE->idx[0]= EXT_RTS_WRCFG_END,
-      pE->idx[1]= EXT_RTS_RDVAL_BGN;
-      pE->r[0]=   0.5;
-      pE->r[1]=   1.0 - pE->r[0];
+      pE->idx[1]= EXT_RTS_RDVAL_END;
+      switch(timeEst & EXT_RTS_GEP_MASK)
+      {
+         case EXT_RTS_GEP01 : pE->idx[0]= EXT_RTS_RDVAL_BGN; break;
+         case EXT_RTS_GEP02 : pE->idx[0]= EXT_RTS_WRCFG_END; break;
+         case EXT_RTS_GEP03 : pE->idx[0]= EXT_RTS_WRCFG_BGN; break;
+      }
+      pE->r[1]=   0.02 + ((timeEst >> EXT_RTS_VAL_SHIFT) + 1) * 0.96 / (1<<(8-EXT_RTS_VAL_SHIFT));
+      pE->r[0]=   1.0 - pE->r[1];
       LOG_CALL("(%d) -> %d, %d, %G, %G\n", timeEst, pE->idx[0], pE->idx[1], pE->r[0], pE->r[1]);
    }
    return(pE);
@@ -772,10 +784,10 @@ void argTrans (ADS1XArgs *pA, int argc, char *argv[])
             sscanf(optarg, "%d", &t);
             if (t > 0) { pA->param.rate[0]= t; }
             break;
-         case 'T' : //
-            sscanf(optarg, "%d", &t);
-            if ((t < 0) || (t > EXT_RTS_COUNT)) { pA->param.timeEst= EXT_RTS_COUNT; }
-            else { pA->param.timeEst= t; }
+         case 'T' :
+            sscanf(optarg, "%X", &t);
+            //if ((t < 0) || (t > EXT_RTS_COUNT)) { pA->param.timeEst= EXT_RTS_COUNT; }
+            pA->param.timeEst= t;
             //packTE(EXT_RTS_WRCFG_END, EXT_RTS_RDVAL_BGN, 0.5); // EXT_RTS_RDVAL_END;
            break;
          case 'A' :
