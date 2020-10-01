@@ -508,15 +508,10 @@ void i2cArgTrans (LXI2CArgs *pA, int argc, char *argv[])
       }
    } while (ch > 0);
    if (n[1] >= n[0]) { pA->flags&= 0x0F; } // disable processing if only help/verbose specified
-   if (pA->flags & ARG_VERBOSE)
-   {
-      //report(OUT,"nArg: P%d A%d ?%d\n", n[0]-(n[1]+n[2]), n[1], n[2]);
-      argDump(pA);
-   } // pA->ping.modeFlags|= I2C_PING_VERBOSE;
-   if (pA->flags & ARG_HELP)
-   {
-      pingUsageMsg(argv[0]);
-   }
+   //report(OUT,"nArg: P%d A%d ?%d\n", n[0]-(n[1]+n[2]), n[1], n[2]);
+   if (pA->flags & ARG_VERBOSE) { argDump(pA); }
+   if (pA->flags & ARG_HELP) { pingUsageMsg(argv[0]); }
+   else if (0 == (pA->flags & ~ARG_VERBOSE)) { pA->flags|= ARG_PING; }
 } // i2cArgTrans
 
 /***/
@@ -528,7 +523,7 @@ int main (int argc, char *argv[])
    int r= -1;
 
    i2cArgTrans(&gArgs, argc, argv);
-   if (0 == (gArgs.flags & ~ARG_VERBOSE)) { gArgs.flags|= ARG_PING; }
+
    if (lxi2cOpen(&gBusCtx, gArgs.devPath, 400))
    {
       if (gArgs.flags & ARG_PING) { r= lxi2cPing(&gBusCtx, gArgs.busAddr, &(gArgs.ping), gArgs.flags); }

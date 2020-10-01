@@ -48,9 +48,10 @@ SUPP_HDR := $(SUPP_MOD:%=$(COM_DIR)/%.h)
 SUPP_OBJ := $(SUPP_MOD:%=$(OBJ_DIR)/%.o)
 
 
-LIBS := -lm -lrt
+LIBS := -lm
+# -lrt	Solaris "real-time" library, deprecated
 I2C_INCDEF := -I$(COM_DIR) -DLX_I2C_MAIN -DLX_I2C_TEST
-ADS_INCDEF := -I$(COM_DIR) -DADS1X_MAIN -DADS1X_TEST -DLX_I2C_TEST
+ADS_INCDEF := -I$(COM_DIR) -DADS1X_MAIN -DADS1X_TEST
 LSM_INCDEF := -I$(COM_DIR) -DLSM_MAIN -DLSM_TEST
 
 
