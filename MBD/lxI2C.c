@@ -399,8 +399,10 @@ int lxi2cPing (const LXI2CBusCtx *pC, U8 busAddr, const LXI2CPing *pP, U8 modeFl
 /*** PING ARGS ***/
 
 #define ARG_ACTION   0xF0  // Mask
-#define ARG_PING    (1<<7)
-#define ARG_DUMP    (1<<6)
+#define ARG_PING     (1<<7)
+#define ARG_DUMP     (1<<6)
+#define ARG_READ     (1<<5)
+#define ARG_WRITE    (1<<4)
 
 #define ARG_OPTION   0x0F  // Mask
 #define ARG_HELP    (1<<1)
@@ -425,8 +427,8 @@ static LXI2CArgs gArgs=
 
 void pingUsageMsg (const char name[])
 {
-static const char optCh[]="abcdetvh";
-static const char argCh[]="###### ";
+static const char optCh[]="abcdetPDRWvh";
+static const char argCh[]="######     ";
 static const char *desc[]=
 {
    "I2C bus address: 2digit hex (no prefix)",
@@ -435,6 +437,10 @@ static const char *desc[]=
    "device index (-> path /dev/i2c-# )",
    "maximum errors to ignore (-1 -> all)",
    "interval (nanoseconds) between messages",
+   "Ping",
+   "Dump",
+   "Read",
+   "Write",
    "verbose diagnostic messages",
    "help (display this text)"
 };
@@ -467,7 +473,7 @@ void i2cArgTrans (LXI2CArgs *pA, int argc, char *argv[])
    signed char ch, nCh;
    do
    {
-      ch= getopt(argc,argv,"a:b:c:d:e:t:hv");
+      ch= getopt(argc,argv,"a:b:c:d:e:t:PDRWhv");
       if (ch > 0)
       {
          switch(ch)
@@ -500,9 +506,14 @@ void i2cArgTrans (LXI2CArgs *pA, int argc, char *argv[])
                sscanf(optarg,"%d", &t);
                if (t > 0) { pA->ping.ivlNanoSec= t; }
                break;
+            case 'P' : pA->flags|= ARG_PING; break;
+            case 'D' : pA->flags|= ARG_DUMP; break;
+            case 'R' : pA->flags|= ARG_READ; break;
+            case 'W' : pA->flags|= ARG_WRITE; break; // TODO: Require payload
+            //
             case 'h' : n[1]++; pA->flags|= ARG_HELP; break;
             case 'v' : n[1]++; pA->flags|= ARG_VERBOSE; break;
-            default : n[2]++; break;
+            default : n[2]++; break; // unrecognised
          }
          n[0]++;
       }
@@ -524,7 +535,7 @@ int main (int argc, char *argv[])
 
    i2cArgTrans(&gArgs, argc, argv);
 
-   if (lxi2cOpen(&gBusCtx, gArgs.devPath, 400))
+   if ((gArgs.flags & ARG_ACTION) && lxi2cOpen(&gBusCtx, gArgs.devPath, 400))
    {
       if (gArgs.flags & ARG_PING) { r= lxi2cPing(&gBusCtx, gArgs.busAddr, &(gArgs.ping), gArgs.flags); }
       if (gArgs.flags & ARG_DUMP) { r= lxi2cDumpDevAddr(&gBusCtx, gArgs.busAddr, 0xFF,0x00); }
