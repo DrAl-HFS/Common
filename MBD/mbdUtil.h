@@ -42,10 +42,12 @@ INLINE float rcpF (float x) { if (0 != x) { return(1.0 / x); } else return(0); }
 
 #endif // INLINE
 
-// DEPRECATED: use <util.h> versions
-// Read/write n bytes big-endian
-//extern int rdnbe (const U8 b[], const int n);
-//extern void wrnbe (U8 b[], int x, const int n);
+// Kernighans method for MCU vs. in-place-recursive bit-parallel for pipelined CPU
+extern int bitCountU8 (U8 u);
+
+// NB : choice of int counter is deliberate here: size_t creates dependancy
+// on <stdef> and vulnerability to negative results (arithmetic expression for n)
+extern int bitCountNU8 (const U8 u[], int n);
 
 #ifdef __cplusplus
 } // extern "C"

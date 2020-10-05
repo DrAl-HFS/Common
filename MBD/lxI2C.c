@@ -525,6 +525,19 @@ void i2cArgTrans (LXI2CArgs *pA, int argc, char *argv[])
    else if (0 == (pA->flags & ~ARG_VERBOSE)) { pA->flags|= ARG_PING; }
 } // i2cArgTrans
 
+#include "mbdUtil.h"
+int hack (void)
+{
+static const U8 b[]={
+0b00000000,
+0b10111111, 0b00111110, 0b00111110, 0b00111111,
+0b10111110, 0b00000111, 0b10000110, 0b00110000,
+0b00110000, 0b00111111, 0b10111110, 0b00111111,
+0b10111110, 0b01111111, 0b11111110, 0b01111111,
+0b00000000};
+   LOG_CALL("() - %d bytes, %d bits set\n", sizeof(b), bitCountNU8(b, sizeof(b)));
+   return(0);
+} // hack
 /***/
 
 LXI2CBusCtx gBusCtx={0,-1};
@@ -532,6 +545,8 @@ LXI2CBusCtx gBusCtx={0,-1};
 int main (int argc, char *argv[])
 {
    int r= -1;
+
+   return hack();
 
    i2cArgTrans(&gArgs, argc, argv);
 

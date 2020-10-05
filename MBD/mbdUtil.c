@@ -20,16 +20,23 @@ float rcpF (float x) { if (0 != x) { return(1.0 / x); } else return(0); }
 
 #endif // indef INLINE
 
-/* DEPRECATED Read n bytes big-endian
-int rdnbe (const U8 b[], const int n)
+int bitCountU8 (U8 u)
 {
-   int r= b[0];
-   for (int i= 1; i<n; i++) { r= (r<<8) | b[i]; }
-   return(r);
-} // rdnbe
+#if 0 // Good for 8bit MCU (no bit shifting)
+   int c=0;
+   for (; u; c++) { u&= u - 1; } // strip high bit
+   return(c);
+#else // Good for pipelined CPU (no branching)
+   u= u - ((u >> 1) & 0x55);          // odd & even bits -> 4 packed 2bit numbers
+   u= (u & 0x33) + ((u >> 2) & 0x33); //    -> 2 packed 4bit "nybbles"
+   return((u & 0x0F) + (u >> 4));    //    -> 4 bit result
+#endif
+} // bitCountU8
 
-void wrnbe (U8 b[], int x, const int n)
+int bitCountNU8 (const U8 u[], int n)
 {
-   for (int i= n-1; i>0; i--) { b[i]= x & 0xFF; x>>= 8; }
-} // rdnbe
-*/
+   int c=0;
+   for (int i=0; i<n; i++) { c+= bitCountU8(u[i]); }
+// __GNUC__ -> __builtin_popcount(u[i])
+   return(c);
+} // bitCountNU8
