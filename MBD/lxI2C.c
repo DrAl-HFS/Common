@@ -398,11 +398,12 @@ int lxi2cPing (const LXI2CBusCtx *pC, U8 busAddr, const LXI2CPing *pP, U8 modeFl
 
 /*** PING ARGS ***/
 
-#define ARG_ACTION   0xF0  // Mask
-#define ARG_PING     (1<<7)
-#define ARG_DUMP     (1<<6)
-#define ARG_READ     (1<<5)
-#define ARG_WRITE    (1<<4)
+#define ARG_ACTION 0xF0  // Mask
+#define ARG_PING   (1<<7)
+#define ARG_DUMP   (1<<6)
+#define ARG_XPT    (1<<5)
+//#define ARG_READ   (1<<5)
+//#define ARG_WRITE  (1<<4)
 
 #define ARG_OPTION   0x0F  // Mask
 #define ARG_HELP    (1<<1)
@@ -422,12 +423,12 @@ static LXI2CArgs gArgs=
       1000, 10, // n, e
       1000000  // interval (ns)
    },
-   "/dev/i2c-1", 0x48, ARG_PING
+   "/dev/i2c-1", 0x48, 0
 };
 
 void pingUsageMsg (const char name[])
 {
-static const char optCh[]="abcdetPDRWvh";
+static const char optCh[]="abcdetPDXvh";
 static const char argCh[]="######     ";
 static const char *desc[]=
 {
@@ -439,8 +440,8 @@ static const char *desc[]=
    "interval (nanoseconds) between messages",
    "Ping",
    "Dump",
-   "Read",
-   "Write",
+   "eXperimental"
+   //"Read","Write",
    "verbose diagnostic messages",
    "help (display this text)"
 };
@@ -473,7 +474,7 @@ void i2cArgTrans (LXI2CArgs *pA, int argc, char *argv[])
    signed char ch, nCh;
    do
    {
-      ch= getopt(argc,argv,"a:b:c:d:e:t:PDRWhv");
+      ch= getopt(argc,argv,"a:b:c:d:e:t:PDXhv");
       if (ch > 0)
       {
          switch(ch)
@@ -508,8 +509,9 @@ void i2cArgTrans (LXI2CArgs *pA, int argc, char *argv[])
                break;
             case 'P' : pA->flags|= ARG_PING; break;
             case 'D' : pA->flags|= ARG_DUMP; break;
-            case 'R' : pA->flags|= ARG_READ; break;
-            case 'W' : pA->flags|= ARG_WRITE; break; // TODO: Require payload
+            case 'X' : pA->flags|= ARG_XPT; break;
+            //case 'R' : pA->flags|= ARG_READ; break;
+            //case 'W' : pA->flags|= ARG_WRITE; break; // TODO: Require payload
             //
             case 'h' : n[1]++; pA->flags|= ARG_HELP; break;
             case 'v' : n[1]++; pA->flags|= ARG_VERBOSE; break;
@@ -518,26 +520,17 @@ void i2cArgTrans (LXI2CArgs *pA, int argc, char *argv[])
          n[0]++;
       }
    } while (ch > 0);
-   if (n[1] >= n[0]) { pA->flags&= 0x0F; } // disable processing if only help/verbose specified
    //report(OUT,"nArg: P%d A%d ?%d\n", n[0]-(n[1]+n[2]), n[1], n[2]);
    if (pA->flags & ARG_VERBOSE) { argDump(pA); }
    if (pA->flags & ARG_HELP) { pingUsageMsg(argv[0]); }
-   else if (0 == (pA->flags & ~ARG_VERBOSE)) { pA->flags|= ARG_PING; }
+   // disable processing if only help/verbose specified
+   // otherwise add default action if necessary
+   if (n[1] >= n[0]) { pA->flags&= ARG_OPTION; }
+   else if (0 == (pA->flags & ARG_ACTION)) { pA->flags|= ARG_PING; }
 } // i2cArgTrans
 
-#include "mbdUtil.h"
-int hack (void)
-{
-static const U8 b[]={
-0b00000000,
-0b10111111, 0b00111110, 0b00111110, 0b00111111,
-0b10111110, 0b00000111, 0b10000110, 0b00110000,
-0b00110000, 0b00111111, 0b10111110, 0b00111111,
-0b10111110, 0b01111111, 0b11111110, 0b01111111,
-0b00000000};
-   LOG_CALL("() - %d bytes, %d bits set\n", sizeof(b), bitCountNU8(b, sizeof(b)));
-   return(0);
-} // hack
+#include "ledMatrix.h"
+
 /***/
 
 LXI2CBusCtx gBusCtx={0,-1};
@@ -546,12 +539,11 @@ int main (int argc, char *argv[])
 {
    int r= -1;
 
-   return hack();
-
    i2cArgTrans(&gArgs, argc, argv);
 
    if ((gArgs.flags & ARG_ACTION) && lxi2cOpen(&gBusCtx, gArgs.devPath, 400))
    {
+      if (gArgs.flags & ARG_XPT) { r= ledMatHack(&gBusCtx); }
       if (gArgs.flags & ARG_PING) { r= lxi2cPing(&gBusCtx, gArgs.busAddr, &(gArgs.ping), gArgs.flags); }
       if (gArgs.flags & ARG_DUMP) { r= lxi2cDumpDevAddr(&gBusCtx, gArgs.busAddr, 0xFF,0x00); }
 

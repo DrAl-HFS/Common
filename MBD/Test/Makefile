@@ -24,7 +24,7 @@ OBJ_DIR := obj
 # list from which file names are generated. Anything
 # not fitting the pattern (header without body or
 # vice versa) requires explicit addition...
-I2C_MOD := lxI2C lxTiming mbdUtil
+I2C_MOD := lxI2C lxTiming ledMatrix mbdUtil
 I2C_SRC := $(I2C_MOD:%=$(SRC_DIR)/%.c)
 I2C_HDR := $(I2C_MOD:%=$(HDR_DIR)/%.h)
 I2C_OBJ := $(I2C_MOD:%=$(OBJ_DIR)/%.o)
@@ -90,5 +90,5 @@ clean :
 	rm -f ti2c ads1x lsm9ds1 $(OBJ_DIR)/*
 
 run : ti2c
-	./$< -v
+	./$< -Xv
 
