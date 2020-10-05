@@ -543,7 +543,7 @@ int main (int argc, char *argv[])
 
    if ((gArgs.flags & ARG_ACTION) && lxi2cOpen(&gBusCtx, gArgs.devPath, 400))
    {
-      if (gArgs.flags & ARG_XPT) { r= ledMatHack(&gBusCtx); }
+      if (gArgs.flags & ARG_XPT) { r= ledMatHack(&gBusCtx, 0x75); }
       if (gArgs.flags & ARG_PING) { r= lxi2cPing(&gBusCtx, gArgs.busAddr, &(gArgs.ping), gArgs.flags); }
       if (gArgs.flags & ARG_DUMP) { r= lxi2cDumpDevAddr(&gBusCtx, gArgs.busAddr, 0xFF,0x00); }
 

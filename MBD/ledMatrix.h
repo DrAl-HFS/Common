@@ -7,6 +7,6 @@
 #include "lxI2C.h"
 
 
-extern int ledMatHack (const LXI2CBusCtx *pC);
+extern int ledMatHack (const LXI2CBusCtx *pC, const U8 busAddr);
 
 #endif // LED_MATRIX_H
