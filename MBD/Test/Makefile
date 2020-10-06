@@ -24,10 +24,16 @@ OBJ_DIR := obj
 # list from which file names are generated. Anything
 # not fitting the pattern (header without body or
 # vice versa) requires explicit addition...
-I2C_MOD := lxI2C lxTiming ledMatrix mbdUtil
+I2C_MOD := lxI2C lxTiming
 I2C_SRC := $(I2C_MOD:%=$(SRC_DIR)/%.c)
 I2C_HDR := $(I2C_MOD:%=$(HDR_DIR)/%.h)
 I2C_OBJ := $(I2C_MOD:%=$(OBJ_DIR)/%.o)
+
+I2C_TST_MOD := ledMatrix ledMapRGB mbdUtil
+I2C_TST_SRC := $(I2C_TST_MOD:%=$(SRC_DIR)/%.c)
+I2C_TST_HDR := $(I2C_TST_MOD:%=$(HDR_DIR)/%.h)
+I2C_TST_OBJ := $(I2C_TST_MOD:%=$(OBJ_DIR)/%.o)
+I2C_TST_HDR+= $(HDR_DIR)/lumissil.h
 
 ADS_MOD := ads1xDev ads1xUtil
 ADS_SRC := $(ADS_MOD:%=$(SRC_DIR)/%.c)
@@ -73,8 +79,8 @@ $(OBJ_DIR)/%.o : %.o
 
 
 # Full build from source
-ti2c : $(I2C_SRC) $(I2C_HDR) $(SUPP_OBJ) $(MAKEFILE)
-	$(CC) $(OPT) $(I2C_INCDEF) $(LIBS) $(I2C_SRC) $(SUPP_OBJ) -o $@
+ti2c : $(I2C_SRC) $(I2C_HDR) $(I2C_TST_SRC) $(I2C_TST_HDR) $(SUPP_OBJ) $(MAKEFILE)
+	$(CC) $(OPT) $(I2C_INCDEF) $(LIBS) $(I2C_SRC) $(I2C_TST_SRC) $(SUPP_OBJ) -o $@
 
 ads1x : $(I2C_SRC) $(I2C_HDR) $(ADS_SRC) $(ADS_HDR) $(SUPP_OBJ)  $(MAKEFILE)
 	$(CC) $(OPT) $(ADS_INCDEF) $(LIBS) $(I2C_SRC) $(ADS_SRC) $(SUPP_OBJ) -o $@
