@@ -63,14 +63,14 @@ typedef struct
 
 enum LMSLReg
 {
-   LMSL_REG_CONFIG=0x00,
-   LMSL_REG_PICTURE,   //0x01
-   LMSL_REG_AUTOPLAY1, //0x02
-   LMSL_REG_AUTOPLAY2=0x03,
-   // 0x04 unused
-   LMSL_REG_DISPOPT=0x05,
+   LMSL_REG_CONFIG=0x00,   // Mode, Autoplay start frame
+   LMSL_REG_PICTURE,   // Static display
+   LMSL_REG_AUTOPLAY1,  // Loop, frames
+   LMSL_REG_AUTOPLAY2=0x03,   // Rate
+   // 0x04 unused - scratch
+   LMSL_REG_DISPOPT=0x05,  // Intensity, Blink
    LMSL_REG_AUDSYNC,   //0x06
-   LMSL_REG_FRAMESTAT, //0x07
+   LMSL_REG_FRAMESTAT, //0x07 read-only
    LMSL_REG_BREATHE1,  //0x08
    LMSL_REG_BREATHE2,  //0x09
    LMSL_REG_SHUTDOWN,  //0x0A
