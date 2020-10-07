@@ -149,6 +149,30 @@ U8 getChanPtrs (const U8 *p[3], U8 m)
 
 /***/
 
+void ledMapRGB
+(
+   U8 pwm[], // Destination
+   const U8 rgb[][3],  // tuples
+   const int n,     // Number of values to store <= SHIM_LED_COUNT
+   const U8 modes
+)
+{
+   const U8 vIdxMask= getVIM(modes);
+   const U8 *pChan[3];
+
+   getChanPtrs(pChan, CHAN_MODE_RGB);
+
+   for (int i=0; i<n; i++)
+   {
+      U8 j= i;
+      if (modes & CHAN_MODE_REVERSE) { j= n-i; }
+      j &= vIdxMask;
+      pwm[ pChan[0][i] ]= rgb[j][0];
+      pwm[ pChan[1][i] ]= rgb[j][1];
+      pwm[ pChan[2][i] ]= rgb[j][2];
+   }
+} // ledMapRGB
+
 // pwm[LMSL_PWM_BYTES]
 void ledMapChanPWM (U8 pwm[], const U8 v[], const int n, const U8 chan[], const U8 modes)
 {

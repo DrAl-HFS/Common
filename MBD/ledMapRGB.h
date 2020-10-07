@@ -36,6 +36,14 @@ extern const ChanMap gMapLED;
 
 /***/
 
+extern void ledMapRGB
+(
+   U8 pwm[], // Destination
+   const U8 rgb[][3],  // tuples
+   const int n,     // Number of values to store <= SHIM_LED_COUNT
+   const U8 modes
+);
+
 // pwm[LMSL_PWM_BYTES]
 // Retain or deprecate ? Marginally more efficient for single channel...
 extern void ledMapChanPWM
