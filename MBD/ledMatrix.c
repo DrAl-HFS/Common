@@ -18,6 +18,38 @@ F32 gammaNorm (F32 x)
    return(1);
 } // gammaNorm
 
+// Interval [0,1] normalised unit conversion of HSV to RGB
+// Lightness (v) may be scaled as required for the target RGB
+// but Hue and Saturation must be normalised for correct operation
+void hsv2rgb (F32 rgbN[3], const F32 hN, const F32 sN, const F32 v)
+{
+// r=v*(1+s*(cos(h)-1))
+// g=v*(1+s*(cos(h-2.09439)-1))
+// b=v*(1+s*(cos(h+2.09439)-1))
+   //if (h > 1) { h-= floor(h); }
+   //if (v < 0) { for (int i= 0; i<3; i++) { rgbN[i]= 0; } return; }
+   const F32 hRad= hN * 2 * M_PI; // Norm -> rad
+   F32 cosRad[3];
+   cosRad[0]= cosf(hRad);
+   cosRad[1]= cosf(hRad - 2.09439); // - 2/3 PI
+   cosRad[2]= cosf(hRad + 2.09439); // + 2/3 PI
+   // Vectorisable iteration
+   for (int i= 0; i<3; i++) { rgbN[i]= v * (1 + sN * (cosRad[i] - 1)); }
+} // hsv2rgb
+
+void tstH (const int n)
+{
+   F32 rgb[3], h=0, d=1;
+
+   if (n > 1) { d/= n; }
+   for (int i=0; i <= n; i++)
+   {
+      hsv2rgb(rgb, h, 0.5, 0.5);
+      LOG("H%G -> %G,%G,%G\n", h, rgb[0], rgb[1], rgb[2]);
+      h+= d;
+   }
+} // tstH
+
 void dumpReg (const ControlPage *pCP)
 {
    U8 reg; // temp for brevity
@@ -60,6 +92,8 @@ int ledMatHack (const LXI2CBusCtx *pC, const U8 busAddr)
    FramePage   frames[8];
    ControlPage cp;
    U8 i, n, t, pageSel[2]={LMSL_REG_PAGE_SEL,LMSL_CTRL_PAGE};
+
+   tstH(11);
 
    r= lxi2cReadRB(pC, busAddr, pageSel, sizeof(pageSel));
    if (LMSL_CTRL_PAGE != pageSel[1])
@@ -111,11 +145,9 @@ int ledMatHack (const LXI2CBusCtx *pC, const U8 busAddr)
       {
 static const U8 cMap[]={0x0,0x1,0x2,0x4,0x6,0x5,0x3,0x7}; // B R G B C M Y W
          ledMapMultiChanPWM(frames[iPage].pwm, pwmI, SHIM_LED_COUNT, chanMode | cMap[iPage]<<4);
-/*
-         if (n & 0x1) { ledMapChanPWM(frames[iPage].pwm, pwmI, SHIM_LED_COUNT, gMapLED.red, chanMode); }
-         if (n & 0x2) { ledMapChanPWM(frames[iPage].pwm, pwmI, SHIM_LED_COUNT, gMapLED.green, chanMode); }
-         if (n & 0x4) { ledMapChanPWM(frames[iPage].pwm, pwmI, SHIM_LED_COUNT, gMapLED.blue, chanMode); }
-*/
+
+         //ledMapChanPWM(frames[iPage].pwm, pwmI, SHIM_LED_COUNT, gMapLED.red, chanMode);
+
          n= sizeof(FramePage);
          r= lxi2cWriteRB(pC, busAddr, frames[iPage].addr, n);
          LOG("Write Frame Page [%d] - %d Bytes r=%d\n", iPage, n, r);
