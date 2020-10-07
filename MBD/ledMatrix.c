@@ -13,7 +13,7 @@
 // Logical to perceptual mapping for [0,1] interval
 F32 gammaNorm (F32 x)
 {
-   if (x < 0.995) { return(1.00800 * powf(x,1.69500)); }
+   if (x < 0.995) { return(1.008 * powf(x,1.695)); }
    //else
    return(1);
 } // gammaNorm
@@ -56,18 +56,11 @@ void setFade (U8 r8[2], U8 enable, U8 ex2FadeOutT, U8 ex2OffT, U8 ex2FadeInT)
 
 int ledMatHack (const LXI2CBusCtx *pC, const U8 busAddr)
 {
-   //LOG_CALL("() - %d bytes, %d bits set\n", sizeof(b), bitCountNU8(b, sizeof(b)));
    int r;
    FramePage   frames[8];
    ControlPage cp;
    U8 i, n, t, pageSel[2]={LMSL_REG_PAGE_SEL,LMSL_CTRL_PAGE};
 
-   memset(frames, 0x00, sizeof(frames));
-   // All pages start at 0x00
-   //for (int i=0; i<8; i++) { frames[i].addr[0]= 0x00; }
-   cp.addr[0]= 0x00;
-   //memset(cp.reg, 0xFF, sizeof(cp.reg));
-   //for (int i=0; i<13; i++) printf("%d : %02X\n", i, cp.reg[i]);
    r= lxi2cReadRB(pC, busAddr, pageSel, sizeof(pageSel));
    if (LMSL_CTRL_PAGE != pageSel[1])
    {
@@ -76,57 +69,53 @@ int ledMatHack (const LXI2CBusCtx *pC, const U8 busAddr)
       r= lxi2cWriteRB(pC, busAddr, pageSel, sizeof(pageSel));
    }
 
+   cp.addr[0]= 0x00;
    r= lxi2cReadRB(pC, busAddr, cp.addr, sizeof(ControlPage));
    LOG("Read Control Page - r=%d\n", r);
    if (r >= 0) { dumpReg(&cp); }
 
-   //pageSel[1]= LMSL_DATA_PAGE1; // Frame index 0
-   //r= lxi2cWriteRB(pC, busAddr, pageSel, sizeof(pageSel));
+   // Setup intensity table
    U8 pwmI[SHIM_LED_COUNT];
-   const F32 bias= 7.0 / 0xFF;
+   const F32 bias= 6.5 / 0xFF;
    const F32 delta= (1.0 - bias) / (SHIM_LED_COUNT-1);
    for (int i=0; i < SHIM_LED_COUNT; i++)
    {
       F32 r= i * delta + bias;
       F32 g= gammaNorm(r);
+      U8 ru= 0.5 + 0xFF * r;
       U8 gu= 0.5 + 0xFF * g;
-      LOG("pwmI[%d] %G -> %G (%G -> %u)\n", i, r, g, 0xFF * r, gu);
+      LOG("pwmI[%d] %G -> %G (%u -> %u)\n", i, r, g, ru, gu);
       pwmI[i]= gu;
    }
 
+   // Initialise first frame
+   frames[0].addr[0]= 0x00;
+   r= ledMapSetBits(frames[0].enable, LMSL_FLAG_BYTES);
+   memcpy(frames[0].blink, frames[0].enable, LMSL_FLAG_BYTES);
+   memset(frames[0].pwm, 0x00, LMSL_PWM_BYTES);
+   const U8 chanMode= 0x85;
+
+   // Setup each page and send to device
    for (int iPage=0; iPage<LMSL_FRAME_PAGE_COUNT; iPage++)
    {
       pageSel[1]= iPage;
       r= lxi2cWriteRB(pC, busAddr, pageSel, sizeof(pageSel));
       if (0)
-      {
+      {  // copy existing from device
          r= lxi2cReadRB(pC, busAddr, frames[iPage].addr, sizeof(FramePage));
          LOG("Read Frame Page - r=%d\n", r);
       }
       else if (iPage > 0) { memcpy(frames+iPage, frames+0, sizeof(frames[0])); }
-      else
-      {
-         r= ledMapSetBits(frames[iPage].enable, LMSL_FLAG_BYTES);
-         memcpy(frames[iPage].blink, frames[iPage].enable, LMSL_FLAG_BYTES);
-         r= ledMapSetBits(frames[iPage].blink, LMSL_FLAG_BYTES);
-         //memset(frames[iPage].blink, 0x00, LMSL_FLAG_BYTES);
-         //memset(frames[iPage].pwm, 0x00, LMSL_PWM_BYTES);
-      }
-      //for (int i=0; i<LMSL_FLAG_BYTES; i+= 2) LOG("%d : %02X %02X\n", i, frames[iPage].enable[i], frames[iPage].enable[i+1]);
 
       if (r >= 0)
       {
-         //U8 v[SHIM_LED_COUNT]= {0x00, }; //0x1F, 0xFF, 0x1F, 0x00, 0x1F};
-         //for (int i=0; i <= iPage; i++) { v[SHIM_LED_COUNT-(1+i)]= 0x0F; }
 static const U8 cMap[]={0x0,0x1,0x2,0x4,0x6,0x5,0x3,0x7}; // B R G B C M Y W
-         n= cMap[iPage];
-         //U8 m= SHIM_LED_COUNT / 2, w= iPage+1;
-         //if (iPage > 1) { for (int i=(m-w); i < (m+w); i++) { v[i]= 0x7F; } }
-
-         if (n & 0x1) { ledMapChanPWM(frames[iPage].pwm, pwmI, SHIM_LED_COUNT, -1, gMapLED.red); }
-         if (n & 0x2) { ledMapChanPWM(frames[iPage].pwm, pwmI, SHIM_LED_COUNT, -1, gMapLED.green); }
-         if (n & 0x4) { ledMapChanPWM(frames[iPage].pwm, pwmI, SHIM_LED_COUNT, -1, gMapLED.blue); }
-
+         ledMapMultiChanPWM(frames[iPage].pwm, pwmI, SHIM_LED_COUNT, chanMode | cMap[iPage]<<4);
+/*
+         if (n & 0x1) { ledMapChanPWM(frames[iPage].pwm, pwmI, SHIM_LED_COUNT, gMapLED.red, chanMode); }
+         if (n & 0x2) { ledMapChanPWM(frames[iPage].pwm, pwmI, SHIM_LED_COUNT, gMapLED.green, chanMode); }
+         if (n & 0x4) { ledMapChanPWM(frames[iPage].pwm, pwmI, SHIM_LED_COUNT, gMapLED.blue, chanMode); }
+*/
          n= sizeof(FramePage);
          r= lxi2cWriteRB(pC, busAddr, frames[iPage].addr, n);
          LOG("Write Frame Page [%d] - %d Bytes r=%d\n", iPage, n, r);
@@ -148,8 +137,8 @@ static const U8 cMap[]={0x0,0x1,0x2,0x4,0x6,0x5,0x3,0x7}; // B R G B C M Y W
       cp.reg[LMSL_REG_AUTOPLAY1]= 0;   // infinite
       cp.reg[LMSL_REG_AUTOPLAY2]= 0 & 0x3F;   // Frame duration (0->64) *11ms
       n= 2 + LMSL_REG_AUTOPLAY2;
-      if (1) //blink)
-      {  // no blink with autoplay ?
+      if (1) //blink
+      {
          cp.reg[LMSL_REG_DISPOPT]= 0; // off |= (1<<3) | 1;
          n= 2+LMSL_REG_DISPOPT;
       }
