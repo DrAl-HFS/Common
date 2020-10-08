@@ -7,23 +7,34 @@
 
 /***/
 
+#define MAP_MIN_VAL 8
 #define MAP_MAX_VAL 134
 
-const ChanMap gMapLED=
-{
-   {  118, 117, 116, 115, 114, 113, 112,
-      134, 133, 132, 131, 130, 129, 128,
-      127, 121, 122, 123, 124, 125, 126,
-      15, 8, 9, 10, 11, 12, 13 },
-   {  69, 68, 84, 83, 82, 81, 80,
-      21, 20, 19, 18, 17, 33, 32,
-      47, 41, 25, 26, 27, 28, 29,
-      95, 89, 90, 91, 92, 76, 77 },
-   {  85, 101, 100, 99, 98, 97, 96,
-      37, 36, 35, 34, 50, 49, 48,
-      63, 57, 58, 42, 43, 44, 45,
-      111, 105, 106, 107, 108, 109, 93 }
-};
+const ChanMapU gMapLED=
+{  // NB: extra braces required for union
+#if 1
+ { // First union member is Flattened array
+   118, 117, 116, 115, 114, 113, 112,  134, 133, 132, 131, 130, 129, 128,
+   127, 121, 122, 123, 124, 125, 126,  15, 8, 9, 10, 11, 12, 13,
+
+   69, 68, 84, 83, 82, 81, 80,      21, 20, 19, 18, 17, 33, 32,
+   47, 41, 25, 26, 27, 28, 29,      95, 89, 90, 91, 92, 76, 77,
+
+   85, 101, 100, 99, 98, 97, 96,    37, 36, 35, 34, 50, 49, 48,
+   63, 57, 58, 42, 43, 44, 45,      111, 105, 106, 107, 108, 109, 93
+ }
+#else
+ { // First union member is struct of arrays
+   {  118, 117, 116, 115, 114, 113, 112,  134, 133, 132, 131, 130, 129, 128,  127, 121, 122, 123, 124, 125, 126,  15, 8, 9, 10, 11, 12, 13 },
+   {  69, 68, 84, 83, 82, 81, 80, 21,  20, 19, 18, 17, 33, 32, 47,   41, 25, 26, 27, 28, 29, 95,   89, 90, 91, 92, 76, 77 },
+   {  85, 101, 100, 99, 98, 97, 96,    37, 36, 35, 34, 50, 49, 48,   63, 57, 58, 42, 43, 44, 45,   111, 105, 106, 107, 108, 109, 93 }
+ }
+#endif
+}; // gMapLED
+
+
+/***/
+
 #if 1
 // Test hacks
 static const U8 hackMap[SHIM_LED_COUNT][3]=
@@ -152,64 +163,59 @@ U8 getChanPtrs (const U8 *p[3], U8 m)
 void ledMapRGB
 (
    U8 pwm[], // Destination
-   const U8 rgb[][3],  // tuples
+   const U8 vxxx[],  // tuples
    const int n,     // Number of values to store <= SHIM_LED_COUNT
+   const int stride[2],
    const U8 modes
 )
 {
-   const U8 vIdxMask= getVIM(modes);
-   const U8 *pChan[3];
-
-   getChanPtrs(pChan, CHAN_MODE_RGB);
-
-   for (int i=0; i<n; i++)
+   const U8 *pChan[3], nC= getChanPtrs(pChan, CHAN_MODE_RGB);
+   if (nC > 0)
    {
-      U8 j= i;
-      if (modes & CHAN_MODE_REVERSE) { j= n-i; }
-      j &= vIdxMask;
-      pwm[ pChan[0][i] ]= rgb[j][0];
-      pwm[ pChan[1][i] ]= rgb[j][1];
-      pwm[ pChan[2][i] ]= rgb[j][2];
+      const U8 vIdxMask= getVIM(modes);
+
+      for (int i=0; i<n; i++)
+      {
+         int j= i;
+         if (modes & CHAN_MODE_REVERSE) { j= n-i; }
+         j &= vIdxMask;
+#if 1
+         U8 k= 0;
+         j*= stride[1];
+         do { pwm[ pChan[k][i] ]= vxxx[j]; j+= stride[0]; } while (++k < nC);
+#else
+         pwm[ pChan[0][i] ]= rgb[j][0];
+         pwm[ pChan[1][i] ]= rgb[j][1];
+         pwm[ pChan[2][i] ]= rgb[j][2];
+#endif
+      }
    }
 } // ledMapRGB
 
-// pwm[LMSL_PWM_BYTES]
-void ledMapChanPWM (U8 pwm[], const U8 v[], const int n, const U8 chan[], const U8 modes)
-{
-   const U8 vIdxMask= getVIM(modes);
-   if (modes & CHAN_MODE_REVERSE)
-   {  // reverse order
-      for (int i=0; i<n; i++) { pwm[ chan[i] ]= v[(n-i) & vIdxMask]; }
-   }
-   else
-   {
-      for (int i=0; i<n; i++) { pwm[ chan[i] ]= v[i & vIdxMask]; }
-   }
-} // ledMapChanPWM
-
 int ledMapMultiChanPWM (U8 pwm[], const U8 v[], const int n, const U8 modes)
 {
-   const U8 vIdxMask= getVIM(modes);
    const U8 *pChan[3], nC= getChanPtrs(pChan, modes);
 
    if (nC > 0)
    {
+      const U8 vIdxMask= getVIM(modes);
+
       if (modes & CHAN_MODE_REVERSE)
       {
          for (int i=0; i<n; i++)
          {
-            const U8 u= v[(n-i) & vIdxMask];
-            int j= 0;
-            do { pwm[ pChan[j][i] ]= u; } while (++j < nC);
+            const U8 u= v[i & vIdxMask];
+            U8 k= 0;
+            do { pwm[ pChan[k][n-i] ]= u; } while (++k < nC);
          }
       }
       else
       {
          for (int i=0; i<n; i++)
          {
-            const U8 u= v[(n-i) & vIdxMask];
-            int j= 0;
-            do { pwm[ pChan[j][i] ]= u; } while (++j < nC);
+            const U8 u= v[i & vIdxMask];
+            U8 k= 0;
+            do { pwm[ pChan[k][i] ]= u; } while (++k < nC);
          }
       }
       return(n);
@@ -217,17 +223,46 @@ int ledMapMultiChanPWM (U8 pwm[], const U8 v[], const int n, const U8 modes)
    return(0);
 } // ledMapMultiChanPWM
 
-// bm[LMSL_FLAG_BYTES]
-int ledMapSetBits (U8 bm[], const int n)
+// (pwm[LMSL_PWM_BYTES], v[n], gMapLED.red, CHAN_MODE_REVERSE|3)
+void ledMapChanPWM (U8 pwm[], const U8 v[], const int n, const U8 chan[], const U8 modes)
 {
-   if ((n<<3) >= MAP_MAX_VAL)
-   {
-      memset(bm, 0, n);
-      setBitsU8(bm, hackMap[0], SHIM_LED_COUNT*3);
-      validateBits(bm);
-      return(n);
+   const U8 vIdxMask= getVIM(modes);
+   if (modes & CHAN_MODE_REVERSE)
+   {  // reverse order
+      for (int i=0; i<n; i++) { pwm[ chan[n-i] ]= v[i & vIdxMask]; }
    }
-   ERROR_CALL("(%d) - bad map\n", n);
+   else
+   {
+      for (int i=0; i<n; i++) { pwm[ chan[i] ]= v[i & vIdxMask]; }
+   }
+} // ledMapChanPWM
+
+// bm[LMSL_FLAG_BYTES]
+int ledMapSetBits (U8 bm[], const int nBM, int count, int offset, const U8 modes)
+{
+   if ((nBM<<3) >= MAP_MAX_VAL)
+   {
+      memset(bm, 0, nBM);
+      if ((0 == offset) && (SHIM_LED_COUNT == count) && (CHAN_MODE_RGB == (modes & CHAN_MODE_RGB)))
+      {
+         setBitsU8(bm, gMapLED.chan, SHIM_LED_COUNT*3);
+         //validateBits(bm);
+         return(nBM);
+      }
+      else
+      {
+         if ((offset < 0) && (count + offset > 0)) { count+= offset; offset= 0; }
+         if (offset < SHIM_LED_COUNT)
+         {
+            if ((count <= 0) || (count+offset > SHIM_LED_COUNT)) { count= SHIM_LED_COUNT-offset; }
+            if (modes & CHAN_MODE_RED)   { setBitsU8(bm, gMapLED.red+offset, count); }
+            if (modes & CHAN_MODE_GREEN) { setBitsU8(bm, gMapLED.green+offset, count); }
+            if (modes & CHAN_MODE_BLUE)  { setBitsU8(bm, gMapLED.blue+offset, count); }
+            return(nBM);
+         }
+      }
+   }
+   ERROR_CALL("(%d) - bad map\n", nBM);
    return(0);
 } // ledMapSetBits
 

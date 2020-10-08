@@ -124,13 +124,15 @@ int ledMatHack (const LXI2CBusCtx *pC, const U8 busAddr)
 
    // Initialise first frame
    frames[0].addr[0]= 0x00;
-   r= ledMapSetBits(frames[0].enable, LMSL_FLAG_BYTES);
+   r= ledMapSetBits(frames[0].enable, LMSL_FLAG_BYTES, SHIM_LED_COUNT, 0, CHAN_MODE_RGB);
    memcpy(frames[0].blink, frames[0].enable, LMSL_FLAG_BYTES);
    memset(frames[0].pwm, 0x00, LMSL_PWM_BYTES);
    const U8 chanMode= 0x85;
 
    // Setup each page and send to device
-   for (int iPage=0; iPage<LMSL_FRAME_PAGE_COUNT; iPage++)
+   //for (int iPage=0; iPage<LMSL_FRAME_PAGE_COUNT; iPage++)
+   int iPage= LMSL_FRAME_PAGE_COUNT;
+   while (--iPage >= 0)
    {
       pageSel[1]= iPage;
       r= lxi2cWriteRB(pC, busAddr, pageSel, sizeof(pageSel));
@@ -144,9 +146,14 @@ int ledMatHack (const LXI2CBusCtx *pC, const U8 busAddr)
       if (r >= 0)
       {
 static const U8 cMap[]={0x0,0x1,0x2,0x4,0x6,0x5,0x3,0x7}; // B R G B C M Y W
+#if 0
+static const int stride[2]={0,1};
+         ledMapRGB(frames[iPage].pwm, pwmI, SHIM_LED_COUNT, stride, chanMode | cMap[iPage]<<4);
+#else
          ledMapMultiChanPWM(frames[iPage].pwm, pwmI, SHIM_LED_COUNT, chanMode | cMap[iPage]<<4);
-
-         //ledMapChanPWM(frames[iPage].pwm, pwmI, SHIM_LED_COUNT, gMapLED.red, chanMode);
+         //int iC= (iPage % 3) * SHIM_LED_COUNT;
+         //ledMapChanPWM(frames[iPage].pwm, pwmI, SHIM_LED_COUNT, gMapLED.chan + iC, chanMode);
+#endif
 
          n= sizeof(FramePage);
          r= lxi2cWriteRB(pC, busAddr, frames[iPage].addr, n);
