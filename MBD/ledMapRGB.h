@@ -49,7 +49,7 @@ extern void ledMapMultiChanPWM
    const U8 modes
 );
 
-// DEPRECATE: supersceded by preceding routin
+// DEPRECATE: superseded by preceding routine
 // Single input pattern to multiple pwm destination channels
 extern int ledMap1NChanPWM (U8 pwm[], const U8 v[], const int n, const U8 modes);
 
