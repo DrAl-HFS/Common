@@ -169,25 +169,23 @@ void ledMapRGB
    const U8 modes
 )
 {
-   const U8 *pChan[3], nC= getChanPtrs(pChan, CHAN_MODE_RGB);
+   const U8 *pChan[3], nC= getChanPtrs(pChan, modes);
    if (nC > 0)
    {
       const U8 vIdxMask= getVIM(modes);
 
       for (int i=0; i<n; i++)
       {
-         int j= i;
-         if (modes & CHAN_MODE_REVERSE) { j= n-i; }
-         j &= vIdxMask;
-#if 1
+         int j= (i & vIdxMask) * stride[1];
          U8 k= 0;
-         j*= stride[1];
-         do { pwm[ pChan[k][i] ]= vxxx[j]; j+= stride[0]; } while (++k < nC);
-#else
-         pwm[ pChan[0][i] ]= rgb[j][0];
-         pwm[ pChan[1][i] ]= rgb[j][1];
-         pwm[ pChan[2][i] ]= rgb[j][2];
-#endif
+         if (modes & CHAN_MODE_REVERSE)
+         {
+            do { pwm[ pChan[k][n-i] ]= vxxx[j]; j+= stride[0]; } while (++k < nC);
+         }
+         else
+         {
+            do { pwm[ pChan[k][i] ]= vxxx[j]; j+= stride[0]; } while (++k < nC);
+         }
       }
    }
 } // ledMapRGB
