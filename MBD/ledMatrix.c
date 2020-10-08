@@ -11,43 +11,90 @@
 /***/
 
 // Logical to perceptual mapping for [0,1] interval
-F32 gammaNormF32 (F32 x)
+F32 normGammaCorrectF32 (F32 x)
 {
    if (x < 0.995) { return(1.008 * powf(x,1.695)); }
    //else
    return(1);
-} // gammaNormF32
+} // normGammaCorrectF32
 
 // Interval [0,1] normalised unit conversion of HSV to RGB
-// Lightness (v) may be scaled as required for the target RGB
-// but Hue and Saturation must be normalised for correct operation
-void hsv2rgb (F32 rgbN[3], const F32 hN, const F32 sN, const F32 v)
+// Lightness (v) scale is arbitrary but Hue and Saturation
+// must be normalised for correct operation
+void normHSV2RGBF32 (F32 rgbN[3], const F32 hN, const F32 sN, const F32 v)
 {
 // r=v*(1+s*(cos(h)-1))
 // g=v*(1+s*(cos(h-2.09439)-1))
 // b=v*(1+s*(cos(h+2.09439)-1))
    //if (h > 1) { h-= floor(h); }
    //if (v < 0) { for (int i= 0; i<3; i++) { rgbN[i]= 0; } return; }
-   const F32 hRad= hN * 2 * M_PI; // Norm -> rad
+   const F32 hRad= hN * 2 * M_PI; // Norm -> radians
    F32 cosRad[3];
    cosRad[0]= cosf(hRad);
    cosRad[1]= cosf(hRad - 2.09439); // - 2/3 PI
    cosRad[2]= cosf(hRad + 2.09439); // + 2/3 PI
    // Vectorisable iteration
    for (int i= 0; i<3; i++) { rgbN[i]= v * (1 + sN * (cosRad[i] - 1)); }
-} // hsv2rgb
+} // normHSV2RGBF32
+
+void normHSV2RGBU8 (U8 rgbU8[3], const F32 hsvNF32[3])
+{
+   F32 rgbF32[3];
+   normHSV2RGBF32(rgbF32, hsvNF32[0], hsvNF32[1], normGammaCorrectF32(hsvNF32[2]) * 0xFF);
+   for (int i= 0; i<3; i++) { rgbU8[i]= rgbF32[i]+0.5; }
+} // normHSV2RGBU8
+
+void lerpHSV2RGBU8 (U8 rgbU8[], const F32 hsvA[3], const F32 hsvB[3], const int n)
+{
+   if (n > 0)
+   {
+      normHSV2RGBU8(rgbU8, hsvA);
+      if (n > 1)
+      {
+         int m= n-1;
+         normHSV2RGBU8(rgbU8+3*m, hsvB);
+         if (n > 2)
+         {
+            F32 tHSV[3], dHSV[3];
+            F32 r= 1.0 / m;
+            for (int i= 0; i<3; i++) { dHSV[i]= r * (hsvB[i] - hsvA[i]); }
+            for (int t= 1; t<m; t++)
+            {
+               for (int i= 0; i<3; i++) { tHSV[i]= hsvA[i] + t * dHSV[i]; }
+               normHSV2RGBU8(rgbU8+3*t, tHSV);
+               LOG("t=%d\n",t);
+            }
+         }
+      }
+   }
+} // lerpHSV2RGBU8
 
 void tstH (const int n)
 {
+#if 0
    F32 rgb[3], h=0, d=1;
 
    if (n > 1) { d/= n; }
+   LOG("H [%d] ->\tR\tG\tB\n", n);
    for (int i=0; i <= n; i++)
    {
-      hsv2rgb(rgb, h, 0.5, 0.5);
-      LOG("H%G -> %G,%G,%G\n", h, rgb[0], rgb[1], rgb[2]);
+      normHSV2RGBF32(rgb, h, 0.5, 0.5);
+      LOG("%6.4G -> %5.3G, %5.3G, %5.3G\n", h, rgb[0], rgb[1], rgb[2]);
       h+= d;
    }
+#else
+   F32 hsv[2][3]= { {0.1,1,0.125}, {0.9,0.5,0.75} };
+   U8 rgb[3*10];
+   if (n > 10) return;
+   memset(rgb, -1, sizeof(rgb));
+   lerpHSV2RGBU8(rgb, hsv[0], hsv[1], n);
+   for (int i=0; i < n; i++)
+   {
+      int j= 3*i;
+      LOG("[%d] : ( %u, %u, %u )\n", i, rgb[j+0], rgb[j+1], rgb[j+2]);
+   }
+#endif
+   LOG("%s\n","---");
 } // tstH
 
 void dumpReg (const ControlPage *pCP)
@@ -89,12 +136,16 @@ void setFade (U8 r8[2], U8 enable, U8 ex2FadeOutT, U8 ex2OffT, U8 ex2FadeInT)
 int chanTestSetData (FramePage *pFP, const U8 v[], const U8 i, const U8 testID, U8 chanMode)
 {
 static const U8 cMap[]={0x0,0x1,0x2,0x4,0x6,0x5,0x3,0x7}; // B R G B C M Y W
-static const int stride[2]={0,1};
+static const int strideI[2]={0,1};
+static const int strideRGB[2]={1,3};
    chanMode|= cMap[i]<<4;
    switch (testID)
    {
+      case 3 :
+         ledMapMultiChanPWM(pFP->pwm, v, SHIM_LED_COUNT, strideRGB, chanMode|CHAN_MODE_RGB);
+         break;
       case 2 :
-         ledMapMultiChanPWM(pFP->pwm, v, SHIM_LED_COUNT, stride, chanMode);
+         ledMapMultiChanPWM(pFP->pwm, v, SHIM_LED_COUNT, strideI, chanMode);
          break;
       case 1 :
          ledMap1NChanPWM(pFP->pwm, v, SHIM_LED_COUNT, chanMode);
@@ -108,6 +159,28 @@ static const int stride[2]={0,1};
    return(sizeof(FramePage));
 } // chanTestSetData
 
+void genVI (U8 v[], const int n)
+{
+   const F32 bias= 6.5 / 0xFF;
+   const F32 delta= (1.0 - bias) / (n-1);
+   for (int i=0; i < n; i++)
+   {
+      F32 r= i * delta + bias;
+      F32 g= normGammaCorrectF32(r);
+      U8 gu= 0.5 + 0xFF * g;
+      //U8 ru= 0.5 + 0xFF * r;
+      //LOG("pwmI[%d] %G -> %G (%u -> %u)\n", i, r, g, ru, gu);
+      v[i]= gu;
+   }
+} // genVI
+
+void genVRGB (U8 v[], const int n)
+{
+   F32 hsv[2][3]= { {-0.01, 1.0, 0.75}, {1.01, 1.0, 0.75} };
+
+   lerpHSV2RGBU8(v, hsv[0], hsv[1], n);
+} // genVRGB
+
 int ledMatHack (const LXI2CBusCtx *pC, const U8 busAddr)
 {
    int r;
@@ -115,7 +188,7 @@ int ledMatHack (const LXI2CBusCtx *pC, const U8 busAddr)
    ControlPage cp;
    U8 i, n, t, pageSel[2]={LMSL_REG_PAGE_SEL,LMSL_CTRL_PAGE};
 
-   tstH(11);
+   tstH(8);
 
    r= lxi2cReadRB(pC, busAddr, pageSel, sizeof(pageSel));
    if (LMSL_CTRL_PAGE != pageSel[1])
@@ -132,17 +205,11 @@ int ledMatHack (const LXI2CBusCtx *pC, const U8 busAddr)
 
    // Setup intensity table
    U8 pwmI[SHIM_LED_COUNT];
-   const F32 bias= 6.5 / 0xFF;
-   const F32 delta= (1.0 - bias) / (SHIM_LED_COUNT-1);
-   for (int i=0; i < SHIM_LED_COUNT; i++)
-   {
-      F32 r= i * delta + bias;
-      F32 g= gammaNormF32(r);
-      U8 ru= 0.5 + 0xFF * r;
-      U8 gu= 0.5 + 0xFF * g;
-      LOG("pwmI[%d] %G -> %G (%u -> %u)\n", i, r, g, ru, gu);
-      pwmI[i]= gu;
-   }
+   genVI(pwmI, SHIM_LED_COUNT);
+
+   U8 pwmRGB[3*SHIM_LED_COUNT];
+   genVRGB(pwmRGB, SHIM_LED_COUNT);
+
 
    // Initialise first frame
    frames[0].addr[0]= 0x00;
@@ -165,8 +232,7 @@ int ledMatHack (const LXI2CBusCtx *pC, const U8 busAddr)
       }
       else if (iPage > 0) { memcpy(frames+iPage, frames+0, sizeof(frames[0])); }
 
-      n= chanTestSetData(frames+iPage, pwmI, iPage, 2, 0x85);
-
+      n= chanTestSetData(frames+iPage, pwmRGB, iPage, 3, 0x85);
       if (n > 0)
       {
          r= lxi2cWriteRB(pC, busAddr, frames[iPage].addr, n);
