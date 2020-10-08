@@ -160,7 +160,7 @@ U8 getChanPtrs (const U8 *p[3], U8 m)
 
 /***/
 
-void ledMapRGB
+void ledMapMultiChanPWM
 (
    U8 pwm[], // Destination
    const U8 vxxx[],  // tuples
@@ -188,9 +188,9 @@ void ledMapRGB
          }
       }
    }
-} // ledMapRGB
+} // ledMapMultiChanPWM
 
-int ledMapMultiChanPWM (U8 pwm[], const U8 v[], const int n, const U8 modes)
+int ledMap1NChanPWM (U8 pwm[], const U8 v[], const int n, const U8 modes)
 {
    const U8 *pChan[3], nC= getChanPtrs(pChan, modes);
 
@@ -219,7 +219,7 @@ int ledMapMultiChanPWM (U8 pwm[], const U8 v[], const int n, const U8 modes)
       return(n);
    }
    return(0);
-} // ledMapMultiChanPWM
+} // ledMap1NChanPWM
 
 // (pwm[LMSL_PWM_BYTES], v[n], gMapLED.red, CHAN_MODE_REVERSE|3)
 void ledMapChanPWM (U8 pwm[], const U8 v[], const int n, const U8 chan[], const U8 modes)

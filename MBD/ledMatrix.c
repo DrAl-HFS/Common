@@ -11,12 +11,12 @@
 /***/
 
 // Logical to perceptual mapping for [0,1] interval
-F32 gammaNorm (F32 x)
+F32 gammaNormF32 (F32 x)
 {
    if (x < 0.995) { return(1.008 * powf(x,1.695)); }
    //else
    return(1);
-} // gammaNorm
+} // gammaNormF32
 
 // Interval [0,1] normalised unit conversion of HSV to RGB
 // Lightness (v) may be scaled as required for the target RGB
@@ -86,6 +86,28 @@ void setFade (U8 r8[2], U8 enable, U8 ex2FadeOutT, U8 ex2OffT, U8 ex2FadeInT)
    if (enable) { r8[1]|= 1<<4; }
 } // setFade
 
+int chanTestSetData (FramePage *pFP, const U8 v[], const U8 i, const U8 testID, U8 chanMode)
+{
+static const U8 cMap[]={0x0,0x1,0x2,0x4,0x6,0x5,0x3,0x7}; // B R G B C M Y W
+static const int stride[2]={0,1};
+   chanMode|= cMap[i]<<4;
+   switch (testID)
+   {
+      case 2 :
+         ledMapMultiChanPWM(pFP->pwm, v, SHIM_LED_COUNT, stride, chanMode);
+         break;
+      case 1 :
+         ledMap1NChanPWM(pFP->pwm, v, SHIM_LED_COUNT, chanMode);
+         break;
+      default :
+      {
+         const int iC= (i % 3) * SHIM_LED_COUNT;
+         ledMapChanPWM(pFP->pwm, v, SHIM_LED_COUNT, gMapLED.chan + iC, chanMode);
+      }
+   }
+   return(sizeof(FramePage));
+} // chanTestSetData
+
 int ledMatHack (const LXI2CBusCtx *pC, const U8 busAddr)
 {
    int r;
@@ -115,7 +137,7 @@ int ledMatHack (const LXI2CBusCtx *pC, const U8 busAddr)
    for (int i=0; i < SHIM_LED_COUNT; i++)
    {
       F32 r= i * delta + bias;
-      F32 g= gammaNorm(r);
+      F32 g= gammaNormF32(r);
       U8 ru= 0.5 + 0xFF * r;
       U8 gu= 0.5 + 0xFF * g;
       LOG("pwmI[%d] %G -> %G (%u -> %u)\n", i, r, g, ru, gu);
@@ -127,7 +149,7 @@ int ledMatHack (const LXI2CBusCtx *pC, const U8 busAddr)
    r= ledMapSetBits(frames[0].enable, LMSL_FLAG_BYTES, SHIM_LED_COUNT, 0, CHAN_MODE_RGB);
    memcpy(frames[0].blink, frames[0].enable, LMSL_FLAG_BYTES);
    memset(frames[0].pwm, 0x00, LMSL_PWM_BYTES);
-   const U8 chanMode= 0x84;
+
 
    // Setup each page and send to device
    //for (int iPage=0; iPage<LMSL_FRAME_PAGE_COUNT; iPage++)
@@ -143,19 +165,10 @@ int ledMatHack (const LXI2CBusCtx *pC, const U8 busAddr)
       }
       else if (iPage > 0) { memcpy(frames+iPage, frames+0, sizeof(frames[0])); }
 
-      if (r >= 0)
-      {
-static const U8 cMap[]={0x0,0x1,0x2,0x4,0x6,0x5,0x3,0x7}; // B R G B C M Y W
-#if 1
-static const int stride[2]={0,1};
-         ledMapRGB(frames[iPage].pwm, pwmI, SHIM_LED_COUNT, stride, chanMode | cMap[iPage]<<4);
-#else
-         ledMapMultiChanPWM(frames[iPage].pwm, pwmI, SHIM_LED_COUNT, chanMode | cMap[iPage]<<4);
-         //int iC= (iPage % 3) * SHIM_LED_COUNT;
-         //ledMapChanPWM(frames[iPage].pwm, pwmI, SHIM_LED_COUNT, gMapLED.chan + iC, chanMode);
-#endif
+      n= chanTestSetData(frames+iPage, pwmI, iPage, 2, 0x85);
 
-         n= sizeof(FramePage);
+      if (n > 0)
+      {
          r= lxi2cWriteRB(pC, busAddr, frames[iPage].addr, n);
          LOG("Write Frame Page [%d] - %d Bytes r=%d\n", iPage, n, r);
       }

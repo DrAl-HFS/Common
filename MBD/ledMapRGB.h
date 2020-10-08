@@ -8,6 +8,9 @@
 
 #include "mbdUtil.h"
 
+// Notes: routines here are (lightly) coupled to Pimoroni LEDshim charlieplexing structure.
+// May factor this out (if necessary) at some point i.e. if another charlieplexed device
+// looks useful...
 
 /***/
 
@@ -37,7 +40,7 @@ extern const ChanMapU gMapLED;
 // (Caveat: R,G,B ordering required)
 // Stride allows flexible organisation
 // e.g. (1,3) for interleaved RGB, (n,1) for planar
-extern void ledMapRGB
+extern void ledMapMultiChanPWM
 (
    U8 pwm[], // Destination
    const U8 vxxx[], // tuples of dimension <= stride[1]
@@ -46,9 +49,9 @@ extern void ledMapRGB
    const U8 modes
 );
 
-
+// DEPRECATE: supersceded by preceding routin
 // Single input pattern to multiple pwm destination channels
-extern int ledMapMultiChanPWM (U8 pwm[], const U8 v[], const int n, const U8 modes);
+extern int ledMap1NChanPWM (U8 pwm[], const U8 v[], const int n, const U8 modes);
 
 // Single input pattern to single pwm destination channel
 // Permits offsetting channel map to store contiguous
