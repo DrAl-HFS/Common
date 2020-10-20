@@ -40,6 +40,10 @@ typedef union { U64 u64; struct { U8 u8[8]; }; } UU64;
 typedef union { U32 u32; struct { U8 u8[4]; }; } UU32;
 typedef union { U16 u16; struct { U8 u8[2]; }; } UU16;
 
+// Compact descriptor for fragment within small buffer
+// Size units determined by usage context (commonly bytes)
+typedef struct { U16 offset, len; } FragBuff16;
+
 #ifdef __cplusplus
 } // extern "C"
 #endif

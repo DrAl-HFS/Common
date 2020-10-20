@@ -19,14 +19,8 @@ extern "C" {
 
 /***/
 
-
 //#ifdef LSM_TEST
-#define LSM_TEST_MODE_VERIFY  (1<<7)
-#define LSM_TEST_MODE_SLEEP   (1<<6)
-#define LSM_TEST_MODE_POLL    (1<<5)
-#define LSM_TEST_MODE_ROTMUX  (1<<4)
-#define LSM_TEST_MODE_TUNE    (1<<3)
-#define LSM_TEST_MODE_VERBOSE (1<<0)
+//#define LSM_TEST_MODE_
 
 extern int testIMU (const LXI2CBusCtx *pC, const U8 dev[2], const U8 maxIter);
 

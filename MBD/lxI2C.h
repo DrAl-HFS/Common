@@ -52,6 +52,11 @@ typedef struct
 
 extern Bool32 lxi2cOpen (LXI2CBusCtx *pBC, const char *path, const int clk);
 
+// Simple read without write (for stream interface)
+extern int lxi2cRead (const LXI2CBusCtx *pBC, const U8 busAddr, U8 b[], const U8 nB);
+// extern int lxi2cWrite (const LXI2CBusCtx *pBC, const U8 busAddr, const U8 b[], const U8 nB);
+
+// Register interface
 extern int lxi2cReadRB (const LXI2CBusCtx *pBC, const U8 busAddr, U8 regBytes[], const U8 nRB);
 extern int lxi2cWriteRB (const LXI2CBusCtx *pBC, const U8 busAddr, const U8 regBytes[], const U8 nRB);
 

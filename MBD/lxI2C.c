@@ -78,6 +78,14 @@ Bool32 lxi2cOpen (LXI2CBusCtx *pBC, const char *path, const int clk)
    m[1].buf=    pB;
 #endif
 
+int lxi2cRead (const LXI2CBusCtx *pBC, const U8 busAddr, U8 b[], const U8 nB)
+{
+   struct i2c_msg m[]= {
+      { .addr= busAddr,  .flags= I2C_M_RD,  .len= nB,  .buf= b } };
+   struct i2c_rdwr_ioctl_data d={ m, 1 };
+   return ioctl(pBC->fd, I2C_RDWR, &d);
+} // lxi2cRead
+
 int lxi2cReadRB (const LXI2CBusCtx *pBC, const U8 busAddr, U8 regBytes[], const U8 nRB)
 {
    struct i2c_msg m[]= {
@@ -529,48 +537,10 @@ void i2cArgTrans (LXI2CArgs *pA, int argc, char *argv[])
    else if (0 == (pA->flags & ARG_ACTION)) { pA->flags|= ARG_PING; }
 } // i2cArgTrans
 
-#include "ledMatrix.h"
-
 /***/
 
-// M8 GPS
-enum UBloxReg
-{  // Only three registers: all read only
-   UBLX_REG_NBYTE_HI=0xFD,
-   UBLX_REG_NBYTE_LO, //=0xFE
-   UBLX_REG_DATASTREAM=0xFF
-};
-
-int ubloxHack (const LXI2CBusCtx *pC, const U8 busAddr)
-{
-   U8 buffer[40]={UBLX_REG_NBYTE_HI,};
-   int r= lxi2cReadRB(pC, busAddr, buffer, 3);
-   if (r >= 0)
-   {
-      const U16 n= rdI16BE(buffer+1);
-      LOG_CALL("() - %u bytes avail\n", n);
-      if (n > 0)
-      {
-         U16 c, d=0, t= 0;
-         const signed char *pMsg= (void*)(buffer+1);
-         memset(buffer+1, 0, sizeof(buffer)-1);
-         buffer[0]= UBLX_REG_DATASTREAM;
-         do
-         {
-            c= MIN(32,n-t);
-            r= lxi2cReadRB(pC, busAddr, buffer, 1+c);
-            t+= c;
-            if ((pMsg[0] > 0) && (0 == pMsg[c]))
-            {
-               d+= c;
-               LOG("%s", pMsg);
-            }
-         } while ((r >= 0) && (t < n));
-         LOG("\n\t- %u payload bytes read, %u chars displayed, r=%d\n", t, d, r);
-      }
-   }
-   return(r);
-} // ubloxHack
+#include "ledMatrix.h"
+#include "ubxUtil.h"
 
 // Default bus address selector
 U8 defBA (U8 a, U8 d)
