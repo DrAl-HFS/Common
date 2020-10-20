@@ -181,7 +181,7 @@ void genVRGB (U8 v[], const int n)
    lerpHSV2RGBU8(v, hsv[0], hsv[1], n);
 } // genVRGB
 
-int ledMatHack (const LXI2CBusCtx *pC, const U8 busAddr)
+int ledMatHack (const LXI2CBusCtx *pC, const U8 busAddr, const U8 modeFlags)
 {
    int r;
    FramePage   frames[8];
@@ -280,6 +280,16 @@ int ledMatHack (const LXI2CBusCtx *pC, const U8 busAddr)
    r= lxi2cReadRB(pC, busAddr, cp.addr, sizeof(ControlPage));
    LOG("Read Control Page - r=%d\n", r);
    if (r >= 0) { dumpReg(&cp); }
+
+   if (MODE_SHUTDOWN & modeFlags)
+   {
+      sleep(10);
+      if (LMSL_CTRL_PAGE == pageSel[1])
+      {
+         U8 sd[2]= {LMSL_REG_SHUTDOWN, 0x00}; // shutdown
+         r= lxi2cWriteRB(pC, busAddr, sd, 2);
+      }
+   }
 
    if (r > 0) { r= 0; }
    return(r);

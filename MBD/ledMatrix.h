@@ -13,6 +13,12 @@
 
 /***/
 
-extern int ledMatHack (const LXI2CBusCtx *pC, const U8 busAddr);
+// LM_ ???
+#define MODE_SHUTDOWN (0x80)
+
+
+/***/
+
+extern int ledMatHack (const LXI2CBusCtx *pC, const U8 busAddr, const U8 modeFlags);
 
 #endif // LED_MATRIX_H

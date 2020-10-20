@@ -401,9 +401,8 @@ int lxi2cPing (const LXI2CBusCtx *pC, U8 busAddr, const LXI2CPing *pP, U8 modeFl
 #define ARG_ACTION 0xF0  // Mask
 #define ARG_PING   (1<<7)
 #define ARG_DUMP   (1<<6)
-#define ARG_XPT    (1<<5)
-//#define ARG_READ   (1<<5)
-//#define ARG_WRITE  (1<<4)
+#define ARG_XPT    (1<<5) // hack1 ?
+#define ARG_HACK   (1<<4)
 
 #define ARG_OPTION   0x0F  // Mask
 #define ARG_HELP    (1<<1)
@@ -423,12 +422,12 @@ static LXI2CArgs gArgs=
       1000, 10, // n, e
       1000000  // interval (ns)
    },
-   "/dev/i2c-1", 0x48, 0
+   "/dev/i2c-1", -1, 0
 };
 
 void pingUsageMsg (const char name[])
 {
-static const char optCh[]="abcdetPDXvh";
+static const char optCh[]="abcdetPDXHvh";
 static const char argCh[]="######     ";
 static const char *desc[]=
 {
@@ -441,7 +440,7 @@ static const char *desc[]=
    "Ping",
    "Dump",
    "eXperimental"
-   //"Read","Write",
+   "Hack",
    "verbose diagnostic messages",
    "help (display this text)"
 };
@@ -474,7 +473,7 @@ void i2cArgTrans (LXI2CArgs *pA, int argc, char *argv[])
    signed char ch, nCh;
    do
    {
-      ch= getopt(argc,argv,"a:b:c:d:e:t:PDXhv");
+      ch= getopt(argc,argv,"a:b:c:d:e:t:PDXHvh");
       if (ch > 0)
       {
          switch(ch)
@@ -510,11 +509,12 @@ void i2cArgTrans (LXI2CArgs *pA, int argc, char *argv[])
             case 'P' : pA->flags|= ARG_PING; break;
             case 'D' : pA->flags|= ARG_DUMP; break;
             case 'X' : pA->flags|= ARG_XPT; break;
+            case 'H' : pA->flags|= ARG_HACK; break;
             //case 'R' : pA->flags|= ARG_READ; break;
             //case 'W' : pA->flags|= ARG_WRITE; break; // TODO: Require payload
             //
-            case 'h' : n[1]++; pA->flags|= ARG_HELP; break;
             case 'v' : n[1]++; pA->flags|= ARG_VERBOSE; break;
+            case 'h' : n[1]++; pA->flags|= ARG_HELP; break;
             default : n[2]++; break; // unrecognised
          }
          n[0]++;
@@ -533,6 +533,54 @@ void i2cArgTrans (LXI2CArgs *pA, int argc, char *argv[])
 
 /***/
 
+// M8 GPS
+enum UBloxReg
+{  // Only three registers: all read only
+   UBLX_REG_NBYTE_HI=0xFD,
+   UBLX_REG_NBYTE_LO, //=0xFE
+   UBLX_REG_DATASTREAM=0xFF
+};
+
+int ubloxHack (const LXI2CBusCtx *pC, const U8 busAddr)
+{
+   U8 buffer[40]={UBLX_REG_NBYTE_HI,};
+   int r= lxi2cReadRB(pC, busAddr, buffer, 3);
+   if (r >= 0)
+   {
+      const U16 n= rdI16BE(buffer+1);
+      LOG_CALL("() - %u bytes avail\n", n);
+      if (n > 0)
+      {
+         U16 c, d=0, t= 0;
+         const signed char *pMsg= (void*)(buffer+1);
+         memset(buffer+1, 0, sizeof(buffer)-1);
+         buffer[0]= UBLX_REG_DATASTREAM;
+         do
+         {
+            c= MIN(32,n-t);
+            r= lxi2cReadRB(pC, busAddr, buffer, 1+c);
+            t+= c;
+            if ((pMsg[0] > 0) && (0 == pMsg[c]))
+            {
+               d+= c;
+               LOG("%s", pMsg);
+            }
+         } while ((r >= 0) && (t < n));
+         LOG("\n\t- %u payload bytes read, %u chars displayed, r=%d\n", t, d, r);
+      }
+   }
+   return(r);
+} // ubloxHack
+
+// Default bus address selector
+U8 defBA (U8 a, U8 d)
+{
+   if ((a >= 0x03) && (a <= 0x77)) { return(a); }
+   // else
+   if ((d >= 0x03) && (d <= 0x77)) { return(d); }
+   return(0x00);
+} // defBA
+
 LXI2CBusCtx gBusCtx={0,-1};
 
 int main (int argc, char *argv[])
@@ -543,8 +591,9 @@ int main (int argc, char *argv[])
 
    if ((gArgs.flags & ARG_ACTION) && lxi2cOpen(&gBusCtx, gArgs.devPath, 400))
    {
-      if (gArgs.flags & ARG_XPT) { r= ledMatHack(&gBusCtx, 0x75); }
-      if (gArgs.flags & ARG_PING) { r= lxi2cPing(&gBusCtx, gArgs.busAddr, &(gArgs.ping), gArgs.flags); }
+      if (gArgs.flags & ARG_HACK) { r= ubloxHack(&gBusCtx, defBA(gArgs.busAddr, 0x42) ); }
+      if (gArgs.flags & ARG_XPT) { r= ledMatHack(&gBusCtx, defBA(gArgs.busAddr, 0x75), MODE_SHUTDOWN); }
+      if (gArgs.flags & ARG_PING) { r= lxi2cPing(&gBusCtx, defBA(gArgs.busAddr, 0x48), &(gArgs.ping), gArgs.flags); }
       if (gArgs.flags & ARG_DUMP) { r= lxi2cDumpDevAddr(&gBusCtx, gArgs.busAddr, 0xFF,0x00); }
 
       lxi2cClose(&gBusCtx);
