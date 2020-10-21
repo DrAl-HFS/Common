@@ -29,7 +29,7 @@ I2C_SRC := $(I2C_MOD:%=$(SRC_DIR)/%.c)
 I2C_HDR := $(I2C_MOD:%=$(HDR_DIR)/%.h)
 I2C_OBJ := $(I2C_MOD:%=$(OBJ_DIR)/%.o)
 
-I2C_TST_MOD := ledMatrix ledMapRGB mbdUtil ubxUtil
+I2C_TST_MOD := ledMatrix ledMapRGB mbdUtil ubxDev ubxUtil
 I2C_TST_SRC := $(I2C_TST_MOD:%=$(SRC_DIR)/%.c)
 I2C_TST_HDR := $(I2C_TST_MOD:%=$(HDR_DIR)/%.h)
 I2C_TST_OBJ := $(I2C_TST_MOD:%=$(OBJ_DIR)/%.o)

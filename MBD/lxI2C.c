@@ -540,7 +540,7 @@ void i2cArgTrans (LXI2CArgs *pA, int argc, char *argv[])
 /***/
 
 #include "ledMatrix.h"
-#include "ubxUtil.h"
+#include "ubxDev.h"
 
 // Default bus address selector
 U8 defBA (U8 a, U8 d)
