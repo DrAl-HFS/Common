@@ -1,4 +1,4 @@
-// Common/MBD/ubxUtil.h - utility code for UBlox M8 GPS module
+// Common/MBD/ubxUtil.h - utility code for u-blox GPS module
 // https://github.com/DrAl-HFS/Common.git
 // Licence: GPL V3
 // (c) Project Contributors Oct 2020
@@ -6,10 +6,10 @@
 #ifndef UBX_UTIL_H
 #define UBX_UTIL_H
 
-//include "ubxM8.h"
-//#include "util.h"
+#include "ubxM8.h"
+#include "util.h"
 #include "mbdUtil.h"
-#include "lxI2C.h" // temp ? for debug / flexibility
+
 
 /***/
 
@@ -17,6 +17,17 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+typedef struct
+{
+   const U8 preamble[2]; // { 0xB5,0x62 }
+   U8 classID[2], lengthLE[2];
+} UBXM8Header;
+// U8 payload[1+]
+typedef struct { U8 checksum[2]; } UBXM8Footer;
+
+// typedef struct { U8 classID[2]; FragBuff16 fb } UBXFragBuff; ???
+
 
 /***/
 
@@ -36,11 +47,6 @@ extern int ubxGetPayload (FragBuff16 *pFB, const U8 b[], const int n);
 // stops when no further fragments can be stored. Otherwise entire buffer is scanned.
 // Returns number of valid messages found.
 extern int ubxScanPayloads (FragBuff16 fb[], const int maxFB, const U8 b[], const int n);
-
-//extern int test (const LXI2CBusCtx *pC, const U8 dev[2], const U8 maxIter);
-extern int ubloxHack (const LXI2CBusCtx *pC, const U8 busAddr);
-
-//#endif // UBX_UTIL_H
 
 #ifdef __cplusplus
 } // extern "C"
