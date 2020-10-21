@@ -8,6 +8,7 @@
 
 #include "ubxUtil.h"
 #include "lxI2C.h"
+#include "lxUART.h"
 
 /***/
 
@@ -22,6 +23,7 @@ extern "C" {
 // read in <chunk> size blocks. Terminates if a block starts
 // with invalid (0xFF) data byte.
 // Returns total bytes transferred or zero
+/*
 extern int ubxReadStream
 (
    FragBuff16 *pFB,
@@ -31,7 +33,7 @@ extern int ubxReadStream
    const LXI2CBusCtx *pC,
    const U8 busAddr
 );
-
+*/
 //extern int test (const LXI2CBusCtx *pC, const U8 dev[2], const U8 maxIter);
 extern int ubloxHack (const LXI2CBusCtx *pC, const U8 busAddr);
 

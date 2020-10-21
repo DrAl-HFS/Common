@@ -50,7 +50,7 @@ typedef struct
 
 /***/
 
-extern Bool32 lxi2cOpen (LXI2CBusCtx *pBC, const char *path, const int clk);
+extern Bool32 lxi2cOpen (LXI2CBusCtx *pBC, const char devPath[], const int clk);
 
 // Simple read without write (for stream interface)
 extern int lxi2cRead (const LXI2CBusCtx *pBC, const U8 busAddr, U8 b[], const U8 nB);

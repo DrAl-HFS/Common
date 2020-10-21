@@ -35,25 +35,25 @@ static LXI2CCtx gCtx={LX_I2C_FLAG_TRACE, }; // {{0,-1},{0,-1}},0,0,};
 
 /***/
 
-Bool32 lxi2cOpen (LXI2CBusCtx *pBC, const char *path, const int clk)
+Bool32 lxi2cOpen (LXI2CBusCtx *pBC, const char devPath[], const int clk)
 {
    struct stat st;
    int r= -1;
-   if ((0 == stat(path, &st)) && S_ISCHR(st.st_mode)) // ensure device exists
+   if ((0 == stat(devPath, &st)) && S_ISCHR(st.st_mode)) // ensure device exists
    {
-      pBC->fd= open(path, O_RDWR); // |O_DYSNC ?? |O_NONBLOCK);
+      pBC->fd= open(devPath, O_RDWR); // |O_DYSNC ?? |O_NONBLOCK);
       if (pBC->fd >= 0)
       {
          r= ioctl(pBC->fd, I2C_FUNCS, &(pBC->flags));
          if ((r < 0) || (0 == (pBC->flags & I2C_FUNC_I2C)))
          {
-            ERROR_CALL("(.. %s) - ioctl(.. I2C_FUNCS ..) -> %d\n", path, r);
+            ERROR_CALL("(.. %s) - ioctl(.. I2C_FUNCS ..) -> %d\n", devPath, r);
             //report(ERR1,"(non I2C device ?) ERR#%d -> %s\n", errno, strerror(errno));
             if (r > 0) { r= -1; }
          }
          if (gCtx.flags & LX_I2C_FLAG_TRACE)
          {
-            LX_TRC0("(%s) -> %d\n", path, pBC->fd);
+            LX_TRC0("(%s) -> %d\n", devPath, pBC->fd);
             LX_TRC1("ioctl(.. I2C_FUNCS ..) -> %d\n", r);
             LX_TRC1("flags=0x%0X (%dbytes)\n", pBC->flags, sizeof(pBC->flags));
          }
@@ -61,7 +61,7 @@ Bool32 lxi2cOpen (LXI2CBusCtx *pBC, const char *path, const int clk)
          else if (clk < 10000) { pBC->clk= clk*1000; } // assume kHz
          else { pBC->clk= clk; }  // assume Hz
       }
-      else { report(ERR0,"lxOpenI2C(.. %s)\n", path); }
+      else { ERROR_CALL("(.. %s)\n", devPath); }
    }
    return(r >= 0);
 } // lxi2cOpen
