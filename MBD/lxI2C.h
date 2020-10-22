@@ -28,6 +28,13 @@ extern "C" {
 
 typedef unsigned long UL; // For compatibility with kernel I2C flag def.
 
+// CONSIDER:
+typedef struct
+{
+   int clock;
+   //UL flags; ???
+} PortI2C;
+
 // Bus context
 typedef struct
 {

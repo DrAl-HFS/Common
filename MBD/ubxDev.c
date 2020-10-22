@@ -221,12 +221,14 @@ int ubxReadAvailStream (FragBuff16 *pFB, const UBXCtx *pC)
       if (r >= 0) { n= (U16)rdI16LE(out+1); }
       if (n <= 0) { usleep(2000); }
    } while ((n <= 0) && (--t >= 0));
-
+   if (n < 0) { n= pC->chunk; }
    return ubxReadStream(pFB, pIn, MIN(n, pC->ws[1].len), pC);
 } // ubxReadAvailStream
 
 void initCtx (UBXCtx *pC, const LXI2CBusCtx *pDDS, const U8 busAddr, const U16 chunk, const int bytes)
 {
+   lxUARTOpen(&(pC->uart), "/dev/ttyS0");
+   lxUARTClose(&(pC->uart));
    if (allocMemBuff(&(pC->mb), bytes))
    {
       pC->pDDS= pDDS;
@@ -237,8 +239,6 @@ void initCtx (UBXCtx *pC, const LXI2CBusCtx *pDDS, const U8 busAddr, const U16 c
       pC->ws[0].len=    32;
       pC->ws[1].offset= pC->ws[0].len;
       pC->ws[0].len=    pC->mb.bytes - pC->ws[0].len;
-      lxUARTOpen(&(pC->uart), "/dev/ttyS0");
-      lxUARTClose(&(pC->uart));
    }
 } // initCtx
 

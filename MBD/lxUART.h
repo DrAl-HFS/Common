@@ -18,9 +18,15 @@ extern "C" {
 
 typedef struct
 {
-   //UL   flags;
+   int   baud;
+   short tbiv; // termios baud index (mask) value
+   char  pad[2];
+} PortUART;
+
+typedef struct
+{
    int  fd;
-   int  baud;
+   PortUART port;
 } LXUARTCtx;
 
 
@@ -28,8 +34,8 @@ typedef struct
 /***/
 
 extern Bool32 lxUARTOpen (LXUARTCtx *pUC, const char devPath[]);
-//lxUARTRead()
-//lxUARTWrite()
+//lxUARTRead() -> read(fd...
+//lxUARTWrite() -> write(fd...
 extern void lxUARTClose (LXUARTCtx *pUC);
 
 #ifdef __cplusplus

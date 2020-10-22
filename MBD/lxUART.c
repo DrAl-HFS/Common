@@ -8,86 +8,208 @@
 
 #include "lxUART.h"
 
+/*
+Basic checks for RPi -
+enable_uart=1 (also disable serial console in cmdline.txt, easier using raspi-config)
+init_uart_baud=115200 ???no effect???
+
+RPi-W (BT) options:
+1) Free up PL011 (becomes Primary i.e. /dev/ttyS0)
+a) No BT
+dtoverlay=disable-bt
+sudo systemctl disable hciuart
+b) Mini-UART BT (reliability untested)
+dtoverlay=miniuart-bt
+core_freq=250 ( OR force_turbo=1 ???)
+
+2) RPi4 extra PL011 devices
+cat /boot/overlays/README
+dtoverlay=uart#,<param>=<val>
+*/
+// DIY power-of-hundred exponent & mantissa encoding
+#define UEX_SHIFT   14
+#define UEX_MASK_M ((1<<UEX_SHIFT)-1)
+//#define UEX_E0 (0<<14)
+#define UEX_ET2 (1<<14) // 10^2
+#define UEX_ET4 (2<<14) // 10^4
+#define UEX_ET6 (3<<14) // 10^6
+
+typedef U16 UEX16;
+#define REF_BAUD_ULO  (7)  // Communicating with objects nearing the Oort cloud?
+#define REF_BAUD_LO  (13)  // Geriatric equipment / very noisy environments
+#define REF_BAUD_STD (19)  // Widely supported (assume good quality wire & connectors)
+#define REF_BAUD_HI  (21)  // Special installations: low-capacitance/screened structured cable
+static const UEX16 refBaud[]=
+{
+   50,75,110,134,150,200,300,       // 7 ultra-low
+   600,1200,1800,2400,4800,9600,    // +6 low
+   UEX_ET2|192, UEX_ET2|384, UEX_ET2|576, UEX_ET2|768, UEX_ET2|1152, UEX_ET2|2304, // +6 standard
+   UEX_ET2|4608, UEX_ET2|9216  // +2 high
+};
+
 
 /***/
 
-#if 1
+// mantissa, base & exponent
+static U32 scalePowU (const U32 m, const U32 b, const U8 e)
+{
+   switch (e)
+   {
+      case 0 : return(m);
+      case 1 : return(m * b);
+      default :
+      {
+         U32 s= b * b;
+         for (U8 i=3; i<=e; i++) { s*= b; }
+         return(m * s);
+      }
+   }
+} // scalePowU
+
+static U32 unpackUEX16 (UEX16 x)
+{
+   return scalePowU(UEX_MASK_M & x, 100, x>>UEX_SHIFT);
+} // unpackUEX16
+
+U32 adiff (U32 a, U32 b) { if (a > b) return(a - b); else return (b-a); }
+
+int matchUEX16 (U32 *pR, const U32 x, const UEX16 ref[], int n)
+{
+   int iB= -1;
+   if (n > 0)
+   {
+      U32 rB=0, dB=-1, r=-1, d=-1, ld;
+      do
+      {
+         ld= d;
+         r= unpackUEX16(ref[--n]);
+         d= adiff(x,r);
+         if (d < dB) { iB= n; rB= r; dB= d; }
+      } while ((n > 0) && (d < ld));
+      if (pR) { *pR= rB; }
+   }
+   return(iB);
+} // matchUEX16
+
+int matchBaudRate (int *pR, const int r, const U8 range)
+{
+   if (r > 0) { return matchUEX16((unsigned*)pR, r, refBaud, MIN(REF_BAUD_HI,range)); } 
+   return(0);
+} // matchBaudRate
+
+void testUEX (void)
+{
+   for (int i=0; i<REF_BAUD_HI; i++) { LOG("S%d : %u\n", i, unpackUEX16(refBaud[i])); }
+   //n= sizeof(extBaud)/sizeof(extBaud[0]);
+   //for (int i=0; i<n; i++) { LOG("E%d : %u\n", i, unpackUEX16(extBaud[i])); }
+   for (int i=100; i<100000000; i*= 1.5)
+   {
+      I32 r;
+      matchBaudRate(&r, i, REF_BAUD_HI);
+      LOG("%d -> %d\n", i, r);
+   }
+} // testUEX
+
+#if 0
 
 //#include <asm/termbits.h>
+//#include <asm/ioctls.h>
 #include <stropts.h>
 #include <asm/termios.h>
-//#include <asm/ioctls.h>
 
-int newTerm (const LXUARTCtx *pUC, int rate) //
+int interrogatePort (const int fd, const PortUART *pS) //
 {
    struct termios2 st;
 
-   int r= ioctl(pUC->fd, TCGETS2, &st);
+   int r= ioctl(fd, TCGETS2, &st);
    if (r >= 0)
    {
       LOG_CALL("() - %d / %d baud\n", st.c_ispeed, st.c_ospeed);
-
-      if (rate > 0)
+      int b= MIN(st.c_ispeed, st.c_ospeed);
+      if (pS && (pS->baud > 0) &&
+         ((pS->baud != st.c_ispeed) || (pS->baud != st.c_ospeed)))
       {
          st.c_cflag&= ~CBAUD;
          st.c_cflag|= BOTHER;
-         st.c_ispeed= rate;
-         st.c_ospeed= rate;
-         r= ioctl(pUC->fd, TCSETS2, &st);
-         if (r > 0) { r= rate; }
+         st.c_ispeed= pS->baud;
+         st.c_ospeed= pS->baud;
+         r= ioctl(fd, TCSETS2, &st);
+         if (r >= 0) { b= pS->baud; }
       }
+      return(b);
    }
    return(r);
-} // newTerm
-
-//#undef struct termios
-//#undef struct termio
-//#undef struct winsize
+} // interrogatePort
 
 #else
-
+// Older functionality - standard baud rates only
 #include <termios.h>
 #include <sys/ioctl.h>
 
-static I32 stdBaud (I32 r, I8 i)
+#define REF_BAUD_TERMIOS_IMAX (REF_BAUD_LO+2)
+static I32 termiosBaudIdx (int i)
 {
-static const U8 sbdL6[]={50,75,110,134,150,200};
-static const U16 sbdM10[]={300,600,1200,1800,2400,4800,9600,19200,38400,57600};
-static const U32 sbdH2[]={76800,115200};
-   if (i <= 0) { r= 0; }
-   else
+   if (i > 0)
    {
-      i-= 1;
-      if (i<6) { r= sbdL6[i]; }
-      else
+      if ((i-1) < REF_BAUD_TERMIOS_IMAX) { return unpackUEX16(refBaud[i-1]); }
+      switch (i)
       {
-         i-= 6;
-         if (i<10) { r= sbdM10[i]; }
-         else
-         {
-            i-= 10;
-            if (i < 2) { r= sbdH2[i]; }
-            else r= -1;
-         }
+         case B57600  : return(57600);
+         case B115200 : return(115200);
+         case B230400 : return(230400); 
       }
    }
-   return(r);
-} // stdBaud
+   return(0);
+} // termiosBaudIdx
 
-int oldTerm (const LXUARTCtx *pUC)
+static int termiosMatchBaudRate (int *pR, const int r)
+{
+   int i= matchBaudRate(pR,r,REF_BAUD_STD);
+   if (i < REF_BAUD_TERMIOS_IMAX) { return(i+1); }
+   static const U16 t[]={ B57600, B115200, B115200, B230400 }; // Aaargh! no 76800 !!??
+   return( t[i-REF_BAUD_TERMIOS_IMAX] );
+} // termiosMatchBaudRate
+
+int interrogatePort (const int fd, const PortUART *pS)
 {
    struct termios st;
    //int r= ioctl(pUC->fd, TCGETS, &st);
-   int r= tcgetattr(pUC->fd, &st);
+   int r= tcgetattr(fd, &st);
    if (r >= 0)
    {
-      I8 ib= st.c_cflag & CBAUD;
-      r= stdBaud(0,ib);
-      //int s= cfgetspeed(st);
+      int iB= st.c_cflag & CBAUD;
+      int rB= termiosBaudIdx(iB);
+      int s[2];
+      s[0]= cfgetispeed(&st);
+      s[1]= cfgetospeed(&st);
+      LOG_CALL("() - %d / %d (%d?) baud\n", s[0], s[1], rB);
+/*
+      LOG("B* %d -> %d\n", B19200, termiosBaudIdx(B19200));
+      LOG("B* %d -> %d\n", B38400, termiosBaudIdx(B38400));
+      LOG("B* %d -> %d\n", B57600, termiosBaudIdx(B57600));
+      LOG("B* %d -> %d\n", B115200, termiosBaudIdx(B115200));
+      LOG("B* %d -> %d\n", B230400, termiosBaudIdx(B230400));
+*/
+      if (pS && ((pS->baud > 0) || (pS->tbiv != 0)))
+      {
+         int rBS= termiosBaudIdx(pS->tbiv);
+         if (0 != rBS) { iB= pS->tbiv; } // Assume rate is termios standard index value e.g. "B9600"
+         else
+         {  // Find index of best match, apply +1 shift (0 -> B0, 1 -> B50)
+            iB= termiosMatchBaudRate(&rBS, pS->baud);
+         }
+
+         cfsetspeed(&st, iB);
+         r= tcsetattr(fd, 0, &st);
+         if (r >= 0) { return(rBS); } // newly set value
+      }
+      return(rB); // existing value
    }
-   return(r);
-} // oldTerm
+   return(r); // error
+} // interrogatePort
+
 #endif
+
 
 /***/
 
@@ -95,13 +217,16 @@ Bool32 lxUARTOpen (LXUARTCtx *pUC, const char devPath[])
 {
    struct stat st;
    int r= -1;
+
+   //testUEX();
+   
    if ((0 == stat(devPath, &st)) && S_ISCHR(st.st_mode)) // ensure device exists
    {
       pUC->fd= open(devPath, O_RDWR|O_NOCTTY|O_NDELAY); // ignore controls & HW signals e.g. DCD
       if (pUC->fd >= 0)
       {
-         pUC->baud= newTerm(pUC, 230400);
-         LOG_CALL("(..%s) - %d baud\n", devPath, pUC->baud);
+         pUC->port.baud= interrogatePort(pUC->fd, NULL); // 230400);
+         LOG_CALL("(..%s) - %d baud\n", devPath, pUC->port.baud);
 
          /*
          if ((r < 0) || (0 == (pBC->flags & I2C_FUNC_I2C)))
