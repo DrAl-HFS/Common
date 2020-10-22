@@ -20,7 +20,7 @@ typedef struct
 {
    int   baud;
    short tbiv; // termios baud index (mask) value
-   char  pad[2];
+   char  mode[6];
 } PortUART;
 
 typedef struct

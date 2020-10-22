@@ -93,7 +93,7 @@ int matchUEX16 (U32 *pR, const U32 x, const UEX16 ref[], int n)
 
 int matchBaudRate (int *pR, const int r, const U8 range)
 {
-   if (r > 0) { return matchUEX16((unsigned*)pR, r, refBaud, MIN(REF_BAUD_HI,range)); } 
+   if (r > 0) { return matchUEX16((unsigned*)pR, r, refBaud, MIN(REF_BAUD_HI,range)); }
    return(0);
 } // matchBaudRate
 
@@ -110,12 +110,53 @@ void testUEX (void)
    }
 } // testUEX
 
-#if 0
+#ifndef LXUART_TERMIOS_OLD
 
 //#include <asm/termbits.h>
 //#include <asm/ioctls.h>
 #include <stropts.h>
 #include <asm/termios.h>
+
+void dump (const int f)
+{
+   if (0 != f)
+   {
+      const char *s[32]={NULL,};
+      int n= 0;
+      if (f & EXTA)	s[n++]= "External rate clock A";
+      if (f & EXTB)	s[n++]= "External rate clock B";
+      if (f & CSIZE)	s[n++]= "Bit mask for data bits";
+      if (f & CS5)	s[n++]= "5 data bits";
+      if (f & CS6)	s[n++]= "6 data bits";
+      if (f & CS7)	s[n++]= "7 data bits";
+      if (f & CS8)	s[n++]= "8 data bits";
+      if (f & CSTOPB)	s[n++]= "2 stop bits (1 otherwise)";
+      if (f & CREAD)	s[n++]= "Enable receiver";
+      if (f & PARENB)	s[n++]= "Enable parity bit";
+      if (f & PARODD)	s[n++]= "Use odd parity instead of even";
+      if (f & HUPCL)	s[n++]= "HUP";
+      if (f & CLOCAL)	s[n++]= "Local";
+      //if (f & LOBLK)	s[n++]= "Block job control output";
+      //if (f & CNEW_RTSCTS)	s[n++]= "CNEW_RTSCTS";
+      if (f & CRTSCTS)	s[n++]= "CRTSCTS";
+      for (int i=0; i<n; i++) { LOG("%s\n",s[i]); }
+   }
+} // dump
+
+void setTermiosFlagCh (char c[4], const int f)
+{
+   int i= 0;
+   if (f & CS8) { c[i]= '8'; }   // assume 8bit mode...
+   else if (f & CS7) { c[i]= '7'; }
+   else if (f & CS6) { c[i]= '6'; }
+   else if (f & CS5) { c[i]= '5'; }
+   ++i;
+   if (0 == (f & PARENB)) { c[i]= 'N'; }
+   else if (f & PARODD) { c[i]= 'O'; } else { c[i]= 'E'; }
+   ++i;
+   if (f & CSTOPB) { c[i]= '2'; } else { c[i]= '1'; }
+   c[++i]= 0;
+} // setTermiosFlagCh
 
 int interrogatePort (const int fd, const PortUART *pS) //
 {
@@ -124,7 +165,11 @@ int interrogatePort (const int fd, const PortUART *pS) //
    int r= ioctl(fd, TCGETS2, &st);
    if (r >= 0)
    {
-      LOG_CALL("() - %d / %d baud\n", st.c_ispeed, st.c_ospeed);
+      char fc[4];
+      setTermiosFlagCh(fc, st.c_cflag);
+      LOG_CALL("() - %d / %d baud %s\n", st.c_ispeed, st.c_ospeed, fc);
+      //dump(st.c_cflag);
+
       int b= MIN(st.c_ispeed, st.c_ospeed);
       if (pS && (pS->baud > 0) &&
          ((pS->baud != st.c_ispeed) || (pS->baud != st.c_ospeed)))
@@ -141,7 +186,8 @@ int interrogatePort (const int fd, const PortUART *pS) //
    return(r);
 } // interrogatePort
 
-#else
+#else // LXUART_TERMIOS_OLD
+
 // Older functionality - standard baud rates only
 #include <termios.h>
 #include <sys/ioctl.h>
@@ -156,7 +202,7 @@ static I32 termiosBaudIdx (int i)
       {
          case B57600  : return(57600);
          case B115200 : return(115200);
-         case B230400 : return(230400); 
+         case B230400 : return(230400);
       }
    }
    return(0);
@@ -183,13 +229,7 @@ int interrogatePort (const int fd, const PortUART *pS)
       s[0]= cfgetispeed(&st);
       s[1]= cfgetospeed(&st);
       LOG_CALL("() - %d / %d (%d?) baud\n", s[0], s[1], rB);
-/*
-      LOG("B* %d -> %d\n", B19200, termiosBaudIdx(B19200));
-      LOG("B* %d -> %d\n", B38400, termiosBaudIdx(B38400));
-      LOG("B* %d -> %d\n", B57600, termiosBaudIdx(B57600));
-      LOG("B* %d -> %d\n", B115200, termiosBaudIdx(B115200));
-      LOG("B* %d -> %d\n", B230400, termiosBaudIdx(B230400));
-*/
+
       if (pS && ((pS->baud > 0) || (pS->tbiv != 0)))
       {
          int rBS= termiosBaudIdx(pS->tbiv);
@@ -208,7 +248,7 @@ int interrogatePort (const int fd, const PortUART *pS)
    return(r); // error
 } // interrogatePort
 
-#endif
+#endif // LXUART_TERMIOS_OLD
 
 
 /***/
@@ -219,7 +259,7 @@ Bool32 lxUARTOpen (LXUARTCtx *pUC, const char devPath[])
    int r= -1;
 
    //testUEX();
-   
+
    if ((0 == stat(devPath, &st)) && S_ISCHR(st.st_mode)) // ensure device exists
    {
       pUC->fd= open(devPath, O_RDWR|O_NOCTTY|O_NDELAY); // ignore controls & HW signals e.g. DCD
