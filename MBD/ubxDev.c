@@ -4,6 +4,9 @@
 // (c) Project Contributors Oct 2020
 
 #include "ubxDev.h"
+#include "ubxUtil.h"
+#include "ubxDissect.h"
+#include "ubxDebug.h"
 
 
 /***/
@@ -15,6 +18,7 @@ typedef struct
    U16   chunk;   // i2c-bus stream transaction granularity
    // Working buffers / storage
    MemBuff  mb;
+   // waste of time...
    FragBuff16  ws[2]; //, res[FRAG_RES_MAX]
    // int uartFD;
    LXUARTCtx uart;
@@ -24,153 +28,7 @@ typedef struct
 
 /***/
 
-// Factor -> ubxDbg ?
-static const char *ubxClassStr (U8 c)
-{
-   switch(c)
-   {
-      case UBXM8_CL_NAV : return("NAV");
-      case UBXM8_CL_RXM : return("RXM");
-      case UBXM8_CL_INF : return("INF");
-      case UBXM8_CL_ACK : return("ACK");
-      case UBXM8_CL_CFG : return("CFG");
-      case UBXM8_CL_UPD : return("UPD");
-      case UBXM8_CL_MON : return("MON");
-      case UBXM8_CL_AID : return("AID");
-      case UBXM8_CL_TIM : return("TIM");
-      case UBXM8_CL_ESF : return("ESF");
-      case UBXM8_CL_MGA : return("MGA");
-      case UBXM8_CL_LOG : return("LOG");
-      case UBXM8_CL_SEC : return("SEC");
-      case UBXM8_CL_HNR : return("HNR");
-      case UBXM8_CL_NMEA : return("NMEA");
-      case UBXM8_CL_PUBX : return("PUBX");
-   }
-   return(NULL);
-} // ubxClassStr
 
-static const char *ubxIDStr (U8 id)
-{
-   switch(id)
-   {
-      case UBXM8_ID_PRT : return("PRT");
-      case UBXM8_ID_MSG : return("MSG");
-      case UBXM8_ID_INF : return("INF");
-      case UBXM8_ID_CFG : return("CFG");
-   }
-   return(NULL);
-} // ubxIDStr
-
-// Generate string table describing message
-int ubxClassIDStrTab
-(
-   const char *r[],
-   int maxR,
-   char ch[],
-   int maxCh,
-   const U8 classID[2],
-   const U8 *pP,
-   const U16 lenP
-)
-{
-   const char *s= ubxClassStr(classID[0]);
-   int n=0;
-   if (s && (n < maxR))
-   {
-      r[n++]= s;
-      s= NULL;
-      if (UBXM8_CL_CFG == classID[0]) { s= ubxIDStr(classID[1]); } // far from complete...
-      else if (UBXM8_CL_ACK == classID[0])
-      {
-         if ((maxCh > 2) && (n < maxR))
-         {
-            ch[0]= ',';
-            ch[1]= classID[1] +'0';
-            ch[2]= 0;
-            r[n++]= ch;
-         }
-         if (pP && (lenP > 0))
-         {  // Ack payload is class-id header of command
-            s= ubxClassStr(pP[0]);
-            if (s && ((maxR - n) > 1)) { r[n++]= " : "; r[n++]= s; }
-            s= NULL;
-            if (lenP > 1) { s= ubxIDStr(pP[1]); }
-         }
-      }
-      if (s)
-      {
-         if ((maxR-n) > 1) { r[n++]= ","; r[n++]= s; }
-      }
-      if ((n < maxR) && (n <= 3)) { r[n++]= " : "; }
-   }
-   return(n);
-} // ubxClassIDStrTab
-
-int headerType (const UBXFrameHeader *pH, const U8 c, const U8 id) { return((pH->classID[0]==c) << 1) | (pH->classID[1] == id); }
-
-typedef struct
-{
-   U8 id, rvd1[1], txRdy[2];
-   union
-   {
-      struct { U8 mode[4], baud[4];  } uart;
-      struct { U8 rvd2[8]; } usb;
-      struct { U8 mode[4], rvd2[4]; } spi;
-      struct { U8 mode[4], rvd2[4]; } dds;
-   };
-   U8 inProtoM[2], outProtoM[2], flags[2], rvd3[2];
-} UBXPort;
-
-#define UBX_PRT_PROTO_UBX     (1<<0)
-#define UBX_PRT_PROTO_NMEA    (1<<1)
-//#define UBX_PRT_PROTO_RTCM2   (1<<2)
-//#define UBX_PRT_PROTO_RTCM3   (1<<5)
-
-void dissectCfgPrt (const UBXPort *pP, const int n)
-{
-   if (n >= sizeof(*pP))
-   {
-      U16 inM= (U16)rdI16LE(pP->inProtoM);
-      U16 outM= (U16)rdI16LE(pP->outProtoM);
-      U16 f= (U16)rdI16LE(pP->flags);
-      LOG("IN,OUT,F : %04X,%04X,%04X\n", inM, outM, f);
-/*      switch(pP->id)
-      {
-         case 0 :
-         case 1 :
-         case 2 :
-         case 3 :
-      }*/
-   }
-} // dissectCfgPrt
-
-
-#define UBX_DUMP_STR_MAX 8
-void ubxDumpPayloads (const U8 b[], FragBuff16 fb[], int nFB)
-{
-   for (int i=0; i<nFB; i++)
-   {
-      const U8 *pP= b + fb[i].offset;
-      const UBXFrameHeader *pH= (void*)(pP - sizeof(*pH)); // beware structure padding dependant on compiler/options
-      const char *s[UBX_DUMP_STR_MAX];
-      char ch[8];
-      int nS= ubxClassIDStrTab(s, UBX_DUMP_STR_MAX, ch, sizeof(ch), pH->classID, pP, fb[i].len);
-      if (nS <= 0)
-      {
-         LOG("0x%02X,%02X : ", pH->classID[0], pH->classID[1]);
-         reportBytes(OUT, pP, fb[i].len);
-      }
-      else
-      {
-         for (int i=0; i<nS; i++) { LOG("%s", s[i]); }
-         if (0x3 == headerType(pH, UBXM8_CL_CFG, UBXM8_ID_PRT))
-         {
-            dissectCfgPrt((void*)pP, fb[i].len);
-         }
-         else if (nS <= 4) { reportBytes(OUT, pP, fb[i].len); } else { LOG("%s", "\n"); }
-      }
-   }
-} // ubxDumpPayloads
 
 
 /***/
@@ -250,7 +108,6 @@ int ubloxHack (const LXI2CBusCtx *pC, const U8 busAddr)
    int nFB=0, m, n=0, t, tries= 10, r=-1;
 
    initCtx(&ctx, pC, busAddr, 128, 4<<10);
-   LOG("sizeof(UBXFrameHeader)=%d\n", sizeof(UBXFrameHeader));
 
    rb[n++]= 0xB5;
    rb[n++]= 0x62;

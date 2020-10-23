@@ -7,6 +7,7 @@
 #define UBX_UTIL_H
 
 #include "ubxM8.h"
+#include "ubxPDU.h"
 #include "util.h"
 #include "mbdUtil.h"
 
@@ -17,14 +18,6 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-typedef struct
-{
-   const U8 preamble[2]; // { 0xB5,0x62 }
-   U8 classID[2], lengthLE[2];
-} UBXFrameHeader;
-// U8 payload[1+]
-typedef struct { U8 checksum[2]; } UBXFrameFooter;
 
 // typedef struct { U8 classID[2]; FragBuff16 fb } UBXFragBuff; ???
 

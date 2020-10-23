@@ -25,6 +25,9 @@ core_freq=250 ( OR force_turbo=1 ???)
 2) RPi4 extra PL011 devices
 cat /boot/overlays/README
 dtoverlay=uart#,<param>=<val>
+
+TODO : Model PL011 / serial clock to assess
+possible inaccuracy in baud rates. (Mini-uart?)
 */
 // DIY power-of-hundred exponent & mantissa encoding
 #define UEX_SHIFT   14

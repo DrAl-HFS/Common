@@ -6,7 +6,6 @@
 #ifndef UBX_DEV_H
 #define UBX_DEV_H
 
-#include "ubxUtil.h"
 #include "lxI2C.h"
 #include "lxUART.h"
 
@@ -36,8 +35,6 @@ extern int ubxReadStream
 */
 //extern int test (const LXI2CBusCtx *pC, const U8 dev[2], const U8 maxIter);
 extern int ubloxHack (const LXI2CBusCtx *pC, const U8 busAddr);
-
-//#endif // UBX_UTIL_H
 
 #ifdef __cplusplus
 } // extern "C"
