@@ -60,8 +60,9 @@ int ubxScanPayloads (FragBuff16 fb[], const int maxFB, const U8 b[], const int n
    if (maxFB > 0) { pFB= fb; }
    while (i < m)
    {
-      if ((0xB5 == b[i++]) && (0x62 == b[i++]))
+      if ((0xB5 == b[i+0]) && (0x62 == b[i+1]))
       {
+         i+= 2;
          r= ubxGetPayload(pFB, b+i, n-i);
          if (r > 0)
          {
@@ -75,6 +76,7 @@ int ubxScanPayloads (FragBuff16 fb[], const int maxFB, const U8 b[], const int n
             i+= r;
          } else { nBad++; }
       }
+      else { i++; }
    }
    if (nBad > 0) { LOG_CALL("() - nBad=%d\n", nBad); }
    return(nFB);

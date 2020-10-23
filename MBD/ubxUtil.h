@@ -1,4 +1,4 @@
-// Common/MBD/ubxUtil.h - utility code for u-blox GPS module
+// Common/MBD/ubxUtil.h - independant utility code for u-blox GPS module
 // https://github.com/DrAl-HFS/Common.git
 // Licence: GPL V3
 // (c) Project Contributors Oct 2020
@@ -18,8 +18,6 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-// typedef struct { U8 classID[2]; FragBuff16 fb } UBXFragBuff; ???
 
 
 /***/

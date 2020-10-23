@@ -28,6 +28,10 @@ typedef struct // beware structure padding on non-PO4/8/16 data: depending on co
 // U8 payload[1+]
 typedef struct { U8 checksum[2]; } UBXFrameFooter;
 
+#define UBX_PORT_ID_DDS  0x00
+#define UBX_PORT_ID_SPI  0x01
+#define UBX_PORT_ID_USB  0x02
+#define UBX_PORT_ID_UART 0x03
 
 #define UBX_PORT_PROTO_UBX     (1<<0)
 #define UBX_PORT_PROTO_NMEA    (1<<1)
@@ -42,7 +46,7 @@ typedef struct
       struct { U8 mode[4], baud[4];  } uart;
       struct { U8 rvd2[8]; } usb;
       struct { U8 mode[4], rvd2[4]; } spi;
-      struct { U8 mode[4], rvd2[4]; } dds;
+      struct { U8 mode[4], rvd2[4]; } dds; // i2c
    };
    U8 inProtoM[2], outProtoM[2], flags[2], rvd3[2];
 } UBXPort;

@@ -12,10 +12,12 @@ void ubxDissectCfgPrt (const UBXPort *pP, const int n)
 {
    if (n >= sizeof(*pP))
    {
+      U32 mode= readBytesLE(pP->uart.mode, 0, 4);
+      U32 baud= readBytesLE(pP->uart.baud, 0, 4);
       U16 inM= (U16)rdI16LE(pP->inProtoM);
       U16 outM= (U16)rdI16LE(pP->outProtoM);
       U16 f= (U16)rdI16LE(pP->flags);
-      LOG("IN,OUT,F : %04X,%04X,%04X\n", inM, outM, f);
+      LOG("ID%02X, MD,BD= %08X,%d; IN,OUT,FLG=%04X,%04X,%04X\n", mode, baud, pP->id, inM, outM, f);
 /*      switch(pP->id)
       {
          case 0 :
