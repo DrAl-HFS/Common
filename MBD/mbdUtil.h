@@ -19,6 +19,10 @@ extern "C" {
 // GCC happiest, others?
 #define INLINE static inline
 
+// Convenience macros
+#define rdU16LE(b) (U16)rdI16LE(b)
+#define rdU16BE(b) (U16)rdI16BE(b)
+
 #ifndef INLINE
 
 extern I16 rdI16BE (const U8 b[2]);

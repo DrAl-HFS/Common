@@ -95,7 +95,7 @@ int ubxClassIDStrTab
 } // ubxClassIDStrTab
 
 #define UBX_DUMP_STR_MAX 8
-void ubxDumpPayloads (const U8 b[], FragBuff16 fb[], int nFB)
+void ubxDumpPayloads (const U8 b[], FragBuff16 fb[], const int nFB, const int modeFlags)
 {
    for (int i=0; i<nFB; i++)
    {
@@ -106,10 +106,8 @@ void ubxDumpPayloads (const U8 b[], FragBuff16 fb[], int nFB)
       int nS= ubxClassIDStrTab(s, UBX_DUMP_STR_MAX, ch, sizeof(ch), pH->classID, pP, fb[i].len);
       if (nS <= 0)
       {
-         LOG("0x%02X,%02X : ", pH->classID[0], pH->classID[1]);
-         reportBytes(OUT, pP, fb[i].len);
       }
-      else
+      if (nS > 0)
       {
          for (int i=0; i<nS; i++) { LOG("%s", s[i]); }
          if (0x3 == ubxHeaderMatch(pH, UBXM8_CL_CFG, UBXM8_ID_PRT))
@@ -118,6 +116,12 @@ void ubxDumpPayloads (const U8 b[], FragBuff16 fb[], int nFB)
          }
          else if (nS <= 4) { reportBytes(OUT, pP, fb[i].len); } else { LOG("%s", "\n"); }
       }
+      else { report(OUT,"0x%02X,%02X\n", pH->classID[0], pH->classID[1]); }
+      if (modeFlags & DBG_MODE_RAW)
+      {
+         reportBytes(OUT, pP, fb[i].len);
+      }
+
    }
 } // ubxDumpPayloads
 

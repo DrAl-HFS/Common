@@ -29,14 +29,22 @@ typedef struct // beware structure padding on non-PO4/8/16 data: depending on co
 typedef struct { U8 checksum[2]; } UBXFrameFooter;
 
 #define UBX_PORT_ID_DDS  0x00
-#define UBX_PORT_ID_SPI  0x01
-#define UBX_PORT_ID_USB  0x02
-#define UBX_PORT_ID_UART 0x03
+#define UBX_PORT_ID_UART 0x01
+// #define UBX_PORT_ID_UART2 0x02 ???
+#define UBX_PORT_ID_USB  0x03
+#define UBX_PORT_ID_SPI  0x04
 
 #define UBX_PORT_PROTO_UBX     (1<<0)
 #define UBX_PORT_PROTO_NMEA    (1<<1)
 #define UBX_PORT_PROTO_RTCM2   (1<<2)
 #define UBX_PORT_PROTO_RTCM3   (1<<5)
+
+#define UBX_RESET_ID_HW_IMMED    0x00
+#define UBX_RESET_ID_SW_FULL     0x01
+#define UBX_RESET_ID_SW_GNSS     0x02
+#define UBX_RESET_ID_HW_DEFER    0x04
+#define UBX_RESET_ID_GNSS_STOP   0x08
+#define UBX_RESET_ID_GNSS_START  0x09
 
 typedef struct
 {

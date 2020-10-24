@@ -16,6 +16,9 @@
 extern "C" {
 #endif
 
+#define DBG_MODE_RAW (1<<7)
+
+
 /***/
 
 /*
@@ -30,7 +33,7 @@ extern int ubxClassIDStrTab
    const U16 lenP
 );
 */
-extern void ubxDumpPayloads (const U8 b[], FragBuff16 fb[], int nFB);
+extern void ubxDumpPayloads (const U8 b[], FragBuff16 fb[], const int nFB, const int modeFlags);
 
 
 #ifdef __cplusplus

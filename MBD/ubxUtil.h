@@ -22,6 +22,9 @@ extern "C" {
 
 /***/
 
+// Set 6byte frame header
+extern int ubxSetFrameHeader (U8 b[], const U8 cl, const U8 id, const U16 nPB);
+
 // Calculate checksum for given message buffer
 // Returns 2 (bytes) if calculated, zero otherwise
 extern int ubxChecksum (U8 cs[2], const U8 b[], const int n);
