@@ -46,8 +46,35 @@ void ubxDissectNavPVT (const UBXNavPVT *pP, const int n)
 {
    if (n >= sizeof(*pP))
    {
+      int i;
       char dt[32];
+
       stringifyDT(dt, &(pP->tUTC), pP->nsUTC);
       report(OUT,"%s\n", dt);
+      if (0x01 & pP->valid) {}
+      {
+static const char fixCh[]={'N','D','2','3','G','T','?'};
+         i= pP->fixType;
+         if (i >= sizeof(fixCh)) { i= sizeof(fixCh)-1; }
+         report(OUT,"Fix:%c nSat=%d valid=%02X\n", fixCh[i], pP->nSat, pP->valid);
+         //pP->flags, flags2
+      }
+      if (0 == (pP->flags3 & (1<<0)))
+      {
+         float sc[2], h[2];
+         sc[0]= readBytesLE(pP->lon, 0, 4) * 1E-7;
+         sc[1]= readBytesLE(pP->lat, 0, 4) * 1E-7;
+         h[0]= readBytesLE(pP->h, 0, 4) * 0.001;
+         h[1]= readBytesLE(pP->hMSL, 0, 4) * 0.001;
+         report(OUT,"lon,lat: %f, %f \t height G,S: %f, %f\n", sc[0], sc[1], h[0], h[1]);
+      }
+      if (0 == (pP->flags & (1<<5)))
+      {
+         float v[3], s, b;
+         for (i=0; i<3; i++) { v[i]= readBytesLE(pP->velNED[i], 0, 4) * 0.001; }
+         s= readBytesLE(pP->groundSpeed, 0, 4) * 0.001;
+         b= readBytesLE(pP->heading, 0, 4) * 1E-5;
+         report(OUT,"vNED (%f, %f, %f) \t speed %fm/s head %fdeg\n", v[0], v[1], v[2], s, b);
+      }
    }
 } // ubxDissectNavPVT

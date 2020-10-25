@@ -65,14 +65,15 @@ typedef struct
    U8 iTOW[4];
    UBXDateTime tUTC;
    U8 valid;
-   U8 tAcc[4], nsUTC[4];   // ns
+   U8 accuT[4], nsUTC[4];   // ns
    U8 fixType, flags, flags2, nSat;
    U8 lon[4], lat[4]; // 1E-7 degree
-   U8 h[4], hMSL[4], hAcc[4], vAcc[4]; // mm
+   U8 h[4], hMSL[4]; // height above: ellipsoid (geodetic?) &  mean sea level mm
+   U8 accuH[4], accuV[4]; // mm
    U8 velNED[3][4]; // North, East Down mm/s
    U8 groundSpeed[4]; // mm/s
    U8 heading[4]; // 1E-5 degree
-   U8 accGS[4], accHdg[4]; // mm/s , 1E-5 degree
+   U8 accuGS[4], accuHdg[4]; // mm/s , 1E-5 degree
    U8 pdop[2], flags3, rvd1[5];
    U8 headV[4], magDecl[2], accMag[2];
 } UBXNavPVT;
