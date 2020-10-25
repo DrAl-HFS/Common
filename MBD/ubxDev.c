@@ -64,7 +64,7 @@ int ubxReadStream (FragBuff16 *pFB, U8 b[], const int max, const UBXCtx *pUC)
    return(t);
 } // ubxReadStream
 
-int ubxReadAvail (const UBXCtx *pUC)
+int ubxGetAvail (const UBXCtx *pUC)
 {
    int t= pUC->dds.retry;
    U8 io[3];
@@ -79,11 +79,11 @@ int ubxReadAvail (const UBXCtx *pUC)
       } else ubxSync(pUC);
    } while (t-- > 0);
    return(-1);
-} // ubxReadAvail
+} // ubxGetAvail
 
 int ubxReadAvailStream (FragBuff16 *pFB, const UBXCtx *pUC)
 {
-   int n= ubxReadAvail(pUC);
+   int n= ubxGetAvail(pUC);
    if (n < 0) { n= pUC->dds.chunk; }
    n= MIN(1+n, pUC->mb.bytes);
    return ubxReadStream(pFB, pUC->mb.p, n, pUC);
@@ -214,8 +214,9 @@ int ubloxHack (const LXI2CBusCtx *pC, const U8 busAddr)
 {
    UBXCtx ctx={0,};
    FragBuff16 fb[FB_COUNT];
-   int nFB=0, t, n, r=-1;
+   int nFB=0, nEFB=0, t, n, r=-1;
 
+   memset(fb,-1,sizeof(fb));
    initCtx(&ctx, pC, NULL, busAddr, 16<<10);
 
    //r= ubxReset(UBX_RESET_ID_SW_FULL, &ctx);
@@ -233,7 +234,19 @@ int ubloxHack (const LXI2CBusCtx *pC, const U8 busAddr)
       {
          U8 *pM= (U8*)(ctx.mb.p) + fb[0].offset;
          nFB= ubxScanPayloads(fb+1, FB_COUNT-1, pM, fb[0].len);
-         LOG("\t- %d bytes transferred, %d skipped, %d payloads found, r=%d\n", t, fb[0].offset, nFB, r);
+         for (int i=nFB+1; i<FB_COUNT; i++)
+         {
+            if ((fb[i].offset + fb[i].len) < fb[0].len)
+            {
+               char sf[8], *pS= (void*)(pM+fb[i].offset);
+               if (snprintf(sf, sizeof(sf)-1, "%s", pS) > 0)
+               {
+                  LOG("%d %+d[%d]=%s\n", i, fb[i].offset, fb[i].len, sf);
+               }
+               nEFB++;
+            }
+         }
+         LOG("\t- %d bytes transferred, %d skipped, payloads found: %d UBX ,%d other. r=%d\n", t, fb[0].offset, nFB, nEFB, r);
          if (nFB > 0)
          {
             ubxDumpPayloads(pM, fb+1, nFB, DBG_MODE_RAW);
