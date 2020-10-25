@@ -243,7 +243,7 @@ int ubloxHack (const LXI2CBusCtx *pC, const U8 busAddr)
    //r= ubxReset(UBX_RESET_ID_SW_FULL, &ctx);
 
    r= ubxRequestPortConfig(UBX_PORT_ID_DDS, &ctx);
-   //r= ubxRequestPortConfig(UBX_PORT_ID_UART, &ctx);
+   r= ubxRequestPortConfig(UBX_PORT_ID_UART, &ctx);
    r= ubxSetRate(UBXM8_CL_NAV, UBXM8_ID_PVT, 1, &ctx);
    r= -1;
    n= 0; m= 5;
