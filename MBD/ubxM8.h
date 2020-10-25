@@ -100,7 +100,9 @@ enum UBXM8ID
    UBXM8_ID_NOTICE=0x02, // !!!
    UBXM8_ID_TEST=0x03, // !!!
    UBXM8_ID_DEBUG=0x04, // !!!
-   // LOG MGA MON NAV???
+   // LOG MGA MON ???
+   // NAV
+   UBXM8_ID_PVT=0x07 // Full? navigation solution
 };
 
 /***/

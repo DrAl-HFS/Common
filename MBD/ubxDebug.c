@@ -43,6 +43,7 @@ static const char *ubxIDStr (U8 id)
       case UBXM8_ID_MSG : return("MSG");
       case UBXM8_ID_INF : return("INF");
       case UBXM8_ID_CFG : return("CFG");
+      case UBXM8_ID_PVT : return("PVT");
    }
    return(NULL);
 } // ubxIDStr
@@ -114,14 +115,18 @@ void ubxDumpPayloads (const U8 b[], FragBuff16 fb[], const int nFB, const int mo
          {
             ubxDissectCfgPrt((void*)pP, fb[i].len);
          }
-         else if (nS <= 4) { reportBytes(OUT, pP, fb[i].len); } else { LOG("%s", "\n"); }
+         if (0x3 == ubxHeaderMatch(pH, UBXM8_CL_NAV, UBXM8_ID_PVT))
+         {
+            ubxDissectNavPVT((void*)pP, fb[i].len);
+         }
+         if (0==(modeFlags & DBG_MODE_RAW)) { LOG("%s", "\n"); }
       }
       else { report(OUT,"0x%02X,%02X\n", pH->classID[0], pH->classID[1]); }
       if (modeFlags & DBG_MODE_RAW)
       {
+         report(OUT,"[%d]=", fb[i].len);
          reportBytes(OUT, pP, fb[i].len);
       }
-
    }
 } // ubxDumpPayloads
 

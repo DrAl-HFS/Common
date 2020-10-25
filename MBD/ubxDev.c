@@ -84,6 +84,7 @@ int ubxGetAvail (const UBXCtx *pUC)
 int ubxReadAvailStream (FragBuff16 *pFB, const UBXCtx *pUC)
 {
    int n= ubxGetAvail(pUC);
+   LOG_CALL("()  - %d\n", n);
    if (n < 0) { n= pUC->dds.chunk; }
    n= MIN(1+n, pUC->mb.bytes);
    return ubxReadStream(pFB, pUC->mb.p, n, pUC);
@@ -108,6 +109,25 @@ void releaseCtx (UBXCtx *pUC)
    // pI2C ??
    releaseMemBuff(&(pUC->mb));
 } // releaseCtx
+
+int ubxSetRate (const U8 cl, const U8 id, const U8 rate, const UBXCtx *pUC)
+{  // NB - no register address specified
+   int r=-1;
+   U8 msg[11], n= ubxSetFrameHeader(msg, UBXM8_CL_CFG, UBXM8_ID_MSG, 3);
+
+   msg[n++]= cl; // Mask lo
+   msg[n++]= id; // Mask hi
+   msg[n++]= rate;
+   n+= ubxChecksum(msg+n, msg+2, n-2);
+   //
+   if (pUC->dds.pI2C)
+   {
+      r= lxi2cWriteRB(pUC->dds.pI2C, pUC->dds.busAddr, msg, n);
+      LOG_CALL("() - I2C-Write CFG-MSG[%d] r=%d\n", n, r);
+      ubxSync(pUC);
+   }
+   return(r);
+} // ubxSetRate
 
 int ubxReset (const U8 resetID, const UBXCtx *pUC)
 {  // NB - no register address specified
@@ -214,20 +234,22 @@ int ubloxHack (const LXI2CBusCtx *pC, const U8 busAddr)
 {
    UBXCtx ctx={0,};
    FragBuff16 fb[FB_COUNT];
-   int nFB=0, nEFB=0, t, n, r=-1;
+   int nFB=0, nEFB=0, t, n, m, r=-1;
 
+   LOG("UBXNavPVT:%d\n", sizeof(UBXNavPVT));
    memset(fb,-1,sizeof(fb));
    initCtx(&ctx, pC, NULL, busAddr, 16<<10);
 
    //r= ubxReset(UBX_RESET_ID_SW_FULL, &ctx);
 
    r= ubxRequestPortConfig(UBX_PORT_ID_DDS, &ctx);
-   r= ubxRequestPortConfig(UBX_PORT_ID_UART, &ctx);
-
+   //r= ubxRequestPortConfig(UBX_PORT_ID_UART, &ctx);
+   r= ubxSetRate(UBXM8_CL_NAV, UBXM8_ID_PVT, 1, &ctx);
    r= -1;
-   n= 1;
+   n= 0; m= 5;
    do
    {
+      LOG("I%d/%d\n",n,m);
       t= ubxReadAvailStream(fb,&ctx);
       LOG("t[%d]=%d\n",n,t);
       if (t > 0)
@@ -238,7 +260,7 @@ int ubloxHack (const LXI2CBusCtx *pC, const U8 busAddr)
          {
             if ((fb[i].offset + fb[i].len) < fb[0].len)
             {
-               char sf[8], *pS= (void*)(pM+fb[i].offset);
+               char sf[16], *pS= (void*)(pM+fb[i].offset);
                if (snprintf(sf, sizeof(sf)-1, "%s", pS) > 0)
                {
                   LOG("%d %+d[%d]=%s\n", i, fb[i].offset, fb[i].len, sf);
@@ -258,7 +280,9 @@ int ubloxHack (const LXI2CBusCtx *pC, const U8 busAddr)
             }
          }
       }
-   } while (n-- > 0);
+      usleep(500000);
+    } while (n++ < m);
+   r= ubxSetRate(UBXM8_CL_NAV, UBXM8_ID_PVT, 0, &ctx);
 
    releaseCtx(&ctx);
    return(r);

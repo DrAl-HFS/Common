@@ -34,3 +34,20 @@ void ubxDissectCfgPrt (const UBXPort *pP, const int n)
       }
    }
 } // ubxDissectCfgPrt
+
+int stringifyDT (char c[], const UBXDateTime *pT, const U8 *pNS4)
+{
+   float fracSec= 0;
+   if (pNS4) { fracSec= readBytesLE(pNS4, 0, 4) * 1E-9; }
+   return sprintf(c, "%d/%d/%d %d:%d:%d (%+f) UTC", rdU16LE(pT->year), pT->month, pT->day, pT->hour, pT->min, pT->sec, fracSec);
+} // stringifyDT
+
+void ubxDissectNavPVT (const UBXNavPVT *pP, const int n)
+{
+   if (n >= sizeof(*pP))
+   {
+      char dt[32];
+      stringifyDT(dt, &(pP->tUTC), pP->nsUTC);
+      report(OUT,"%s\n", dt);
+   }
+} // ubxDissectNavPVT

@@ -22,6 +22,8 @@ extern "C" {
 
 extern void ubxDissectCfgPrt (const UBXPort *pP, const int n);
 
+extern void ubxDissectNavPVT (const UBXNavPVT *pP, const int n);
+
 
 #ifdef __cplusplus
 } // extern "C"
