@@ -33,6 +33,8 @@ typedef struct
 
 INLINE void ubxSyncDDS (const UBXInfoDDS *pD) { if (pD->syncus > 0) { usleep(pD->syncus); } }
 
+INLINE int endFrag (const FragBuff16 *pF, const int ext) { return(pF->offset + pF->len + ext); }
+
 int ubxGetAvailDDS (const UBXInfoDDS *pD)
 {
    int t= pD->retry;
@@ -47,71 +49,6 @@ int ubxGetAvailDDS (const UBXInfoDDS *pD)
    } while (t-- > 0);
    return(-1);
 } // ubxGetAvailDDS
-
-// DEPRECATE
-int ubxReadStream (FragBuff16 *pFB, U8 b[], const int max, const UBXCtx *pUC)
-{
-   int r, retry= 3, l= 0, t= 0, chunk= pUC->dds.chunk;
-   if (max > 1)
-   {
-      if (chunk <= 0) { chunk= MIN(32,max); }
-      b[0]= UBXM8_RG_DATASTREAM;
-      r= lxi2cReadRB(pUC->dds.pI2C, pUC->dds.busAddr, b, chunk);
-      if (r >= 0)
-      {
-         t+= chunk;
-         if (UBXM8_DSB_INVALID == b[1]) { chunk= 0; } // invalid data, quit?
-         else { l= t-1; r= max-t; if (r < chunk) { chunk= r; } } // update chunk
-
-         while (chunk > 0)
-         {  // Continue reading, no register update necessary
-            r= lxi2cRead(pUC->dds.pI2C, pUC->dds.busAddr, b+t, chunk);
-            if (r >= 0)
-            {
-               t+= chunk;
-               if (UBXM8_DSB_INVALID == b[t]) { chunk= 0; } // invalid data, quit?
-               else { l= t-1; r= max-t; if (r < chunk) { chunk= r; } } // update chunk
-            } else if (--retry < 0) { chunk= 0; }
-         }
-         if (pFB) { pFB->offset= 1; pFB->len= l; } // store result
-      }
-   }
-   return(t);
-} // ubxReadStream
-
-int ubxReadAvailStream (FragBuff16 *pFB, const UBXCtx *pUC)
-{
-   int r= ubxGetAvailDDS(&(pUC->dds));
-   LOG_CALL("()  - %d\n", r);
-   if (r >= 0)
-   {
-      if (0 == r) { r= pUC->dds.chunk; }
-      r= MIN(1+r, pUC->mb.bytes);
-      // DEPRECATE
-      return ubxReadStream(pFB, pUC->mb.p, r, pUC);
-   }
-   return(r);
-} // ubxReadAvailStream
-
-void initCtx (UBXCtx *pUC, const LXI2CBusCtx *pI2C, const LXUARTCtx *pU, const U8 busAddr, const size_t bytes)
-{
-   //lxUARTOpen(&(pC->uart), "/dev/ttyS0");
-   if (allocMemBuff(&(pUC->mb), bytes))
-   {
-      pUC->dds.pI2C= pI2C;
-      pUC->dds.busAddr= busAddr;
-      pUC->dds.retry=   3;
-      pUC->dds.chunk=   16;
-      pUC->dds.syncus=  2000;
-   }
-} // initCtx
-
-void releaseCtx (UBXCtx *pUC)
-{
-   lxUARTClose(&(pUC->uart));
-   // pI2C ??
-   releaseMemBuff(&(pUC->mb));
-} // releaseCtx
 
 // DISPLACE / rename ?
 int iclamp (int x, const int min, const int max)
@@ -165,38 +102,96 @@ int ubxTransactDDS (const MemBuff *pMB, const UBXInfoDDS *pD, const U8 msg[], co
    if (r >= 0)
    {
       r= ubxGetAvailDDS(pD);
-      if (r >= 0) // Persist even if nothing known available (yet)
-      {
+      if (r >= 0)
+      {  // Persist even if nothing known available (yet)
          return ubxReadDDS(pMB,pD,r,expectPld);
-#if 0
-         int bT=     iclamp(r, UBX_PKT_MIN, pMB->bytes); // Target
-         int chunk=  iclamp(pD->chunk, bT, pMB->bytes);
-         U8 *pB=  pMB->p;
-         int bR=  0;   // Result
-
-         int t= pD->retry;
-         do // Repeated chunk read (no register update necessary)
-         {
-            pB[bR]= UBXM8_DSB_INVALID;  // set guard byte
-            r= lxi2cRead(pD->pI2C, pD->busAddr, pB+bR, chunk);
-            if ((r < 0) || (UBXM8_DSB_INVALID == pB[bR]))
-            {
-               if (t-- > 0) { ubxSyncDDS(pD); }
-               else { chunk= 0; } // give up
-            }
-            else
-            {
-               bR+= chunk;
-               r= bT - bR;
-               if (r < chunk) { chunk= r; }
-            }
-         } while (chunk > 0);
-         return(bR);
-#endif
       }
    }
    return(r);
 } // ubxTransactDDS
+
+int ubxReadStream (FragBuff16 *pFB, const UBXCtx *pUC, const int expect)
+{
+   int r=0;
+   if (pFB)
+   {
+      const int e= endFrag(pFB,0);
+      if (e < pUC->mb.bytes)
+      {
+         MemBuff mb= { .bytes= pUC->mb.bytes - e, .w= pUC->mb.w + e  };
+         r= ubxReadDDS(&mb, &(pUC->dds), ubxGetAvailDDS(&(pUC->dds)), expect);
+         if (r > 0) { pFB->len+= r; }
+      }
+   }
+   else { r= ubxReadDDS(&(pUC->mb), &(pUC->dds), ubxGetAvailDDS(&(pUC->dds)), expect); }
+   return(r);
+} // ubxReadStream
+
+/* DEPRECATE
+int ubxReadStream (FragBuff16 *pFB, U8 b[], const int max, const UBXCtx *pUC)
+{
+   int r, retry= 3, l= 0, t= 0, chunk= pUC->dds.chunk;
+   if (max > 1)
+   {
+      if (chunk <= 0) { chunk= MIN(32,max); }
+      b[0]= UBXM8_RG_DATASTREAM;
+      r= lxi2cReadRB(pUC->dds.pI2C, pUC->dds.busAddr, b, chunk);
+      if (r >= 0)
+      {
+         t+= chunk;
+         if (UBXM8_DSB_INVALID == b[1]) { chunk= 0; } // invalid data, quit?
+         else { l= t-1; r= max-t; if (r < chunk) { chunk= r; } } // update chunk
+
+         while (chunk > 0)
+         {  // Continue reading, no register update necessary
+            r= lxi2cRead(pUC->dds.pI2C, pUC->dds.busAddr, b+t, chunk);
+            if (r >= 0)
+            {
+               t+= chunk;
+               if (UBXM8_DSB_INVALID == b[t]) { chunk= 0; } // invalid data, quit?
+               else { l= t-1; r= max-t; if (r < chunk) { chunk= r; } } // update chunk
+            } else if (--retry < 0) { chunk= 0; }
+         }
+         if (pFB) { pFB->offset= 1; pFB->len= l; } // store result
+      }
+   }
+   return(t);
+} // ubxReadStream
+
+int ubxReadAvailStream (FragBuff16 *pFB, const UBXCtx *pUC)
+{
+   int r= ubxGetAvailDDS(&(pUC->dds));
+   LOG_CALL("()  - %d\n", r);
+   if (r >= 0)
+   {
+      if (0 == r) { r= pUC->dds.chunk; }
+      r= MIN(1+r, pUC->mb.bytes);
+      // DEPRECATE
+      return ubxReadStream(pFB, pUC->mb.p, r, pUC);
+   }
+   return(r);
+} // ubxReadAvailStream
+*/
+
+void initCtx (UBXCtx *pUC, const LXI2CBusCtx *pI2C, const LXUARTCtx *pU, const U8 busAddr, const size_t bytes)
+{
+   //lxUARTOpen(&(pC->uart), "/dev/ttyS0");
+   if (allocMemBuff(&(pUC->mb), bytes))
+   {
+      pUC->dds.pI2C= pI2C;
+      pUC->dds.busAddr= busAddr;
+      pUC->dds.retry=   3;
+      pUC->dds.chunk=   16;
+      pUC->dds.syncus=  2000;
+   }
+} // initCtx
+
+void releaseCtx (UBXCtx *pUC)
+{
+   lxUARTClose(&(pUC->uart));
+   // pI2C ??
+   releaseMemBuff(&(pUC->mb));
+} // releaseCtx
 
 int ubxGetInfo (FragBuff16 *pFB, const UBXCtx *pUC)
 {
@@ -341,8 +336,6 @@ int ubxUpdatePortConfig (U8 *pB, const FragBuff16 fb[], const int n, const UBXCt
 
 #define FB_COUNT 8
 
-static int endFrag (const FragBuff16 *pF, const int ext) { return(pF->offset + pF->len + ext); }
-
 int ubxProcessPayloads (const MemBuff *pMB, const FragBuff16 *pFB)
 {
    FragBuff16 fb[FB_COUNT];
@@ -365,7 +358,7 @@ int ubxTest (const LXI2CBusCtx *pC, const U8 busAddr)
    UBXCtx ctx={0,};
    FragBuff16 fb[FB_COUNT];
    //U8 *pM;
-   int nFB=0, nEFB=0, t, n, m, r=-1;
+   int nFB=0, nEFB=0, t, n, m, r=-1, expect= 0;
 
    //LOG("UBXNavPVT:%d\n", sizeof(UBXNavPVT));
    memset(fb,-1,sizeof(fb));
@@ -386,15 +379,18 @@ int ubxTest (const LXI2CBusCtx *pC, const U8 busAddr)
       }
       //r= ubxReset(UBX_RESET_ID_SW_FULL, &ctx);
 
-      r= ubxRequestPortConfig(UBX_PORT_ID_DDS, &ctx);
-      //r= ubxRequestPortConfig(UBX_PORT_ID_UART, &ctx);
+      //r= ubxRequestPortConfig(UBX_PORT_ID_DDS, &ctx); expect+= sizeof(UBXPort);
+      //r= ubxRequestPortConfig(UBX_PORT_ID_UART, &ctx); expect+= sizeof(UBXPort);
       r= ubxSetRate(UBXM8_CL_NAV, UBXM8_ID_PVT, 1, &ctx);
+      expect+= sizeof(UBXNavPVT);
+
       r= -1;
       n= 0; m= 5;
       do
       {
          LOG("I%d/%d\n",n,m);
-         t= ubxReadAvailStream(fb,&ctx);
+
+         t= ubxReadStream(fb,&ctx,expect); // ubxReadAvailStream(fb,&ctx);
          LOG("t[%d]=%d\n",n,t);
          if (t > 0)
          {
