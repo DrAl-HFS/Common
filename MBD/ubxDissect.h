@@ -19,10 +19,12 @@ extern "C" {
 
 /***/
 
+extern void ubxDissectNavPVT (const UBXNavPVT *pP, const int n);
 
 extern void ubxDissectCfgPrt (const UBXPort *pP, const int n);
 
-extern void ubxDissectNavPVT (const UBXNavPVT *pP, const int n);
+extern void ubxDissectCfgInf (const UBXCfgInf *pP, const int n);
+
 
 
 #ifdef __cplusplus

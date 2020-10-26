@@ -49,18 +49,6 @@ typedef struct { U8 checksum[2]; } UBXFrameFooter;
 #define UBX_RESET_ID_GNSS_STOP   0x08
 #define UBX_RESET_ID_GNSS_START  0x09
 
-typedef struct
-{
-   U8 id, rvd1[1], txRdy[2];
-   union
-   {
-      struct { U8 mode[4], baud[4];  } uart;
-      struct { U8 rvd2[8]; } usb;
-      struct { U8 mode[4], rvd2[4]; } spi;
-      struct { U8 mode[4], rvd2[4]; } dds; // i2c
-   };
-   U8 inProtoM[2], outProtoM[2], flags[2], rvd3[2];
-} UBXPort;
 
 typedef struct { U8 year[2], month, day, hour, min, sec; } UBXDateTime;
 typedef struct
@@ -80,6 +68,25 @@ typedef struct
    U8 pdop[2], flags3, rvd1[5];
    U8 headV[4], magDecl[2], accMag[2];
 } UBXNavPVT;
+
+
+typedef struct
+{
+   U8 id, rvd1[1], txRdy[2];
+   union
+   {
+      struct { U8 mode[4], baud[4];  } uart;
+      struct { U8 rvd2[8]; } usb;
+      struct { U8 mode[4], rvd2[4]; } spi;
+      struct { U8 mode[4], rvd2[4]; } dds; // i2c
+   };
+   U8 inProtoM[2], outProtoM[2], flags[2], rvd3[2];
+} UBXPort;
+
+typedef struct
+{
+   U8 id, rvd1[3], inf[6];
+} UBXCfgInf;
 
 /***/
 

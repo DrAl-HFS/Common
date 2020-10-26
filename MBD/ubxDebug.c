@@ -111,13 +111,17 @@ void ubxDumpPayloads (const U8 b[], FragBuff16 fb[], const int nFB, const int mo
       if (nS > 0)
       {
          for (int i=0; i<nS; i++) { LOG("%s", s[i]); }
+         if (0x3 == ubxHeaderMatch(pH, UBXM8_CL_NAV, UBXM8_ID_PVT))
+         {
+            ubxDissectNavPVT((void*)pP, fb[i].len);
+         }
          if (0x3 == ubxHeaderMatch(pH, UBXM8_CL_CFG, UBXM8_ID_PRT))
          {
             ubxDissectCfgPrt((void*)pP, fb[i].len);
          }
-         if (0x3 == ubxHeaderMatch(pH, UBXM8_CL_NAV, UBXM8_ID_PVT))
+         if (0x3 == ubxHeaderMatch(pH, UBXM8_CL_CFG, UBXM8_ID_INF))
          {
-            ubxDissectNavPVT((void*)pP, fb[i].len);
+            ubxDissectCfgInf((void*)pP, fb[i].len);
          }
          if (0==(modeFlags & DBG_MODE_RAW)) { LOG("%s", "\n"); }
       }
@@ -128,5 +132,6 @@ void ubxDumpPayloads (const U8 b[], FragBuff16 fb[], const int nFB, const int mo
          reportBytes(OUT, pP, fb[i].len);
       }
    }
+   report(OUT,"---");
 } // ubxDumpPayloads
 
