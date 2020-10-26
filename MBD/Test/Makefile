@@ -29,11 +29,17 @@ I2C_SRC := $(I2C_MOD:%=$(SRC_DIR)/%.c)
 I2C_HDR := $(I2C_MOD:%=$(HDR_DIR)/%.h)
 I2C_OBJ := $(I2C_MOD:%=$(OBJ_DIR)/%.o)
 
-I2C_TST_MOD := ledMatrix ledMapRGB mbdUtil ubxDev ubxUtil ubxDissect ubxDebug lxUART
+I2C_TST_MOD := ledMatrix ledMapRGB mbdUtil
 I2C_TST_SRC := $(I2C_TST_MOD:%=$(SRC_DIR)/%.c)
 I2C_TST_HDR := $(I2C_TST_MOD:%=$(HDR_DIR)/%.h)
 I2C_TST_OBJ := $(I2C_TST_MOD:%=$(OBJ_DIR)/%.o)
 I2C_TST_HDR+= $(HDR_DIR)/lumissil.h
+
+UBX_MOD := ubxDev ubxUtil ubxDissect ubxDebug lxUART
+UBX_SRC := $(UBX_MOD:%=$(SRC_DIR)/%.c)
+UBX_HDR := $(UBX_MOD:%=$(HDR_DIR)/%.h)
+UBX_OBJ := $(UBX_MOD:%=$(OBJ_DIR)/%.o)
+UBX_HDR+= $(HDR_DIR)/mbdUtil.h
 
 ADS_MOD := ads1xDev ads1xUtil
 ADS_SRC := $(ADS_MOD:%=$(SRC_DIR)/%.c)
@@ -57,13 +63,14 @@ SUPP_OBJ := $(SUPP_MOD:%=$(OBJ_DIR)/%.o)
 LIBS := -lm
 # -lrt	Solaris "real-time" library, deprecated
 I2C_INCDEF := -I$(COM_DIR) -DLX_I2C_MAIN -DLX_I2C_TEST
+UBX_INCDEF := -I$(COM_DIR) -DUBX_MAIN -DUBX_TEST
 ADS_INCDEF := -I$(COM_DIR) -DADS1X_MAIN -DADS1X_TEST
 LSM_INCDEF := -I$(COM_DIR) -DLSM_MAIN -DLSM_TEST
 
 
 .PHONY : all clean run
 
-all : ti2c ads1x lsm9ds1
+all : ti2c ubx ads1x lsm9ds1
 
 
 # Move any object files to the expected location
@@ -82,6 +89,9 @@ $(OBJ_DIR)/%.o : %.o
 ti2c : $(I2C_SRC) $(I2C_HDR) $(I2C_TST_SRC) $(I2C_TST_HDR) $(SUPP_OBJ) $(MAKEFILE)
 	$(CC) $(OPT) $(I2C_INCDEF) $(LIBS) $(I2C_SRC) $(I2C_TST_SRC) $(SUPP_OBJ) -o $@
 
+ubx :  $(I2C_SRC) $(I2C_HDR) $(UBX_SRC) $(UBX_HDR) $(SUPP_OBJ)  $(MAKEFILE)
+	$(CC) $(OPT) $(UBX_INCDEF) $(LIBS) $(I2C_SRC) $(UBX_SRC) $(SUPP_OBJ) -o $@
+
 ads1x : $(I2C_SRC) $(I2C_HDR) $(ADS_SRC) $(ADS_HDR) $(SUPP_OBJ)  $(MAKEFILE)
 	$(CC) $(OPT) $(ADS_INCDEF) $(LIBS) $(I2C_SRC) $(ADS_SRC) $(SUPP_OBJ) -o $@
 
@@ -93,8 +103,8 @@ setup :
 	mkdir obj
 
 clean :
-	rm -f ti2c ads1x lsm9ds1 $(OBJ_DIR)/*
+	rm -f ti2c ubx ads1x lsm9ds1 $(OBJ_DIR)/*
 
-run : ti2c
-	./$< -Hv
+run : ubx
+	./$< -hv
 

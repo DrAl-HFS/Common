@@ -31,9 +31,26 @@ typedef struct
 
 /***/
 
-INLINE void ubxSync (const UBXCtx *pUC) { if (pUC->dds.syncus > 0) { usleep(pUC->dds.syncus); } }
+INLINE void ubxSyncDDS (const UBXModesDDS *pD) { if (pD->syncus > 0) { usleep(pD->syncus); } }
 
-// Consider: abstract read method for multi-interface compatibility ?
+int ubxGetAvailDDS (const UBXModesDDS *pD)
+{
+   int t= pD->retry;
+   U8 io[3];
+
+   io[0]= UBXM8_RG_NBYTE_HI;
+   do
+   {
+      int r= lxi2cReadRB(pD->pI2C, pD->busAddr, io, 3);
+      if (r >= 0)
+      {
+         return rdU16BE(io+1);
+      } else ubxSyncDDS(pD);
+   } while (t-- > 0);
+   return(-1);
+} // ubxGetAvailDDS
+
+// DEPRECATE
 int ubxReadStream (FragBuff16 *pFB, U8 b[], const int max, const UBXCtx *pUC)
 {
    int r, retry= 3, l= 0, t= 0, chunk= pUC->dds.chunk;
@@ -64,30 +81,18 @@ int ubxReadStream (FragBuff16 *pFB, U8 b[], const int max, const UBXCtx *pUC)
    return(t);
 } // ubxReadStream
 
-int ubxGetAvail (const UBXCtx *pUC)
-{
-   int t= pUC->dds.retry;
-   U8 io[3];
-
-   io[0]= UBXM8_RG_NBYTE_HI;
-   do
-   {
-      int r= lxi2cReadRB(pUC->dds.pI2C, pUC->dds.busAddr, io, 3);
-      if (r >= 0)
-      {
-         return rdU16BE(io+1);
-      } else ubxSync(pUC);
-   } while (t-- > 0);
-   return(-1);
-} // ubxGetAvail
-
 int ubxReadAvailStream (FragBuff16 *pFB, const UBXCtx *pUC)
 {
-   int n= ubxGetAvail(pUC);
-   LOG_CALL("()  - %d\n", n);
-   if (n < 0) { n= pUC->dds.chunk; }
-   n= MIN(1+n, pUC->mb.bytes);
-   return ubxReadStream(pFB, pUC->mb.p, n, pUC);
+   int r= ubxGetAvailDDS(&(pUC->dds));
+   LOG_CALL("()  - %d\n", r);
+   if (r >= 0)
+   {
+      if (0 == r) { r= pUC->dds.chunk; }
+      r= MIN(1+r, pUC->mb.bytes);
+      // DEPRECATE
+      return ubxReadStream(pFB, pUC->mb.p, r, pUC);
+   }
+   return(r);
 } // ubxReadAvailStream
 
 void initCtx (UBXCtx *pUC, const LXI2CBusCtx *pI2C, const LXUARTCtx *pU, const U8 busAddr, const size_t bytes)
@@ -110,6 +115,74 @@ void releaseCtx (UBXCtx *pUC)
    releaseMemBuff(&(pUC->mb));
 } // releaseCtx
 
+// DISPLACE / rename ?
+int iclamp (int x, const int min, const int max)
+{
+   if (x < min) { return(min); }
+   if (x > max) { return(max); }
+   return(x);
+} // iclamp
+
+int ubxTransactDDS (const MemBuff *pMB, const U8 msg[], const int msgLen, const UBXModesDDS *pD)
+{
+   int r= -1, t= pD->retry;
+   do
+   {
+      r= lxi2cWriteRB(pD->pI2C, pD->busAddr, msg, msgLen);
+      if ((r < 0) && (t > 0)) { ubxSyncDDS(pD); }
+   } while ((r < 0) && (t-- > 0));
+   if (r >= 0)
+   {
+      t= pD->retry;
+      do
+      {  // Get bytes available & setup stream access register
+         r= ubxGetAvailDDS(pD);
+         if ((r < 0) && (t >= 0)) { ubxSyncDDS(pD); } // extra sync delay for dire cases
+      } while ((r < 0) && (t-- > 0));
+
+      if (r >= 0) // Persist even if nothing known available (yet)
+      {
+         int bT=     iclamp(r, UBX_PKT_MIN, pMB->bytes); // Target
+         int chunk=  iclamp(pD->chunk, bT, pMB->bytes);
+         U8 *pB=  pMB->p;
+         int bR=  0;   // Result
+
+         t= pD->retry;
+         do // Repeated chunk read (no register update necessary)
+         {
+            pB[bR]= UBXM8_DSB_INVALID;  // set guard byte
+            r= lxi2cRead(pD->pI2C, pD->busAddr, pB+bR, chunk);
+            if ((r < 0) || (UBXM8_DSB_INVALID == pB[bR]))
+            {
+               if (t-- > 0) { ubxSyncDDS(pD); }
+               else { chunk= 0; } // give up
+            }
+            else
+            {
+               bR+= chunk;
+               r= bT - bR;
+               if (r < chunk) { chunk= r; }
+            }
+         } while (chunk > 0);
+         return(bR);
+      }
+   }
+   return(r);
+} // ubxTransactDDS
+
+int ubxGetInfo (const UBXCtx *pUC)
+{
+   int r=-1;
+   if (pUC->dds.pI2C && validMemBuff(&(pUC->mb),1<<10)) // NB info result potentially large
+   {
+      U8 msg[9], n= ubxSetFrameHeader(msg, UBXM8_CL_CFG, UBXM8_ID_INF, 1);
+      msg[n++]= 0x00; // UBX protocol
+      n+= ubxChecksum(msg+n, msg+2, n-2);
+      r= ubxTransactDDS(&(pUC->mb), msg, n, &(pUC->dds));
+   }
+   return(r);
+} // ubxGetInfo
+
 int ubxSetRate (const U8 cl, const U8 id, const U8 rate, const UBXCtx *pUC)
 {  // NB - no register address specified
    int r=-1;
@@ -124,7 +197,7 @@ int ubxSetRate (const U8 cl, const U8 id, const U8 rate, const UBXCtx *pUC)
    {
       r= lxi2cWriteRB(pUC->dds.pI2C, pUC->dds.busAddr, msg, n);
       LOG_CALL("() - I2C-Write CFG-MSG[%d] r=%d\n", n, r);
-      ubxSync(pUC);
+      ubxSyncDDS(&(pUC->dds));
    }
    return(r);
 } // ubxSetRate
@@ -161,12 +234,18 @@ int ubxRequestPortConfig (const U8 portID, const UBXCtx *pUC)
    {
       r= lxi2cWriteRB(pUC->dds.pI2C, pUC->dds.busAddr, rqb, n);
       LOG_CALL("() - I2C-Write CFG-PRT [%d] r=%d\n", n, r);
-      ubxSync(pUC);
+      ubxSyncDDS(&(pUC->dds));
    }
    return(r);
 } // ubxRequestPortConfig
 
-void *ubxGetPtr (U8 *pB, const FragBuff16 *pF, const U8 lvl)
+int ubxGetVersion (const U8 portID, const UBXCtx *pUC)
+{
+   int r=-1;
+   return(r);
+} // ubxRequestPortConfig
+
+void *ubxGetHeadPtr (U8 *pB, const FragBuff16 *pF, const U8 lvl)
 {
    // if ((pF->offset+pF->len) > pB->bytes) { return(NULL); } // super paranoid
    pB+= pF->offset;
@@ -177,7 +256,7 @@ void *ubxGetPtr (U8 *pB, const FragBuff16 *pF, const U8 lvl)
       case 2 : if (pF->offset >= sizeof(UBXFrameHeader)) { return(pB-sizeof(UBXFrameHeader)); } break;
    }
    return(NULL);
-} // ubxGetPtr
+} // ubxGetHeadPtr
 
 int ubxUpdatePortConfig (U8 *pB, const FragBuff16 fb[], const int n, const UBXCtx *pUC)
 {
@@ -189,7 +268,7 @@ int ubxUpdatePortConfig (U8 *pB, const FragBuff16 fb[], const int n, const UBXCt
       if (fb[i].len > 2) // skip ACKS (2 byte cmd hdr pld)
       {
          if (fb[i].len != sizeof(UBXPort)) { ERROR_CALL("() - bad frag [%d] %d != %d\n", i, fb[i].len, sizeof(UBXPort)); return(-1); }
-         pF= ubxGetPtr(pB, fb+i, 2);
+         pF= ubxGetHeadPtr(pB, fb+i, 2);
          //LOG("fb[%d] : %d,%+d %02X%02X\n",i, fb[i].offset, fb[i].len, pF->header.classID[0], pF->header.classID[1]);
          if (pF && (0x3 == ubxHeaderMatch(&(pF->header), UBXM8_CL_CFG, UBXM8_ID_PRT)))
          {
@@ -220,7 +299,7 @@ int ubxUpdatePortConfig (U8 *pB, const FragBuff16 fb[], const int n, const UBXCt
                   const char *ids[]={"DDS","UART"};
                   r= lxi2cWriteRB(pUC->dds.pI2C, pUC->dds.busAddr, pF->preamble, n);
                   LOG_CALL("() - I2C-Write CFG-PRT [%d] %s r=%d\n", n, ids[pP->id], r);
-                  ubxSync(pUC);
+                  ubxSyncDDS(&(pUC->dds));
                }
             }
          }
@@ -229,66 +308,162 @@ int ubxUpdatePortConfig (U8 *pB, const FragBuff16 fb[], const int n, const UBXCt
    return(r);
 } // ubxUpdatePortConfig
 
+#ifdef UBX_TEST
+
 #define FB_COUNT 8
-int ubloxHack (const LXI2CBusCtx *pC, const U8 busAddr)
+int ubxTest (const LXI2CBusCtx *pC, const U8 busAddr)
 {
    UBXCtx ctx={0,};
    FragBuff16 fb[FB_COUNT];
+   //U8 *pM;
    int nFB=0, nEFB=0, t, n, m, r=-1;
 
-   LOG("UBXNavPVT:%d\n", sizeof(UBXNavPVT));
+   //LOG("UBXNavPVT:%d\n", sizeof(UBXNavPVT));
    memset(fb,-1,sizeof(fb));
    initCtx(&ctx, pC, NULL, busAddr, 16<<10);
 
-   //r= ubxReset(UBX_RESET_ID_SW_FULL, &ctx);
-
-   r= ubxRequestPortConfig(UBX_PORT_ID_DDS, &ctx);
-   r= ubxRequestPortConfig(UBX_PORT_ID_UART, &ctx);
-   r= ubxSetRate(UBXM8_CL_NAV, UBXM8_ID_PVT, 1, &ctx);
-   r= -1;
-   n= 0; m= 5;
-   do
+   r= ubxGetInfo(&ctx);
+   LOG("ubxGetInfo() - %d bytes\n", r);
+   if (r > 0)
    {
-      LOG("I%d/%d\n",n,m);
-      t= ubxReadAvailStream(fb,&ctx);
-      LOG("t[%d]=%d\n",n,t);
-      if (t > 0)
-      {
-         U8 *pM= (U8*)(ctx.mb.p) + fb[0].offset;
-         nFB= ubxScanPayloads(fb+1, FB_COUNT-1, pM, fb[0].len);
-         for (int i=nFB+1; i<FB_COUNT; i++)
-         {
-            if ((fb[i].offset + fb[i].len) < fb[0].len)
-            {
-               char sf[16], *pS= (void*)(pM+fb[i].offset);
-               if (snprintf(sf, sizeof(sf)-1, "%s", pS) > 0)
-               {
-                  LOG("%d %+d[%d]=%s\n", i, fb[i].offset, fb[i].len, sf);
-               }
-               nEFB++;
-            }
-         }
-         LOG("\t- %d bytes transferred, %d skipped, payloads found: %d UBX ,%d other. r=%d\n", t, fb[0].offset, nFB, nEFB, r);
-         if (nFB > 0)
-         {
-            ubxDumpPayloads(pM, fb+1, nFB, DBG_MODE_RAW);
-            if (r < 0)
-            {
-               r= ubxUpdatePortConfig(pM, fb+1, nFB, &ctx);
-               //ubxDumpPayloads(pM, fb+1, nFB, DBG_MODE_RAW);
-               sleep(1);
-            }
-         }
-      }
-      usleep(500000);
-    } while (n++ < m);
-   r= ubxSetRate(UBXM8_CL_NAV, UBXM8_ID_PVT, 0, &ctx);
+      nFB= ubxScanPayloads(fb, FB_COUNT, ctx.mb.p, r);
+      LOG("\t - %d payloads\n", nFB);
 
+      //r= ubxReset(UBX_RESET_ID_SW_FULL, &ctx);
+
+      r= ubxRequestPortConfig(UBX_PORT_ID_DDS, &ctx);
+      r= ubxRequestPortConfig(UBX_PORT_ID_UART, &ctx);
+      r= ubxSetRate(UBXM8_CL_NAV, UBXM8_ID_PVT, 1, &ctx);
+      r= -1;
+      n= 0; m= 5;
+      do
+      {
+         LOG("I%d/%d\n",n,m);
+         t= ubxReadAvailStream(fb,&ctx);
+         LOG("t[%d]=%d\n",n,t);
+         if (t > 0)
+         {
+            U8 *pM= (U8*)(ctx.mb.p) + fb[0].offset;
+            nFB= ubxScanPayloads(fb+1, FB_COUNT-1, pM, fb[0].len);
+            for (int i=nFB+1; i<FB_COUNT; i++)
+            {
+               if ((fb[i].offset + fb[i].len) < fb[0].len)
+               {
+                  char sf[16], *pS= (void*)(pM+fb[i].offset);
+                  if (snprintf(sf, sizeof(sf)-1, "%s", pS) > 0)
+                  {
+                     LOG("%d %+d[%d]=%s\n", i, fb[i].offset, fb[i].len, sf);
+                  }
+                  nEFB++;
+               }
+            }
+            LOG("\t- %d bytes transferred, %d skipped, payloads found: %d UBX ,%d other. r=%d\n", t, fb[0].offset, nFB, nEFB, r);
+            if (nFB > 0)
+            {
+               ubxDumpPayloads(pM, fb+1, nFB, DBG_MODE_RAW);
+               if (r < 0)
+               {
+                  r= ubxUpdatePortConfig(pM, fb+1, nFB, &ctx);
+                  //ubxDumpPayloads(pM, fb+1, nFB, DBG_MODE_RAW);
+                  sleep(1);
+               }
+            }
+         }
+         usleep(500000);
+      } while (n++ < m);
+      r= ubxSetRate(UBXM8_CL_NAV, UBXM8_ID_PVT, 0, &ctx);
+   }
    releaseCtx(&ctx);
    return(r);
-} // ubloxHack
+} // ubxTest
 
-//extern int test (const LXI2CBusCtx *pC, const U8 dev[2], const U8 maxIter);
+#endif // UBX_TEST
 
-//#endif // UBX_UTIL_H
+#ifdef UBX_MAIN
 
+typedef struct
+{
+   char devPath[14]; // host device path
+   U8 busAddr;
+   U8 flags, pad;
+} UBXArgs;
+
+static UBXArgs gArgs= { "/dev/i2c-1", 0x42, 0, 0 };
+
+void usageMsg (const char name[])
+{
+static const char optCh[]="advh";
+static const char argCh[]="##  ";
+static const char *desc[]=
+{
+   "I2C bus address: 2digit hex (no prefix)",
+   "device index (-> path /dev/i2c-# )",
+   "verbose diagnostic messages",
+   "help (display this text)",
+};
+   const int n= sizeof(desc)/sizeof(desc[0]);
+   report(OUT,"Usage : %s [-%s]\n", name, optCh);
+   for (int i= 0; i<n; i++)
+   {
+      report(OUT,"\t%c %c - %s\n", optCh[i], argCh[i], desc[i]);
+   }
+} // usageMsg
+
+void argDump (const UBXArgs *pA)
+{
+   report(OUT,"Device: devPath=%s, busAddr=%02X\n", pA->devPath, pA->busAddr);
+   report(OUT,"\tflags=%02X\n", pA->flags);
+} // argDump
+
+#define ARG_AUTO    (1<<2)
+#define ARG_HELP    (1<<1)
+#define ARG_VERBOSE (1<<0)
+
+void argTrans (UBXArgs *pA, int argc, char *argv[])
+{
+   int c, t;
+   do
+   {
+      c= getopt(argc,argv,"a:d:vh");
+      switch(c)
+      {
+         case 'a' :
+            sscanf(optarg, "%x", &t);
+            if (t <= 0x7F) { pA->busAddr= t; }
+            break;
+         case 'd' :
+         {
+            char ch= optarg[0];
+            if ((ch > '0') && (ch <= '9')) { pA->devPath[9]= ch; }
+            break;
+         }
+         case 'h' :
+            pA->flags|= ARG_HELP;
+            break;
+         case 'v' :
+            pA->flags|= ARG_VERBOSE;
+            break;
+     }
+   } while (c > 0);
+   if (pA->flags & ARG_HELP) { usageMsg(argv[0]); }
+   if (pA->flags & ARG_VERBOSE) { argDump(pA); }
+} // argTrans
+
+LXI2CBusCtx gBusCtx={0,-1};
+
+int main (int argc, char *argv[])
+{
+   int r= -1;
+
+   argTrans(&gArgs, argc, argv);
+
+   if (lxi2cOpen(&gBusCtx, gArgs.devPath, 400))
+   {
+      ubxTest(&gBusCtx, gArgs.busAddr);
+      lxi2cClose(&gBusCtx);
+   }
+
+   return(r);
+} // main
+
+#endif // UBX_MAIN

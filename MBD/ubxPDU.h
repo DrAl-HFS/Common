@@ -28,6 +28,9 @@ typedef struct // beware structure padding on non-PO4/8/16 data: depending on co
 // U8 payload[1+]
 typedef struct { U8 checksum[2]; } UBXFrameFooter;
 
+#define UBX_PKT_MIN (sizeof(UBXFrameHeader) + 1 + sizeof(UBXFrameFooter))
+
+
 #define UBX_PORT_ID_DDS  0x00
 #define UBX_PORT_ID_UART 0x01
 // #define UBX_PORT_ID_UART2 0x02 ???
