@@ -8,7 +8,7 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <sys/ioctl.h>
-#include <linux/i2c.h>
+//#include <linux/i2c.h> // (in header)
 #include <linux/i2c-dev.h>
 
 #include "lxI2C.h"
@@ -61,8 +61,8 @@ Bool32 lxi2cOpen (LXI2CBusCtx *pBC, const char devPath[], const int clk)
          else if (clk < 10000) { pBC->clk= clk*1000; } // assume kHz
          else { pBC->clk= clk; }  // assume Hz
       }
-      else { ERROR_CALL("(.. %s)\n", devPath); }
    }
+   if (r < 0) { ERROR_CALL("(.. %s) - %d\n", devPath, r); }
    return(r >= 0);
 } // lxi2cOpen
 
@@ -550,7 +550,7 @@ U8 defBA (U8 a, U8 d)
    return(0x00);
 } // defBA
 
-LXI2CBusCtx gBusCtx={0,-1};
+static LXI2CBusCtx gBusCtx={0,-1};
 
 int main (int argc, char *argv[])
 {

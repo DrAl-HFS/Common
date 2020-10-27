@@ -1,3 +1,4 @@
+# Notes: (apt) install i2c-tools spi-tools
 # Makefile : i2c util test
 #ifndef GCC
 ifdef CLANG
@@ -24,17 +25,23 @@ OBJ_DIR := obj
 # list from which file names are generated. Anything
 # not fitting the pattern (header without body or
 # vice versa) requires explicit addition...
-## TODO rename (?? SER_MOD ??)
-I2C_MOD := lxI2C lxTiming lxUART
-I2C_SRC := $(I2C_MOD:%=$(SRC_DIR)/%.c)
-I2C_HDR := $(I2C_MOD:%=$(HDR_DIR)/%.h)
-I2C_OBJ := $(I2C_MOD:%=$(OBJ_DIR)/%.o)
+SER_MOD := lxI2C lxTiming lxUART
+#lxSPI
+SER_SRC := $(SER_MOD:%=$(SRC_DIR)/%.c)
+SER_HDR := $(SER_MOD:%=$(HDR_DIR)/%.h)
+SER_OBJ := $(SER_MOD:%=$(OBJ_DIR)/%.o)
 
 I2C_TST_MOD := ledMatrix ledMapRGB mbdUtil
 I2C_TST_SRC := $(I2C_TST_MOD:%=$(SRC_DIR)/%.c)
 I2C_TST_HDR := $(I2C_TST_MOD:%=$(HDR_DIR)/%.h)
 I2C_TST_OBJ := $(I2C_TST_MOD:%=$(OBJ_DIR)/%.o)
 I2C_TST_HDR+= $(HDR_DIR)/lumissil.h
+
+SPI_TST_MOD := lxSPI
+SPI_TST_SRC := $(SPI_TST_MOD:%=$(SRC_DIR)/%.c)
+SPI_TST_HDR := $(SPI_TST_MOD:%=$(HDR_DIR)/%.h)
+SPI_TST_OBJ := $(SPI_TST_MOD:%=$(OBJ_DIR)/%.o)
+#SPI_TST_HDR+= $(HDR_DIR)/lumissil.h
 
 UBX_MOD := ubxDev ubxUtil ubxDissect ubxDebug
 UBX_SRC := $(UBX_MOD:%=$(SRC_DIR)/UBX/%.c)
@@ -64,6 +71,7 @@ SUPP_OBJ := $(SUPP_MOD:%=$(OBJ_DIR)/%.o)
 LIBS := -lm
 # -lrt	Solaris "real-time" library, deprecated
 I2C_INCDEF := -I$(COM_DIR) -DLX_I2C_MAIN -DLX_I2C_TEST
+SPI_INCDEF := -I$(COM_DIR) -DLX_SPI_MAIN -DLX_SPI_TEST
 UBX_INCDEF := -I$(COM_DIR) -I$(SRC_DIR) -DUBX_MAIN -DUBX_TEST
 ADS_INCDEF := -I$(COM_DIR) -DADS1X_MAIN -DADS1X_TEST
 LSM_INCDEF := -I$(COM_DIR) -DLSM_MAIN -DLSM_TEST
@@ -71,7 +79,7 @@ LSM_INCDEF := -I$(COM_DIR) -DLSM_MAIN -DLSM_TEST
 
 .PHONY : all clean run
 
-all : ti2c ubx ads1x lsm9ds1
+all : ti2c tspi ubx ads1x lsm9ds1
 
 
 # Move any object files to the expected location
@@ -80,24 +88,27 @@ $(OBJ_DIR)/%.o : %.o
 
 # Conflicting conditional compilations break folder based rules
 #%.o : $(SRC_DIR)/%.c $(HDR_DIR)/%.h
-#	$(CC) $(OPT) $(ACC) $(INCDEF) $< -c
+#	$(CC) $(OPT) $(INCDEF) $< -c
 
 %.o : $(COM_DIR)/%.c $(COM_DIR)/%.h
-	$(CC) $(OPT) $(ACC) $(INCDEF) $< -c
+	$(CC) $(OPT) $(INCDEF) $< -c
 
 
 # Full build from source
-ti2c : $(I2C_SRC) $(I2C_HDR) $(I2C_TST_SRC) $(I2C_TST_HDR) $(SUPP_OBJ) $(MAKEFILE)
-	$(CC) $(OPT) $(I2C_INCDEF) $(LIBS) $(I2C_SRC) $(I2C_TST_SRC) $(SUPP_OBJ) -o $@
+ti2c : $(SER_SRC) $(SER_HDR) $(I2C_TST_SRC) $(I2C_TST_HDR) $(SUPP_OBJ) $(MAKEFILE)
+	$(CC) $(OPT) $(I2C_INCDEF) $(LIBS) $(SER_SRC) $(I2C_TST_SRC) $(SUPP_OBJ) -o $@
 
-ubx :  $(I2C_SRC) $(I2C_HDR) $(UBX_SRC) $(UBX_HDR) $(SUPP_OBJ)  $(MAKEFILE)
-	$(CC) $(OPT) $(UBX_INCDEF) $(LIBS) $(I2C_SRC) $(UBX_SRC) $(SUPP_OBJ) -o $@
+tspi : $(SPI_TST_SRC) $(SPI_TST_HDR) $(SUPP_OBJ) $(MAKEFILE)
+	$(CC) $(OPT) $(SPI_INCDEF) $(LIBS) $(SPI_TST_SRC) $(SUPP_OBJ) -o $@
 
-ads1x : $(I2C_SRC) $(I2C_HDR) $(ADS_SRC) $(ADS_HDR) $(SUPP_OBJ)  $(MAKEFILE)
-	$(CC) $(OPT) $(ADS_INCDEF) $(LIBS) $(I2C_SRC) $(ADS_SRC) $(SUPP_OBJ) -o $@
+ubx :  $(SER_SRC) $(SER_HDR) $(UBX_SRC) $(UBX_HDR) $(SUPP_OBJ)  $(MAKEFILE)
+	$(CC) $(OPT) $(UBX_INCDEF) $(LIBS) $(SER_SRC) $(UBX_SRC) $(SUPP_OBJ) -o $@
 
-lsm9ds1 : $(I2C_SRC) $(I2C_HDR) $(LSM_SRC) $(LSM_HDR) $(SUPP_OBJ) $(MAKEFILE)
-	$(CC) $(OPT) $(LSM_INCDEF) $(LIBS) $(I2C_SRC) $(LSM_SRC) $(SUPP_OBJ) -o $@
+ads1x : $(SER_SRC) $(SER_HDR) $(ADS_SRC) $(ADS_HDR) $(SUPP_OBJ)  $(MAKEFILE)
+	$(CC) $(OPT) $(ADS_INCDEF) $(LIBS) $(SER_SRC) $(ADS_SRC) $(SUPP_OBJ) -o $@
+
+lsm9ds1 : $(SER_SRC) $(SER_HDR) $(LSM_SRC) $(LSM_HDR) $(SUPP_OBJ) $(MAKEFILE)
+	$(CC) $(OPT) $(LSM_INCDEF) $(LIBS) $(SER_SRC) $(LSM_SRC) $(SUPP_OBJ) -o $@
 
 
 setup :
