@@ -539,7 +539,7 @@ void i2cArgTrans (LXI2CArgs *pA, int argc, char *argv[])
 
 /***/
 
-#include "ledMatrix.h"
+//#include "ledMatrix.h"
 
 // Default bus address selector
 U8 defBA (U8 a, U8 d)
@@ -560,7 +560,7 @@ int main (int argc, char *argv[])
 
    if ((gArgs.flags & ARG_ACTION) && lxi2cOpen(&gBusCtx, gArgs.devPath, 400))
    {
-      if (gArgs.flags & ARG_XPT) { r= ledMatHack(&gBusCtx, defBA(gArgs.busAddr, 0x75), MODE_SHUTDOWN); }
+      //if (gArgs.flags & ARG_XPT) { r= ledMatHack(&gBusCtx, defBA(gArgs.busAddr, 0x75), MODE_SHUTDOWN); }
       if (gArgs.flags & ARG_PING) { r= lxi2cPing(&gBusCtx, defBA(gArgs.busAddr, 0x48), &(gArgs.ping), gArgs.flags); }
       if (gArgs.flags & ARG_DUMP) { r= lxi2cDumpDevAddr(&gBusCtx, gArgs.busAddr, 0xFF,0x00); }
 

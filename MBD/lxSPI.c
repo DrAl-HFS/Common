@@ -101,6 +101,7 @@ int lxSPIReadWrite (LXSPICtx *pSC, U8 r[], const U8 w[], int n)
 } // lxSPIReadWrite
 
 #ifdef LX_SPI_MAIN
+
 #define ARG_ACTION 0xF0  // Mask
 #define ARG_HACK   (1<<4)
 
@@ -146,7 +147,7 @@ void argTrans (LXSPIArgs *pA, int argc, char *argv[])
    int c;
    do
    {
-      c= getopt(argc,argv,"a:d:vh");
+      c= getopt(argc,argv,"d:vh");
       switch(c)
       {
          case 'd' :
@@ -173,7 +174,8 @@ int main (int argc, char *argv[])
 
    argTrans(&gArgs, argc, argv);
 
-   if ((gArgs.flags & ARG_ACTION) && lxSPIOpen(&gBusCtx, gArgs.devPath, 100))
+   //if ((gArgs.flags & ARG_ACTION) &&
+   if (lxSPIOpen(&gBusCtx, gArgs.devPath, 100))
    {
       lxSPIReadWrite(&gBusCtx,NULL,NULL,0);
 
@@ -182,4 +184,4 @@ int main (int argc, char *argv[])
    return(r);
 } // main
 
-#endif
+#endif // LX_SPI_MAIN

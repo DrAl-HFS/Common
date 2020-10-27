@@ -25,23 +25,23 @@ OBJ_DIR := obj
 # list from which file names are generated. Anything
 # not fitting the pattern (header without body or
 # vice versa) requires explicit addition...
-SER_MOD := lxI2C lxTiming lxUART
+SER_MOD := lxI2C lxTiming lxUART mbdUtil
 #lxSPI
 SER_SRC := $(SER_MOD:%=$(SRC_DIR)/%.c)
 SER_HDR := $(SER_MOD:%=$(HDR_DIR)/%.h)
 SER_OBJ := $(SER_MOD:%=$(OBJ_DIR)/%.o)
 
-I2C_TST_MOD := ledMatrix ledMapRGB mbdUtil
-I2C_TST_SRC := $(I2C_TST_MOD:%=$(SRC_DIR)/%.c)
-I2C_TST_HDR := $(I2C_TST_MOD:%=$(HDR_DIR)/%.h)
-I2C_TST_OBJ := $(I2C_TST_MOD:%=$(OBJ_DIR)/%.o)
-I2C_TST_HDR+= $(HDR_DIR)/lumissil.h
+LED_TST_MOD := ledMatrix ledMapRGB
+LED_TST_SRC := $(LED_TST_MOD:%=$(SRC_DIR)/LED/%.c)
+LED_TST_HDR := $(LED_TST_MOD:%=$(HDR_DIR)/LED/%.h)
+LED_TST_OBJ := $(LED_TST_MOD:%=$(OBJ_DIR)/%.o)
+LED_TST_HDR+= $(HDR_DIR)/LED/lumissil.h
 
 SPI_TST_MOD := lxSPI
 SPI_TST_SRC := $(SPI_TST_MOD:%=$(SRC_DIR)/%.c)
 SPI_TST_HDR := $(SPI_TST_MOD:%=$(HDR_DIR)/%.h)
 SPI_TST_OBJ := $(SPI_TST_MOD:%=$(OBJ_DIR)/%.o)
-#SPI_TST_HDR+= $(HDR_DIR)/lumissil.h
+#SPI_TST_HDR+= $(HDR_DIR)/_.h
 
 UBX_MOD := ubxDev ubxUtil ubxDissect ubxDebug
 UBX_SRC := $(UBX_MOD:%=$(SRC_DIR)/UBX/%.c)
@@ -72,6 +72,7 @@ LIBS := -lm
 # -lrt	Solaris "real-time" library, deprecated
 I2C_INCDEF := -I$(COM_DIR) -DLX_I2C_MAIN -DLX_I2C_TEST
 SPI_INCDEF := -I$(COM_DIR) -DLX_SPI_MAIN -DLX_SPI_TEST
+LED_INCDEF := -I$(COM_DIR) -I$(SRC_DIR) -DLED_MAIN -DLED_TEST
 UBX_INCDEF := -I$(COM_DIR) -I$(SRC_DIR) -DUBX_MAIN -DUBX_TEST
 ADS_INCDEF := -I$(COM_DIR) -DADS1X_MAIN -DADS1X_TEST
 LSM_INCDEF := -I$(COM_DIR) -DLSM_MAIN -DLSM_TEST
@@ -79,7 +80,7 @@ LSM_INCDEF := -I$(COM_DIR) -DLSM_MAIN -DLSM_TEST
 
 .PHONY : all clean run
 
-all : ti2c tspi ubx ads1x lsm9ds1
+all : ti2c tspi led ubx ads1x lsm9ds1
 
 
 # Move any object files to the expected location
@@ -100,6 +101,9 @@ ti2c : $(SER_SRC) $(SER_HDR) $(I2C_TST_SRC) $(I2C_TST_HDR) $(SUPP_OBJ) $(MAKEFIL
 
 tspi : $(SPI_TST_SRC) $(SPI_TST_HDR) $(SUPP_OBJ) $(MAKEFILE)
 	$(CC) $(OPT) $(SPI_INCDEF) $(LIBS) $(SPI_TST_SRC) $(SUPP_OBJ) -o $@
+
+led : $(LED_TST_SRC) $(LED_TST_HDR) $(SUPP_OBJ) $(MAKEFILE)
+	$(CC) $(OPT) $(LED_INCDEF) $(LIBS) $(SER_SRC) $(LED_TST_SRC) $(SUPP_OBJ) -o $@
 
 ubx :  $(SER_SRC) $(SER_HDR) $(UBX_SRC) $(UBX_HDR) $(SUPP_OBJ)  $(MAKEFILE)
 	$(CC) $(OPT) $(UBX_INCDEF) $(LIBS) $(SER_SRC) $(UBX_SRC) $(SUPP_OBJ) -o $@

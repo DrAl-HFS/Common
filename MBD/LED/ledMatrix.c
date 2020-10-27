@@ -294,3 +294,94 @@ int ledMatHack (const LXI2CBusCtx *pC, const U8 busAddr, const U8 modeFlags)
    if (r > 0) { r= 0; }
    return(r);
 } // ledMatHack
+
+#ifdef LED_MAIN
+
+#define ARG_ACTION 0xF0  // Mask
+#define ARG_HACK   (1<<4)
+
+#define ARG_OPTION   0x0F  // Mask
+#define ARG_HELP    (1<<1)
+#define ARG_VERBOSE (1<<0)
+
+typedef struct
+{
+   char devPath[14]; // host device path
+   U8 busAddr; // bus device address
+   U8 flags;
+} LEDArgs;
+
+static LEDArgs gArgs={"/dev/i2c-1", 0x75, 0};
+static LXI2CBusCtx gBusCtx;
+
+void usageMsg (const char name[])
+{
+static const char optCh[]="advh";
+static const char argCh[]="##  ";
+static const char *desc[]=
+{
+   "I2C bus address: 2digit hex (no prefix)",
+   "device index (-> path /dev/i2c-# )",
+   "verbose diagnostic messages",
+   "help (display this text)",
+};
+   const int n= sizeof(desc)/sizeof(desc[0]);
+   report(OUT,"Usage : %s [-%s]\n", name, optCh);
+   for (int i= 0; i<n; i++)
+   {
+      report(OUT,"\t%c %c - %s\n", optCh[i], argCh[i], desc[i]);
+   }
+} // usageMsg
+
+void argDump (const LEDArgs *pA)
+{
+   report(OUT,"Device: devPath=%s, busAddr=%02X, Flags=%02X\n", pA->devPath, pA->busAddr, pA->flags);
+} // argDump
+
+void argTrans (LEDArgs *pA, int argc, char *argv[])
+{
+   int c, t;
+   do
+   {
+      c= getopt(argc,argv,"a:d:vh");
+      switch(c)
+      {
+         case 'a' :
+            sscanf(optarg, "%x", &t);
+            if ((t & 0x7F) == t) { pA->busAddr= t; }
+            break;
+         case 'd' :
+         {
+            char ch= optarg[0];
+            if ((ch > '0') && (ch <= '9')) { pA->devPath[13]= ch; }
+            break;
+         }
+         case 'h' :
+            pA->flags|= ARG_HELP;
+            break;
+         case 'v' :
+            pA->flags|= ARG_VERBOSE;
+            break;
+     }
+   } while (c > 0);
+   if (pA->flags & ARG_HELP) { usageMsg(argv[0]); }
+   if (pA->flags & ARG_VERBOSE) { argDump(pA); }
+} // argTrans
+
+int main (int argc, char *argv[])
+{
+   int r= -1;
+
+   argTrans(&gArgs, argc, argv);
+
+   //if ((gArgs.flags & ARG_ACTION) &&
+   if (lxi2cOpen(&gBusCtx, gArgs.devPath, 400))
+   {
+      r= ledMatHack(&gBusCtx, gArgs.busAddr, MODE_SHUTDOWN);
+
+      lxi2cClose(&gBusCtx);
+   }
+   return(r);
+} // main
+
+#endif // LED_MAIN
