@@ -77,6 +77,7 @@ extern "C" {
 //define _PASTE(a,b) a##b
 //define PASTE(a,b) _PASTE(a,b)
 
+#ifndef MBD_DEF_H // Prevent grumbling about int32_t vs. long int definitions
 // Terse type names
 #if _STDINT_H
 typedef int8_t   I8;
@@ -92,6 +93,7 @@ typedef uint64_t U64;
 // Use old style homebrew (may need tweaking per platform)
 #include "mbdDef.h"
 #endif // _STDINT_H broken
+#endif // MBD_DEF_H
 
 //typedef __fp16 F16; // gcc on ARM: -mfpu=neon-fp16 -mfp16-format=ieee (or -mfp16-format=alternative for no Inf/NaN)
 //typedef _Float16 F16; // CLANG / CStd no ABI ?

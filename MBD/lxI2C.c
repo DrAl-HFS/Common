@@ -556,6 +556,7 @@ int main (int argc, char *argv[])
 {
    int r= -1;
 
+   //printf("sizeof(long int)=%d\n", sizeof(long int));
    i2cArgTrans(&gArgs, argc, argv);
 
    if ((gArgs.flags & ARG_ACTION) && lxi2cOpen(&gBusCtx, gArgs.devPath, 400))

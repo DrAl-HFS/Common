@@ -21,13 +21,14 @@ extern "C" {
 // on all targets, so just home-brew as necessary.
 typedef signed char       I8;
 typedef signed short      I16;
-typedef signed int        I32;
-// Beware! sizeof(long)==8 under PGI!
-typedef signed long long I64;
+typedef signed long       I32; // NB divergence from <int> for AVR 8b gcc compatibility
 
 typedef unsigned char      U8;
 typedef unsigned short     U16;
-typedef unsigned int       U32;
+typedef unsigned long      U32; // not <int>
+
+// Possibly unsupported by some build environments?
+typedef signed long long I64;
 typedef unsigned long long U64;
 
 typedef float F32;
@@ -36,9 +37,9 @@ typedef double F64;
 #endif // UTIL_H
 
 // Types to support endian twiddling/debug
-typedef union { U64 u64; struct { U8 u8[8]; }; } UU64;
-typedef union { U32 u32; struct { U8 u8[4]; }; } UU32;
-typedef union { U16 u16; struct { U8 u8[2]; }; } UU16;
+// typedef union { U64 u64; U8 u8[8]; } UU64;
+typedef union { U32 u32; U8 u8[4]; } UU32;
+typedef union { U16 u16; U8 u8[2]; } UU16;
 
 // Compact descriptor for fragment within small buffer
 // Size units determined by usage context (commonly bytes)
