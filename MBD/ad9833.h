@@ -18,7 +18,7 @@
 extern "C" {
 #endif
 
-enum AD9833RegAddr
+enum AD9833RegID
 {  // Register address : upper 2 or 3 bits of 16b word
    AD9833_REG_CTRL=  0b00,
    AD9833_REG_FREQ0= 0b01,

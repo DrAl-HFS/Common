@@ -34,7 +34,7 @@ typedef enum ads1x_hwid
 #define ADS10_FSR (((1<<11)-1)<<4) // NB: 12b "left aligned" to 16b
 #define ADS11_FSR ((1<<15)-1)
 
-enum ADS1xRegAddr
+enum ADS1xRegID
 {  // Register address (in packet header)
    ADS1X_REG_RES=0, // Result
    ADS1X_REG_CFG,   // Config
