@@ -30,9 +30,9 @@ enum AD9833RegID
 // Byte oriented control register interface
 enum AD9833Shift0
 {
-   AD9833_SH0_TRI=1,
-   AD9833_SH0_DCLK=3,
-   AD9833_SH0_CLK=5,
+   AD9833_SH0_TRI=1,    // "MODE"
+   AD9833_SH0_DCLK=3,   // "DIV2"
+   AD9833_SH0_CLK=5,    // "OPBITEN"
    AD9833_SH0_SLP1=6,
    AD9833_SH0_SLP2=7
 };
