@@ -26,20 +26,20 @@ extern "C" {
 // with the exception of frequency low:high words which must be sent
 // in that order, despite communication otherwise being big-endian...
 typedef struct
-{  // frequency 28bits in lo,hi word order (same 2bit ADR each b01 / b10), phase offset 13bits (3bit ADR, b110 / b111) 
+{  // frequency 28bits in lo,hi word order (same 2bit ADR each b01 / b10), phase offset 13bits (3bit ADR, b110 / b111)
    // The full 28bits is written in lo,hi order when ctrl:B28=1
-   // Otherwise ctrl:HLB defines whether the hi or lo word is assigned   
+   // Otherwise ctrl:HLB defines whether the hi or lo word is assigned
    UU16 fr[2], pr;
 } AD9833FreqPhaseReg;
 
-typedef union  
+typedef union
 {  // Top 2 or 3 bits of each word form the register address
    struct
-   {  
+   {
       UU16 ctrl;  // ADR<<14 = b00
       AD9833FreqPhaseReg fpr[2];
    };
-   U8 b[14]; // deprecate
+   U8 b[14]; // retained as convenience for development, deprecate later?
 } AD9833Reg;
 
 /***/
