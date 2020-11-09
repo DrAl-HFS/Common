@@ -334,7 +334,7 @@ U8 bitsValZ (const size_t v)
 
 //ifdef UTIL_TEST
 
-int utilTest (void)
+int utilSanityCheck (void)
 {
 #if 0
    char c=0;
@@ -353,7 +353,13 @@ int utilTest (void)
       t= 1<<i;
    }
 #endif
-   return(0);
+   union { long i; U8 u[4]; } sz;
+
+   sz.u[0]= (sizeof(short) << 4) | sizeof(char);
+   sz.u[1]= (sizeof(long) << 4) | sizeof(int);
+   sz.u[2]= (sizeof(long long) << 4) | sizeof(size_t);
+   LOG_CALL("() - sizeof(ll,sz,l,i,s,c) -> 0x%X\n", sz.i);
+   return(sz.i);
 } // utilTest
 
 //endif
@@ -362,7 +368,8 @@ int utilTest (void)
 
 int main (int argc, char *argv[])
 {
-   return utilTest();
+   utilSanityCheck();
+   return
 } // utilTest
 
 #endif

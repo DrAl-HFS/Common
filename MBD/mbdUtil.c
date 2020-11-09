@@ -20,10 +20,10 @@ float rcpF (float x) { if (0 != x) { return(1.0 / x); } else return(0); }
 
 #endif // indef INLINE
 
-int bitCountU8 (U8 u)
+U8 bitCountU8 (U8 u)
 {
 #if 0 // Good for 8bit MCU (no bit shifting)
-   int c=0;
+   U8 c=0;
    for (; u; c++) { u&= u - 1; } // strip high bit
    return(c);
 #else // Good for pipelined CPU (no branching)
@@ -40,3 +40,17 @@ int bitCountNU8 (const U8 u[], int n)
 // __GNUC__ -> __builtin_popcount(u[i])
    return(c);
 } // bitCountNU8
+
+//#ifdef DEBUG ??
+
+int mbdSanityCheck (void)
+{
+   UU16 sz;
+
+   sz.u8[0]= (sizeof(char) << 4) | sizeof(short);
+   sz.u8[1]= (sizeof(int) << 4) | sizeof(long);
+   //sz.u8[2]= (sizeof(size_t) << 4) | sizeof(long long);
+   return(sz.u16);
+} // mbdSanityCheck
+
+//#endif // DEBUG

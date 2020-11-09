@@ -51,11 +51,15 @@ INLINE float rcpF (float x) { if (0 != x) { return(1.0 / x); } else return(0); }
 #endif // INLINE
 
 // Kernighans method for MCU vs. in-place-recursive bit-parallel for pipelined CPU
-extern int bitCountU8 (U8 u);
+// Manual switch prior to build required :(
+extern U8 bitCountU8 (U8 u);
 
 // NB : choice of int counter is deliberate here: size_t creates dependancy
 // on <stdef> and vulnerability to negative results (arithmetic expression for n)
 extern int bitCountNU8 (const U8 u[], int n);
+
+// Check for pitfalls
+extern int mbdSanityCheck (void);
 
 #ifdef __cplusplus
 } // extern "C"

@@ -103,7 +103,7 @@ extern F64 lcombF64 (const F64 x0, const F64 x1, const F64 r0, const F64 r1); //
 extern F64 lerpF64 (const F64 x0, const F64 x1, const F64 r0); // return(x0 * r0 + x1 * (1-r0));
 
 
-extern int utilTest (void);
+extern int utilSanityCheck (void);
 
 #ifdef __cplusplus
 } // extern "C"
