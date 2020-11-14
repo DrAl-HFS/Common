@@ -27,22 +27,26 @@ enum AD9833RegID
    AD9833_REG_PHASE1= 0b111,
 };
 
-// Byte oriented control register interface
+// Byte oriented control register interface seems simplest
+// for AVR target, despite 16b endianess issue (ad9833 hardware
+// registers must be updated using 16b msb-first (BE) transfers
+// only). Cryptic flag names assigned by manufacturer are replaced
+// with better (native language bias!) mnemonics here.
 enum AD9833Shift0
 {
-   AD9833_SH0_TRI=1,    // "MODE"
-   AD9833_SH0_DCLK=3,   // "DIV2"
-   AD9833_SH0_CLK=5,    // "OPBITEN"
-   AD9833_SH0_SLP1=6,
-   AD9833_SH0_SLP2=7
+   AD9833_SH0_TRI=1,    // "MODE" triangle waveform +0.3V pp
+   AD9833_SH0_DCLK=3,   // "DIV2"   double rate clock output +Vcc
+   AD9833_SH0_CLK=5,    // "OPBITEN"   clock waveform output +Vcc
+   AD9833_SH0_SLP1=6,   // Sleep
+   AD9833_SH0_SLP2=7    //    modes
 };
 enum AD9833Shift1
 {
-   AD9833_SH1_RST=0,
-   AD9833_SH1_PSEL=2,
-   AD9833_SH1_FSEL=3,
-   AD9833_SH1_HLB=4,
-   AD9833_SH1_B28=5
+   AD9833_SH1_RST=0,    // Reset
+   AD9833_SH1_PSEL=2,   // Phase register output select
+   AD9833_SH1_FSEL=3,   // Frequency register output select
+   AD9833_SH1_HLB=4,    // Hi/Lo frequency register write select
+   AD9833_SH1_B28=5     // Full frequency register pair write mode select
 };
 // Mask values for flags
 enum AD9833Flag0

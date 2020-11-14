@@ -37,8 +37,8 @@ typedef double F64;
 #endif // UTIL_H
 
 // Types to support endian twiddling/debug
-// typedef union { U64 u64; U8 u8[8]; } UU64;
-typedef union { U32 u32; U8 u8[4]; } UU32;
+typedef union { U64 u64; U32 u32[2]; U8 u8[8]; } UU64;
+typedef union { U32 u32; U16 u16[2]; U8 u8[4]; } UU32;
 typedef union { U16 u16; U8 u8[2]; } UU16;
 
 // Compact descriptor for fragment within small buffer
