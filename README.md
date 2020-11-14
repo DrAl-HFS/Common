@@ -1,6 +1,10 @@
 ## Common
-Common definitions, types and functions in C source files. Intended to be built into project using local 
-configuration rather than as library.
+Common definitions, types and functions in C source files.
+Intended to run under Linux - modules prefixed lx* have a strong dependancy on OS interfaces.
+Other modules such as *Dev or *Util depend on lx* modules and so are not readily portable outside the Linux world.
+Lowest level modules & headers provide definitions, types and functions that are useful in a wider sense: see
+e.g. Duino repository.
+Intended to be built into project using local configuration rather than as library.
 
 General Modules (src/*.c) :-
 
@@ -11,4 +15,6 @@ General Modules (src/*.c) :-
 
 Embedded Modules (MBD/*.c) :-
 
-* **lxI2C** : I2C bus utilities.
+* **lxI2C** : I2C (2-wire bus) utilities.
+* **lxSPI** : SPI (3/4-wire bus) utilities.
+* **lxUART** : UART serial interface utilities.
