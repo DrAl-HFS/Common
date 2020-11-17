@@ -1,7 +1,7 @@
 // Common/MBD/ad9833.h - basic cross-platform definitions for
 // Analog Devices AD9833 signal generator with SPI/3-wire compatible interface.
 // https://github.com/DrAl-HFS/Common.git
-// Licence: GPL V3
+// Licence: GPL V3A
 // (c) Project Contributors October-November 2020
 
 // HW Ref:  http://www.analog.com/media/en/technical-documentation/data-sheets/AD9833.pdf
@@ -34,11 +34,11 @@ enum AD9833RegID
 // with better (native language bias!) mnemonics here.
 enum AD9833Shift0
 {
-   AD9833_SH0_TRI=1,    // "MODE" triangle waveform +0.3V pp
-   AD9833_SH0_DCLK=3,   // "DIV2"   double rate clock output +Vcc
-   AD9833_SH0_CLK=5,    // "OPBITEN"   clock waveform output +Vcc
-   AD9833_SH0_SLP1=6,   // Sleep
-   AD9833_SH0_SLP2=7    //    modes
+   AD9833_SH0_TRI=1,     // "MODE" triangle waveform +0.6V pp
+   AD9833_SH0_DCLK=3,    // "DIV2" double rate clock output +Vcc (datasheet incorrect)
+   AD9833_SH0_CLK=5,     // "OPBITEN" clock waveform output +Vcc
+   AD9833_SH0_SLP_DAC=6, // "SLEEP2" DAC disabled (clock output only)
+   AD9833_SH0_SLP_CLK=7  // "SLEEP1" MCLK disabled (DAC output held)
 };
 enum AD9833Shift1
 {
@@ -54,8 +54,8 @@ enum AD9833Flag0
    AD9833_FL0_TRI=  1<<AD9833_SH0_TRI,
    AD9833_FL0_DCLK= 1<<AD9833_SH0_DCLK,
    AD9833_FL0_CLK=  1<<AD9833_SH0_CLK,
-   AD9833_FL0_SLP1= 1<<AD9833_SH0_SLP1,
-   AD9833_FL0_SLP2= 1<<AD9833_SH0_SLP2
+   AD9833_FL0_SLP_DAC= 1<<AD9833_SH0_SLP_DAC,
+   AD9833_FL0_SLP_CLK= 1<<AD9833_SH0_SLP_CLK
 };
 enum AD9833Flag1
 {
