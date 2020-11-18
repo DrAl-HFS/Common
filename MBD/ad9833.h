@@ -86,8 +86,8 @@ enum AD9833Ctrl
 };
 
 // Frequency scale 16b mask
-#define AD_FS_MASK ((1<<14)-1)
-#define AD_PS_MASK ((1<<13)-1)
+#define AD9833_FS_MASK ((1<<14)-1)
+#define AD9833_PS_MASK ((1<<13)-1)
 
 #ifdef __cplusplus
 } // extern "C"
