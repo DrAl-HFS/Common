@@ -36,9 +36,9 @@ enum AD9833Shift0
 {
    AD9833_SH0_TRI=1,     // "MODE" triangle waveform +0.6V pp
    AD9833_SH0_DCLK=3,    // "DIV2" double rate clock output +Vcc (datasheet incorrect)
-   AD9833_SH0_CLK=5,     // "OPBITEN" clock waveform output +Vcc
+   AD9833_SH0_OCLK=5,    // "OPBITEN" clock waveform output +Vcc
    AD9833_SH0_SLP_DAC=6, // "SLEEP2" DAC disabled (clock output only)
-   AD9833_SH0_SLP_CLK=7  // "SLEEP1" MCLK disabled (DAC output held)
+   AD9833_SH0_SLP_MCLK=7 // "SLEEP1" MCLK disabled (DAC output held)
 };
 enum AD9833Shift1
 {
@@ -53,9 +53,9 @@ enum AD9833Flag0
 {
    AD9833_FL0_TRI=  1<<AD9833_SH0_TRI,
    AD9833_FL0_DCLK= 1<<AD9833_SH0_DCLK,
-   AD9833_FL0_CLK=  1<<AD9833_SH0_CLK,
-   AD9833_FL0_SLP_DAC= 1<<AD9833_SH0_SLP_DAC,
-   AD9833_FL0_SLP_CLK= 1<<AD9833_SH0_SLP_CLK
+   AD9833_FL0_OCLK= 1<<AD9833_SH0_OCLK,
+   AD9833_FL0_SLP_DAC=  1<<AD9833_SH0_SLP_DAC,
+   AD9833_FL0_SLP_MCLK= 1<<AD9833_SH0_SLP_MCLK
 };
 enum AD9833Flag1
 {
@@ -86,8 +86,8 @@ enum AD9833Ctrl
 };
 
 // Frequency scale 16b mask
-#define AD9833_FS_MASK ((1<<14)-1)
-#define AD9833_PS_MASK ((1<<13)-1)
+#define AD9833_FSR_MASK ((1<<14)-1)
+#define AD9833_PSR_MASK ((1<<13)-1)
 
 #ifdef __cplusplus
 } // extern "C"
