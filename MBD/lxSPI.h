@@ -1,7 +1,7 @@
 // Common/MBD/lxUART.h - Linux SPI utils
 // https://github.com/DrAl-HFS/Common.git
 // Licence: GPL V3
-// (c) Project Contributors Oct 2020
+// (c) Project Contributors Oct-Dec 2020
 
 #ifndef LX_SPI_H
 #define LX_SPI_H
@@ -17,7 +17,7 @@ extern "C" {
 #endif
 
 typedef struct
-{
+{  // any point in this ??
    U32 clock;
    U16 delay;
    U8 bits, flags;
