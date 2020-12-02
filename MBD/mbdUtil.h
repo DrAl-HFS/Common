@@ -1,7 +1,7 @@
 // Common/MBD/mbdUtil.c - utilities for low-level/embedded stuff
 // https://github.com/DrAl-HFS/Common.git
 // Licence: GPL V3
-// (c) Project Contributors Aug 2020
+// (c) Project Contributors Aug-Dec 2020
 
 #ifndef MBD_UTIL_H
 #define MBD_UTIL_H
