@@ -447,7 +447,7 @@ static const char *desc[]=
    "interval (nanoseconds) between messages",
    "Ping",
    "Dump",
-   "eXperimental"
+   "eXperimental",
    "Hack",
    "verbose diagnostic messages",
    "help (display this text)"

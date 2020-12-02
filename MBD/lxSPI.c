@@ -29,9 +29,8 @@ Bool32 lxSPIOpen (LXSPICtx *pSC, const char devPath[], U32 clock)
       pSC->fd= open(devPath, O_RDWR);
       if (pSC->fd >= 0)
       {
-         if (clock < 1) { clock= 100000; } // standard/default I2C clock rate
+         if (clock < 1) { clock= 8000000; } // 8MHz default SPI clock rate
          else if (clock < 10000) { clock*= 1000; } // assume kHz
-         //else { pBC->clk= clk; }  // assume Hz
          pSC->port.clock= clock;
          pSC->port.delay= 0;
          pSC->port.bits=  8;
