@@ -87,6 +87,7 @@ enum AD9833Ctrl
 
 // Frequency scale 16b mask
 #define AD9833_FSR_MASK ((1<<14)-1)
+#define AD9833_FSR_MASK_8H 0x3F // ((1<<6)-1) most significant 8bits
 #define AD9833_PSR_MASK ((1<<13)-1)
 
 #ifdef __cplusplus
