@@ -93,7 +93,7 @@ Bool32 lxSPIOpen (LXSPICtx *pSC, const char devPath[], U32 clock)
          if (nc > 0) { nc= setInfo(pSC->fd, &inf); LOG("set() - %d\n", nc); }
 
          LOG_CALL("() - %G%cHz\n", sciFmtSetF(s, inf.maxClk), s[0]);
-         LOG("\t%ubpw, %ulsb, 0x%08X modes:\n", inf.bpw, inf.lsb, inf.m32);
+         LOG("\t%ubpw, 0x%08X modes:\n", inf.bpw, inf.m32);
          modeStr(s, sizeof(s)-1, inf.m32); LOG("\t%s\n", s);
 
          if (clock < 1) { clock= 8000000; } // 8MHz default SPI clock rate
