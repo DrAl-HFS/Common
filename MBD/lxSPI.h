@@ -17,23 +17,25 @@ extern "C" {
 #endif
 
 typedef struct
-{  // any point in this ??
-   U32 clock;
+{
+   U32 kdmf, clk;    // kernel driver mode flags, transaction clock rate
    U16 delay;
-   U8 bits, flags;
-} PortSPI;
+   U8  bpw, flags;    // bits per word, misc user flags (unused)
+   //U8  csID, pad;   // chip select defined in device tree only ?
+} SPIProfile;
 
 typedef struct
 {
    int  fd;
-   PortSPI port;
+   U32   maxClk;
+   SPIProfile currProf;
 } LXSPICtx;
 
 
 
 /***/
 
-extern Bool32 lxSPIOpen (LXSPICtx *pSC, const char devPath[], U32 clock);
+extern Bool32 lxSPIOpen (LXSPICtx *pSC, const char devPath[], const SPIProfile *pP);
 
 extern int lxSPIReadWrite (LXSPICtx *pSC, U8 r[], const U8 w[], int n);
 

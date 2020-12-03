@@ -18,62 +18,77 @@
 typedef unsigned long UL;
 typedef unsigned long long ULL;
 
-typedef struct
-{
-   uint32_t m32, maxClk;
-   uint8_t  bpw, pad[3];
-} SPIInfo;
-
 
 /***/
 
-static int modeStr (char s[], const int max, const uint32_t m)
+static int strMode (char s[], const int m, const U32 kdmf)
 {
+static const char hlm[3]={'H','L','M'};
+static const char cd[2]={'-',':'};
+   U8 c;
    int n= 0;
-   if (m & SPI_CPHA) { n+= snprintf(s+n, max-n, "CPHA "); }
-   if (m & SPI_CPOL) { n+= snprintf(s+n, max-n, "CPOL "); }
-   if (m & SPI_NO_CS) { n+= snprintf(s+n, max-n, "NCS "); }
-   if (m & SPI_CS_HIGH) { n+= snprintf(s+n, max-n, "HCS "); }
-   if (m & SPI_LSB_FIRST) { n+= snprintf(s+n, max-n, "LSB "); }
-   if (m & SPI_3WIRE) { n+= snprintf(s+n, max-n, "3WR "); }
-   if (m & SPI_READY) { n+= snprintf(s+n, max-n, "RDY "); }
-// SPI_LOOP
-/*
-SPI_TX_DUAL
-SPI_TX_QUAD
-SPI_RX_DUAL
-SPI_RX_QUAD
-*/
-   return(n);
-} // modeStr
+   n+= snprintf(s+n, m-n, "MODE%u", kdmf & SPI_MODE_3);
+   //if (kdmf & SPI_CPHA) { n+= snprintf(s+n, m-n, "CPHA "); }
+   //if (kdmf & SPI_CPOL) { n+= snprintf(s+n, m-n, "CPOL "); }
 
-static int getInfo (int fd, SPIInfo *pI)
+   c= (0 == (kdmf & SPI_NO_CS));
+   n+= snprintf(s+n, m-n, " CS%c",cd[c]);
+   if (c)
+   {
+      c= (0 == (kdmf & SPI_CS_HIGH));
+      n+= snprintf(s+n, m-n, "%c->%c", hlm[c], hlm[c^1]);
+   }
+   c= hlm[ 1+(0 == (kdmf & SPI_LSB_FIRST)) ];
+   n+= snprintf(s+n, m-n, " %cSB", c);
+   if (kdmf & SPI_3WIRE) { n+= snprintf(s+n, m-n, " 3WR"); }
+   if (kdmf & SPI_READY) { n+= snprintf(s+n, m-n, " RDY"); }
+// SPI_LOOP SPI_TX_DUAL SPI_TX_QUAD SPI_RX_DUAL SPI_RX_QUAD OCTA....
+   return(n);
+} // strMode
+
+static int strProf (char s[], const int m, const SPIProfile *pP)
 {
-   int r, n=0;
-
-   r= ioctl(fd, SPI_IOC_RD_MODE32, &(pI->m32)); n+= (r>= 0);
-   r= ioctl(fd, SPI_IOC_RD_MAX_SPEED_HZ, &(pI->maxClk)); n+= (r>= 0);
-   r= ioctl(fd, SPI_IOC_RD_BITS_PER_WORD, &(pI->bpw)); n+= (r>= 0);
-   //r= ioctl(fd, SPI_IOC_RD_LSB_FIRST, &(pI->lsb)); n+= (r>= 0); // redundant
-
+   int n= snprintf(s, m, "clk= %G%cHz, delay= %uus, bpw= %u\n ", sciFmtSetF(s, pP->clk), s[0], pP->delay, pP->bpw);
+   n+= snprintf(s+n, m-n, "\tmode= 0x%X : ", pP->kdmf);
+   strMode(s+n, m-n, pP->kdmf);
    return(n);
+} // strProf
+
+static int getProf (int fd, SPIProfile *pP)
+{
+   int r, m=0;
+   r= ioctl(fd, SPI_IOC_RD_MODE32, &(pP->kdmf)); m|= (r>= 0);
+   r= ioctl(fd, SPI_IOC_RD_BITS_PER_WORD, &(pP->bpw)); m|= (r>= 0)<<1;
+   return(m);
 } // getInfo
 
-static int setInfo (int fd, const SPIInfo *pI)
+static int getDefaultProf (int fd, SPIProfile *pP)
 {
-   int r, n=0;
+   pP->clk= 8E6; // 8MHz sensible default
+   pP->delay= 0;
+   return getProf(fd,pP);
+} // getDefaultProf
 
-   r= ioctl(fd, SPI_IOC_WR_MODE32, &(pI->m32)); n+= (r>= 0);
-   //???  r= ioctl(fd, SPI_IOC_WR_MAX_SPEED_HZ, &(pI->maxClk)); n+= (r>= 0); // what point ?
-   r= ioctl(fd, SPI_IOC_WR_BITS_PER_WORD, &(pI->bpw)); n+= (r>= 0);
-   //r= ioctl(fd, SPI_IOC_WR_LSB_FIRST, &(pI->lsb)); n+= (r>= 0);
+static int setProf (int fd, const SPIProfile *pP)
+{
+   int r, m=0;
+   r= ioctl(fd, SPI_IOC_WR_MODE32, &(pP->kdmf)); m|= (r>= 0);
+   r= ioctl(fd, SPI_IOC_WR_BITS_PER_WORD, &(pP->bpw)); m|= (r>= 0)<<1;
+   return(m);
+} // setProf
 
-   return(n);
-} // setInfo
+static void setTransProf (struct spi_ioc_transfer *pT, const SPIProfile *pP)
+{
+   memset(pT, 0, sizeof(*pT));
+   pT->speed_hz=        pP->clk;
+   pT->delay_usecs=     pP->delay;
+   pT->bits_per_word=   pP->bpw;
+   pT->cs_change= 1; // ??? no change for part of ongoing transaction ???
+} // setTransProf
 
 /***/
 
-Bool32 lxSPIOpen (LXSPICtx *pSC, const char devPath[], U32 clock)
+Bool32 lxSPIOpen (LXSPICtx *pSC, const char devPath[], const SPIProfile *pP)
 {
    struct stat st;
    int r= -1;
@@ -82,29 +97,27 @@ Bool32 lxSPIOpen (LXSPICtx *pSC, const char devPath[], U32 clock)
       pSC->fd= open(devPath, O_RDWR);
       if (pSC->fd >= 0)
       {
-         SPIInfo inf;
-         char s[64], nc=0;
-
-         getInfo(pSC->fd, &inf);
-
+         r= ioctl(pSC->fd, SPI_IOC_RD_MAX_SPEED_HZ, &(pSC->maxClk));
+         if (pP)
+         {
+            r= setProf(pSC->fd, pP);
+            if (0x3 == r) { pSC->currProf= *pP; }
+            else
+            {
+               WARN_CALL("(... %p) - profile fail (0x%X)\n", pP, r);
+               getProf(pSC->fd, &(pSC->currProf));
+            }
+         }
+         else { getDefaultProf(pSC->fd, &(pSC->currProf)); }
+/*
          if (SPI_MODE_3 != (SPI_MODE_3 & inf.m32)) { inf.m32|= SPI_MODE_3; ++nc; }
          if (SPI_CS_HIGH == (SPI_CS_HIGH & inf.m32)) { inf.m32&= ~SPI_CS_HIGH; ++nc; }
          if (16 != inf.bpw) { inf.bpw= 16; ++nc; }
          if (nc > 0) { nc= setInfo(pSC->fd, &inf); LOG("set() - %d\n", nc); }
-
-         LOG_CALL("() - %G%cHz\n", sciFmtSetF(s, inf.maxClk), s[0]);
-         LOG("\t%ubpw, 0x%08X modes:\n", inf.bpw, inf.m32);
-         modeStr(s, sizeof(s)-1, inf.m32); LOG("\t%s\n", s);
-
-         if (clock < 1) { clock= 8000000; } // 8MHz default SPI clock rate
-         else if (clock < 10000) { clock*= 1000; } // assume kHz
-
-         pSC->port.clock= MIN(clock, inf.maxClk);
-         pSC->port.delay= 0;
-         pSC->port.bits=  inf.bpw;
-         pSC->port.flags= 0;
-
-         return(TRUE);
+*/
+         char s[96];
+         LOG_CALL("() - maxClk= %G%cHz\n", sciFmtSetF(s, pSC->maxClk), s[0]);
+         strProf(s, sizeof(s)-1, &(pSC->currProf)); LOG("\t%s\n", s);
       }
    }
    if (r < 0) { ERROR_CALL("(.. %s) - %d\n", devPath, r); }
@@ -122,12 +135,11 @@ void lxSPIClose (LXSPICtx *pSC)
 
 int lxSPIReadWrite (LXSPICtx *pSC, U8 r[], const U8 w[], int n)
 {
-   struct spi_ioc_transfer m={
-      .rx_buf= (UL)r, .tx_buf= (UL)w, .len= n, .speed_hz= pSC->port.clock,
-      .delay_usecs= pSC->port.delay, .bits_per_word= pSC->port.bits,
-      .cs_change= 1, // toggle CS
-      // .tx_nbits= 0, .rxnbits= 0 // multi-rate transfer unused here  (.pad= 0 )
-   };
+   struct spi_ioc_transfer m;
+   setTransProf(&m,&(pSC->currProf));
+   m.rx_buf= (UL)r;
+   m.tx_buf= (UL)w;
+   m.len=   n;
    //return reportBytes(OUT, (void*)&m, sizeof(m));
    return ioctl(pSC->fd, SPI_IOC_MESSAGE(1), &m);
 } // lxSPIReadWrite
@@ -202,14 +214,21 @@ void argTrans (LXSPIArgs *pA, int argc, char *argv[])
 
 int main (int argc, char *argv[])
 {
+   SPIProfile prof;
    int r= -1;
 
    argTrans(&gArgs, argc, argv);
 
+   prof.kdmf= SPI_MODE_3 | SPI_CS_HIGH; // SPI_MODE_3=SPI_CPOL|SPI_CPHA
+   prof.clk= 488E3;    // kernel driver mode flags, transaction clock rate
+   prof.delay= 0;
+   prof.bpw= 8;
    //if ((gArgs.flags & ARG_ACTION) &&
-   if (lxSPIOpen(&gBusCtx, gArgs.devPath, 100))
+   if (lxSPIOpen(&gBusCtx, gArgs.devPath, &prof))
    {
-      lxSPIReadWrite(&gBusCtx,NULL,NULL,0);
+      U8 rd[2]={0,0}, wr[2]={0xFA,0xFA};
+      r= lxSPIReadWrite(&gBusCtx,rd,wr,2);
+      LOG("lxSPIReadWrite() - %d : %X,%X\n", r, rd[0], rd[1]);
 
       lxSPIClose(&gBusCtx);
    }
