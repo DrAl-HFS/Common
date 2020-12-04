@@ -119,7 +119,7 @@ setup :
 	mkdir obj
 
 clean :
-	rm -f ti2c ubx ads1x lsm9ds1 $(OBJ_DIR)/*
+	rm -f ti2c tspi ubx ads1x lsm9ds1 $(OBJ_DIR)/*
 
 run : ubx
 	./$< -hv

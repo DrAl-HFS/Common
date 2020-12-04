@@ -56,9 +56,11 @@ static int strProf (char s[], const int m, const SPIProfile *pP)
 
 static int getProf (int fd, SPIProfile *pP)
 {
+   uint32_t t= pP->bpw;
    int r, m=0;
    r= ioctl(fd, SPI_IOC_RD_MODE32, &(pP->kdmf)); m|= (r>= 0);
-   r= ioctl(fd, SPI_IOC_RD_BITS_PER_WORD, &(pP->bpw)); m|= (r>= 0)<<1;
+   r= ioctl(fd, SPI_IOC_RD_BITS_PER_WORD, &t); //(pP->bpw));
+   m|= (r>= 0)<<1;
    return(m);
 } // getInfo
 
