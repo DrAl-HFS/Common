@@ -224,12 +224,12 @@ int main (int argc, char *argv[])
    prof.kdmf= SPI_MODE_3 | SPI_CS_HIGH; // SPI_MODE_3=SPI_CPOL|SPI_CPHA
    prof.clk= 488E3;    // kernel driver mode flags, transaction clock rate
    prof.delay= 0;
-   prof.bpw= 8;
+   prof.bpw= 16;
    //if ((gArgs.flags & ARG_ACTION) &&
    if (lxSPIOpen(&gBusCtx, gArgs.devPath, &prof))
    {
-      U8 rd[2]={0,0}, wr[2]={0xFA,0xFA};
-      r= lxSPIReadWrite(&gBusCtx,rd,wr,2);
+      U8 rd[8]={0,}, wr[]={0xFA,0xBC,0xDE};
+      r= lxSPIReadWrite(&gBusCtx,rd,wr,3);
       LOG("lxSPIReadWrite() - %d : %X,%X\n", r, rd[0], rd[1]);
 
       lxSPIClose(&gBusCtx);
