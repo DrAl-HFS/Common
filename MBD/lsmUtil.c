@@ -175,10 +175,10 @@ void dumpNIVD (const I32 v[], const int n, const int d, const char ftr[])
    buf[0]='(';
    while (j < n)
    {
-      nCh= 1+snprintf(buf+1, sizeof(buf)-1, "%d", v[j]);
+      nCh= 1+snprintf(buf+1, sizeof(buf)-1, "%ld", v[j]);
       for (int i= 1; i<d; i++)
       {
-         nCh+= snprintf(buf+nCh, sizeof(buf)-nCh, ",%d", v[j+i]);
+         nCh+= snprintf(buf+nCh, sizeof(buf)-nCh, ",%ld", v[j+i]);
       }
       j+= d;
       if (n == j) { LOG("%s)%s",buf,ftr); }

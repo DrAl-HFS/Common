@@ -54,12 +54,31 @@ static int strProf (char s[], const int m, const SPIProfile *pP)
    return(n);
 } // strProf
 
-static int getProf (int fd, SPIProfile *pP)
+static int getProf (int fd, SPIProfile *pP, const SPIProfile *pD)
 {
-   uint32_t t= pP->bpw;
    int r, m=0;
-   r= ioctl(fd, SPI_IOC_RD_MODE32, &(pP->kdmf)); m|= (r>= 0);
-   r= ioctl(fd, SPI_IOC_RD_BITS_PER_WORD, &t); //(pP->bpw));
+   r= ioctl(fd, SPI_IOC_RD_MODE32, &(pP->kdmf));
+   m|= (r>= 0);
+   if (pD)
+   {
+      if (pD != pP)
+      {
+         pP->clk= pD->clk;
+         pP->delay= pD->delay;
+      }
+   }
+   else
+   {
+/* non-existant:
+   r= ioctl(fd, SPI_IOC_RD_SPEED_HZ, &(pP->clk));
+   m|= (r>= 0)<<1;
+   r= ioctl(fd, SPI_IOC_RD_DELAY_US, &(pP->delay));
+   m|= (r>= 0)<<2;
+*/
+      pP->clk= 8E6;
+      pP->delay= 0;
+   }
+   r= ioctl(fd, SPI_IOC_RD_BITS_PER_WORD, &(pP->bpw));
    m|= (r>= 0)<<1;
    return(m);
 } // getInfo
@@ -68,14 +87,17 @@ static int getDefaultProf (int fd, SPIProfile *pP)
 {
    pP->clk= 8E6; // 8MHz sensible default
    pP->delay= 0;
-   return getProf(fd,pP);
+   return getProf(fd,pP,pP);
 } // getDefaultProf
 
 static int setProf (int fd, const SPIProfile *pP)
 {
    int r, m=0;
-   r= ioctl(fd, SPI_IOC_WR_MODE32, &(pP->kdmf)); m|= (r>= 0);
-   r= ioctl(fd, SPI_IOC_WR_BITS_PER_WORD, &(pP->bpw)); m|= (r>= 0)<<1;
+   r= ioctl(fd, SPI_IOC_WR_MODE32, &(pP->kdmf));
+   m|= (r>= 0);
+   //uint32_t t= pP->bpw; &t); //
+   r= ioctl(fd, SPI_IOC_WR_BITS_PER_WORD, &(pP->bpw));
+   m|= (r>= 0)<<1;
    return(m);
 } // setProf
 
@@ -107,7 +129,7 @@ Bool32 lxSPIOpen (LXSPICtx *pSC, const char devPath[], const SPIProfile *pP)
             else
             {
                WARN_CALL("(... %p) - profile fail (0x%X)\n", pP, r);
-               getProf(pSC->fd, &(pSC->currProf));
+               getProf(pSC->fd, &(pSC->currProf), pP);
             }
          }
          else { getDefaultProf(pSC->fd, &(pSC->currProf)); }
@@ -226,12 +248,12 @@ int main (int argc, char *argv[])
    prof.delay= 0;
    prof.bpw= 16;
    //if ((gArgs.flags & ARG_ACTION) &&
-   if (lxSPIOpen(&gBusCtx, gArgs.devPath, &prof))
+   if (lxSPIOpen(&gBusCtx, gArgs.devPath, NULL)) // &prof))
    {
       U8 rd[8]={0,}, wr[]={0xFA,0xBC,0xDE};
       r= lxSPIReadWrite(&gBusCtx,rd,wr,3);
-      LOG("lxSPIReadWrite() - %d : %X,%X\n", r, rd[0], rd[1]);
-
+      LOG("lxSPIReadWrite() - %d : ", r);
+      reportBytes(DBG, rd, r);
       lxSPIClose(&gBusCtx);
    }
    return(r);
