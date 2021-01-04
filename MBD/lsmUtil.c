@@ -267,8 +267,8 @@ enum AngUnit
 enum LSMLinAngRate
 {
    LAR_OFF= 0, // Sample rate (Hz)
-   LAR_1XX= 1, // L 10 / A 14.9
-   LAR_5XX= 2, // L 50 / A 59.5
+   LAR_1X=  1, // L 10 / A 14.9
+   LAR_5X=  2, // L 50 / A 59.5
    LAR_119= 3,
    LAR_238= 4,
    LAR_476= 5,
@@ -443,11 +443,13 @@ int testIMU (const LXI2CBusCtx *pC, const U8 dev[2], const U8 maxIter)
 
 LXI2CBusCtx gBusCtx={0,-1};
 
+// Experiment with SPI + I2C dual connection: SCL(K) requires
+// isolation (diodes?) to function. SDA/MOSI may also ?
 int main (int argc, char *argv[])
 {
    if (lxi2cOpen(&gBusCtx, "/dev/i2c-1", 400))
    {  // I2C addr: AG= 6B/6A
-      const U8 ag_m[]={0x6a,0x1e};
+      const U8 ag_m[]={0x6a,0x1e}; // NB: AG alternate addr (SDO-AG pulldown disconnected)
       testIMU(&gBusCtx, ag_m, 30);
 
       lxi2cClose(&gBusCtx);
