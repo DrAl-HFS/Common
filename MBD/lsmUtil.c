@@ -462,7 +462,7 @@ int main (int argc, char *argv[])
 #if 1
    SPIProfile prof;
 
-   prof.kdmf= SPI_MODE_3; // | SPI_CS_HIGH; // SPI_MODE_3=SPI_CPOL|SPI_CPHA
+   prof.kdmf= SPI_MODE_3; // CS active low, SPI_MODE_3=SPI_CPOL|SPI_CPHA
    prof.clk= 8E6;
    prof.delay= 0;
    prof.bpw= 8;

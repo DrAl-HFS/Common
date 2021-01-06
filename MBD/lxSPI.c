@@ -34,7 +34,7 @@ static const char cd[2]={'-',':'};
    c= (0 == (kdmf & SPI_NO_CS));
    n+= snprintf(s+n, m-n, " CS%c",cd[c]);
    if (c)
-   {
+   {  // CS sense
       c= (kdmf & SPI_CS_HIGH) > 0;
       n+= snprintf(s+n, m-n, "%c->%c", hlm[c], hlm[c^1]);
    }
@@ -92,23 +92,30 @@ static int getDefaultProf (int fd, SPIProfile *pP)
 
 static int setProf (int fd, const SPIProfile *pP)
 {
-   int r, m=0;
+   int m=0, r;
+
    r= ioctl(fd, SPI_IOC_WR_MODE32, &(pP->kdmf));
-   m|= (r>= 0);
-   //uint32_t t= pP->bpw; &t); //
+   m|= (r>= 0) << 0;
    r= ioctl(fd, SPI_IOC_WR_BITS_PER_WORD, &(pP->bpw));
-   m|= (r>= 0)<<1;
+   m|= (r>= 0) << 1;
+/* read back
+   r= ioctl(fd, SPI_IOC_RD_BITS_PER_WORD, &(pP->bpw));
+   m|= (r>= 0)<<3;
+   int t= 0;
+   r= ioctl(fd, SPI_IOC_RD_MODE32, &t);
+   m|= (t == pP->kdmf);
+*/
    return(m);
 } // setProf
 
-static void setTransProf (struct spi_ioc_transfer *pT, const SPIProfile *pP)
+static void initTransProf (struct spi_ioc_transfer *pT, const SPIProfile *pP, U8 contCS)
 {
    memset(pT, 0, sizeof(*pT));
    pT->speed_hz=        pP->clk;
    pT->delay_usecs=     pP->delay;
    pT->bits_per_word=   pP->bpw;
-   pT->cs_change= 1; // ??? no change for part of ongoing transaction ???
-} // setTransProf
+   pT->cs_change= contCS; // ??? no change for part of ongoing transaction ???
+} // initTransProf
 
 /***/
 
@@ -125,7 +132,7 @@ Bool32 lxSPIOpen (LXSPICtx *pSC, const char devPath[], const SPIProfile *pP)
          if (pP)
          {
             r= setProf(pSC->fd, pP);
-            if (0x3 == r) { pSC->currProf= *pP; }
+            if (0x1 & r) { pSC->currProf= *pP; }
             else
             {
                WARN_CALL("(... %p) - profile fail (0x%X)\n", pP, r);
@@ -160,7 +167,7 @@ void lxSPIClose (LXSPICtx *pSC)
 int lxSPIReadWrite (LXSPICtx *pSC, U8 r[], const U8 w[], int n)
 {
    struct spi_ioc_transfer m;
-   setTransProf(&m,&(pSC->currProf));
+   initTransProf(&m, &(pSC->currProf), 0);
    m.rx_buf= (UL)r;
    m.tx_buf= (UL)w;
    m.len=   n;
@@ -243,7 +250,7 @@ int main (int argc, char *argv[])
 
    argTrans(&gArgs, argc, argv);
 
-   prof.kdmf= SPI_MODE_3 | SPI_CS_HIGH; // SPI_MODE_3=SPI_CPOL|SPI_CPHA
+   prof.kdmf= SPI_MODE_3 | SPI_CS_HIGH; // SPI_MODE_3=SPI_CPOL|SPI_CPHA, CS active high
    prof.clk= 488E3;    // kernel driver mode flags, transaction clock rate
    prof.delay= 0;
    prof.bpw= 16;
