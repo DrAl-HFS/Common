@@ -49,7 +49,7 @@ static const char cd[2]={'-',':'};
 static int strProf (char s[], const int m, const SPIProfile *pP)
 {
    int n= snprintf(s, m, "clk= %G%cHz, delay= %uus, bpw= %u\n ", sciFmtSetF(s, pP->clk), s[0], pP->delay, pP->bpw);
-   n+= snprintf(s+n, m-n, "\tmode= 0x%X : ", pP->kdmf);
+   n+= snprintf(s+n, m-n, "\tKDMF= 0x%X : ", pP->kdmf);
    strMode(s+n, m-n, pP->kdmf);
    return(n);
 } // strProf
@@ -140,7 +140,7 @@ Bool32 lxSPIOpen (LXSPICtx *pSC, const char devPath[], const SPIProfile *pP)
          if (nc > 0) { nc= setInfo(pSC->fd, &inf); LOG("set() - %d\n", nc); }
 */
          char s[96];
-         LOG_CALL("() - maxClk= %G%cHz\n", sciFmtSetF(s, pSC->maxClk), s[0]);
+         LOG_CALL("(%s) - maxClk= %G%cHz\n", devPath, sciFmtSetF(s, pSC->maxClk), s[0]);
          strProf(s, sizeof(s)-1, &(pSC->currProf)); LOG("\t%s\n", s);
       }
    }

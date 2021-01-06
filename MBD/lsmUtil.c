@@ -1,7 +1,7 @@
 // Common/MBD/lsmUtil.c - utility code for STMicro. lsm9ds1 IMU
 // https://github.com/DrAl-HFS/Common.git
 // Licence: GPL V3
-// (c) Project Contributors Aug 2020
+// (c) Project Contributors Aug 2020 - Jan 2021
 
 // HW Ref: https://www.st.com/resource/datasheet/lsm9ds1.pdf
 
@@ -60,6 +60,9 @@ typedef struct
    LSMMagValI16RegFrames   mvI16;
    LSMMagCtrlRegFrames     mctrl;
 } IMURegFrames;
+
+/***/
+
 
 void initFrames (IMURegFrames *pR)
 {
@@ -408,54 +411,84 @@ int testIMU (const LXI2CBusCtx *pC, const U8 dev[2], const U8 maxIter)
       r= I2C_BYTES_NCLK(sizeof(frm.avI16.ang)) * 3;
       LOG("testIMU() - Clk%d, pkt.len=%d, max rate= %d pkt/sec\n", pC->clk, r, pC->clk / r);
 
-      // Accelerometer: control & measure
-      r= lxi2cReadMultiRB(pC, NULL, dev[0], frm.actrl.ang, sizeof(frm.actrl.ang), 3);
-      if (r >= 0)
+      if (0 != dev[0])
       {
-         LOG("%s.%s= ", "actrl", "ang");
-         reportBytes(LOG0,frm.actrl.ang+1, sizeof(frm.actrl.ang)-1);
-         LOG("%s.%s= ", "actrl", "lin");
-         reportBytes(LOG0,frm.actrl.lin+1, sizeof(frm.actrl.lin)-1);
-         LOG("%s.%s= ", "actrl", "r8_10");
-         reportBytes(LOG0,frm.actrl.r8_10+1, sizeof(frm.actrl.r8_10)-1);
+         // Accelerometer: control & measure
+         r= lxi2cReadMultiRB(pC, NULL, dev[0], frm.actrl.ang, sizeof(frm.actrl.ang), 3);
+         if (r >= 0)
+         {
+            LOG("%s.%s= ", "actrl", "ang");
+            reportBytes(LOG0,frm.actrl.ang+1, sizeof(frm.actrl.ang)-1);
+            LOG("%s.%s= ", "actrl", "lin");
+            reportBytes(LOG0,frm.actrl.lin+1, sizeof(frm.actrl.lin)-1);
+            LOG("%s.%s= ", "actrl", "r8_10");
+            reportBytes(LOG0,frm.actrl.r8_10+1, sizeof(frm.actrl.r8_10)-1);
+         }
+         for (enum LSMLinAngRate lar= LAR_119; lar <= LAR_952; lar++) // LAR_119 LAR_238; LAR_952)
+         {
+            accTest(pC, dev[0], &frm, lar, maxIter, 0);
+            LOG("\n%s\n", "-");
+         }
+         LOG("\n%s\n", "---");
       }
-      for (enum LSMLinAngRate lar= LAR_119; lar <= LAR_952; lar++) // LAR_119 LAR_238; LAR_952)
-      {
-         accTest(pC, dev[0], &frm, lar, maxIter, 0);
-         LOG("\n%s\n", "-");
-      }
-      LOG("\n%s\n", "---");
 
-      // Magnetometer: control & measure
-      r= lxi2cReadRB(pC, dev[1], frm.mctrl.r1_5, sizeof(frm.mctrl.r1_5));
-      if (r >= 0)
-      {
-         LOG("%s.%s= ", "mctrl", "r1_5");
-         reportBytes(LOG0, frm.mctrl.r1_5+1, sizeof(frm.mctrl.r1_5)-1);
+      if (0 != dev[1])
+      { // Magnetometer: control & measure
+         r= lxi2cReadRB(pC, dev[1], frm.mctrl.r1_5, sizeof(frm.mctrl.r1_5));
+         if (r >= 0)
+         {
+            LOG("%s.%s= ", "mctrl", "r1_5");
+            reportBytes(LOG0, frm.mctrl.r1_5+1, sizeof(frm.mctrl.r1_5)-1);
+         }
+         magTest(pC, dev[1], &frm, maxIter);
+         LOG("\n%s\n", "---");
       }
-      magTest(pC, dev[1], &frm, maxIter);
-      LOG("\n%s\n", "---");
    }
    return(r);
 } // testIMU
 
 #ifdef LSM_MAIN
 
-LXI2CBusCtx gBusCtx={0,-1};
+#include "lxSPI.h"
+
+LXI2CBusCtx gI2C={0,-1};
+LXSPICtx gSPI={0,-1};
 
 // Experiment with SPI + I2C dual connection: SCL(K) requires
 // isolation (diodes?) to function. SDA/MOSI may also ?
 int main (int argc, char *argv[])
 {
-   if (lxi2cOpen(&gBusCtx, "/dev/i2c-1", 400))
+   int r= 0;
+#if 1
+   SPIProfile prof;
+
+   prof.kdmf= SPI_MODE_3 | SPI_CS_HIGH; // SPI_MODE_3=SPI_CPOL|SPI_CPHA
+   prof.clk= 8E6;
+   prof.delay= 0;
+   prof.bpw= 8;
+   // mode 1,2 -> 0xF,0 (mode 0,3 -> 0,0)
+   if (lxSPIOpen(&gSPI, "/dev/spidev0.1", &prof))
+   {
+      U8 regID[2]={0x0F,0}, res[2];
+      for (int i=0; i<3; i++)
+      {
+         sleep(1);
+         res[0]= res[1]= 0xa5;
+         r= lxSPIReadWrite(&gSPI, res, regID, 2);
+         LOG("[%d]: r=%d : 0x%X,%0X\n", i, r, res[0], res[1]);
+      }
+      lxSPIClose(&gSPI);
+   }
+#else
+   if (lxi2cOpen(&gI2C, "/dev/i2c-1", 400))
    {  // I2C addr: AG= 6B/6A
       const U8 ag_m[]={0x6a,0x1e}; // NB: AG alternate addr (SDO-AG pulldown disconnected)
-      testIMU(&gBusCtx, ag_m, 30);
+      testIMU(&gI2C, ag_m, 3);
 
-      lxi2cClose(&gBusCtx);
+      lxi2cClose(&gI2C);
    }
-
-   return(0);
+#endif
+   return(r);
 } // main
 
 #endif // LSM_MAIN

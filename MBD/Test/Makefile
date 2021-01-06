@@ -25,8 +25,7 @@ OBJ_DIR := obj
 # list from which file names are generated. Anything
 # not fitting the pattern (header without body or
 # vice versa) requires explicit addition...
-SER_MOD := lxI2C lxTiming lxUART mbdUtil
-#lxSPI
+SER_MOD := lxSPI lxI2C lxTiming lxUART mbdUtil
 SER_SRC := $(SER_MOD:%=$(SRC_DIR)/%.c)
 SER_HDR := $(SER_MOD:%=$(HDR_DIR)/%.h)
 SER_OBJ := $(SER_MOD:%=$(OBJ_DIR)/%.o)

@@ -29,7 +29,7 @@ typedef struct
    int  fd;
    U32   maxClk;
    SPIProfile currProf;
-} LXSPICtx;
+} LXSPICtx; // Consider change to *Bus* Ctx ???
 
 
 
