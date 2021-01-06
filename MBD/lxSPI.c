@@ -35,7 +35,7 @@ static const char cd[2]={'-',':'};
    n+= snprintf(s+n, m-n, " CS%c",cd[c]);
    if (c)
    {
-      c= (0 == (kdmf & SPI_CS_HIGH));
+      c= (kdmf & SPI_CS_HIGH) > 0;
       n+= snprintf(s+n, m-n, "%c->%c", hlm[c], hlm[c^1]);
    }
    c= hlm[ 1+(0 == (kdmf & SPI_LSB_FIRST)) ];

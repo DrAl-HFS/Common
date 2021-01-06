@@ -462,7 +462,7 @@ int main (int argc, char *argv[])
 #if 1
    SPIProfile prof;
 
-   prof.kdmf= SPI_MODE_3 | SPI_CS_HIGH; // SPI_MODE_3=SPI_CPOL|SPI_CPHA
+   prof.kdmf= SPI_MODE_3; // | SPI_CS_HIGH; // SPI_MODE_3=SPI_CPOL|SPI_CPHA
    prof.clk= 8E6;
    prof.delay= 0;
    prof.bpw= 8;
@@ -470,9 +470,9 @@ int main (int argc, char *argv[])
    if (lxSPIOpen(&gSPI, "/dev/spidev0.1", &prof))
    {
       U8 regID[2]={0x0F,0}, res[2];
-      for (int i=0; i<3; i++)
+      for (int i=0; i<5; i++)
       {
-         sleep(1);
+         sleep(3);
          res[0]= res[1]= 0xa5;
          r= lxSPIReadWrite(&gSPI, res, regID, 2);
          LOG("[%d]: r=%d : 0x%X,%0X\n", i, r, res[0], res[1]);

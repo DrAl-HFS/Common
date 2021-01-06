@@ -17,7 +17,7 @@ extern "C" {
 #endif
 
 typedef struct
-{
+{  // NB : SPI_CS_HIGH = idle LO -> active HI
    U32 kdmf, clk;    // kernel driver mode flags, transaction clock rate
    U16 delay;
    U8  bpw, flags;    // bits per word, misc user flags (unused)
