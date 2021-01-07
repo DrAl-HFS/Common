@@ -68,6 +68,7 @@ SUPP_OBJ := $(SUPP_MOD:%=$(OBJ_DIR)/%.o)
 
 
 LIBS := -lm
+# -lwiringPi
 # -lrt	Solaris "real-time" library, deprecated
 I2C_INCDEF := -I$(COM_DIR) -DLX_I2C_MAIN -DLX_I2C_TEST
 SPI_INCDEF := -I$(COM_DIR) -DLX_SPI_MAIN -DLX_SPI_TEST

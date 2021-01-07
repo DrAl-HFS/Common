@@ -108,13 +108,13 @@ static int setProf (int fd, const SPIProfile *pP)
    return(m);
 } // setProf
 
-static void initTransProf (struct spi_ioc_transfer *pT, const SPIProfile *pP, U8 contCS)
+static void initTransProf (struct spi_ioc_transfer *pT, const SPIProfile *pP, U8 contHoldCS)
 {
    memset(pT, 0, sizeof(*pT));
    pT->speed_hz=        pP->clk;
    pT->delay_usecs=     pP->delay;
    pT->bits_per_word=   pP->bpw;
-   pT->cs_change= contCS; // ??? no change for part of ongoing transaction ???
+   pT->cs_change= contHoldCS; // continue transaction, hold CS asserted after transfer
 } // initTransProf
 
 /***/
@@ -167,7 +167,7 @@ void lxSPIClose (LXSPICtx *pSC)
 int lxSPIReadWrite (LXSPICtx *pSC, U8 r[], const U8 w[], int n)
 {
    struct spi_ioc_transfer m;
-   initTransProf(&m, &(pSC->currProf), 0);
+   initTransProf(&m, &(pSC->currProf), 0x0);
    m.rx_buf= (UL)r;
    m.tx_buf= (UL)w;
    m.len=   n;
@@ -250,12 +250,12 @@ int main (int argc, char *argv[])
 
    argTrans(&gArgs, argc, argv);
 
-   prof.kdmf= SPI_MODE_3 | SPI_CS_HIGH; // SPI_MODE_3=SPI_CPOL|SPI_CPHA, CS active high
-   prof.clk= 488E3;    // kernel driver mode flags, transaction clock rate
+   prof.kdmf= SPI_MODE_3; // SPI_MODE_3=SPI_CPOL|SPI_CPHA, SPI_CS_HIGH=CS active high
+   prof.clk= 8E3;    // kernel driver mode flags, transaction clock rate
    prof.delay= 0;
-   prof.bpw= 16;
+   prof.bpw= 8;
    //if ((gArgs.flags & ARG_ACTION) &&
-   if (lxSPIOpen(&gBusCtx, gArgs.devPath, NULL)) // &prof))
+   if (lxSPIOpen(&gBusCtx, gArgs.devPath, &prof))
    {
       U8 rd[8]={0,}, wr[]={0xFA,0xBC,0xDE};
       r= lxSPIReadWrite(&gBusCtx,rd,wr,3);

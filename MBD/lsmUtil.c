@@ -450,39 +450,79 @@ int testIMU (const LXI2CBusCtx *pC, const U8 dev[2], const U8 maxIter)
 #ifdef LSM_MAIN
 
 #include "lxSPI.h"
+#include <sys/ioctl.h>
+
 
 LXI2CBusCtx gI2C={0,-1};
 LXSPICtx gSPI={0,-1};
+
+int modeSwitchHack (int setMode)
+{
+   U8 m;
+   int r= ioctl(gSPI.fd, SPI_IOC_RD_MODE, &m);
+   if (r >= 0)
+   {
+      m= (m & ~SPI_MODE_3) | setMode;
+      r= ioctl(gSPI.fd, SPI_IOC_WR_MODE, &m);
+   }
+   return(r);
+} // modeSwitchHack
+
+#include <wiringPi.h>
+
+#if 0
+#define WP_CE0 10 // 'Duinish for BCM:SPI0_CE0_N
+void initWP (void)
+{
+   wiringPiSetup();
+   pinMode(WP_CE0, OUTPUT);
+   digitalWrite(WP_CE0, HIGH);
+} // initWP
+
+#define SET_CS(x) digitalWrite(WP_CE0, x&0x1)
+#else
+#define initWP()  //initWP()
+#define SET_CS(x) //SET_CS(x)
+#endif
+
+#define LSM_SPI_REG_WR(x) ((x)<<1)
+#define LSM_SPI_REG_RD(x) (LSM_SPI_REG_WR(x)|0x1)
 
 // Experiment with SPI + I2C dual connection: SCL(K) requires
 // isolation (diodes?) to function. SDA/MOSI may also ?
 int main (int argc, char *argv[])
 {
    int r= 0;
-#if 1
+#if 0 // Something wrong with SPI interface - 'Duino diagnosis pending ...
    SPIProfile prof;
 
    prof.kdmf= SPI_MODE_3; // CS active low, SPI_MODE_3=SPI_CPOL|SPI_CPHA
-   prof.clk= 8E6;
+   prof.clk= 2E6;
    prof.delay= 0;
    prof.bpw= 8;
    // mode 1,2 -> 0xF,0 (mode 0,3 -> 0,0)
-   if (lxSPIOpen(&gSPI, "/dev/spidev0.1", &prof))
+   if (lxSPIOpen(&gSPI, "/dev/spidev0.0", &prof))
    {
-      U8 regID[2]={0x0F,0}, res[2];
-      for (int i=0; i<5; i++)
+      U8 regID[2]={LSM_SPI_REG_RD(LSM_REG_AG_ID),0}, res[2]; // expect res[1]=0x68 for AG
+
+      initWP();
+      for (int i=0; i <= 3; i++)
       {
-         sleep(3);
+         sleep(1);
+         modeSwitchHack(i);
+         sleep(1);
          res[0]= res[1]= 0xa5;
+         SET_CS(0);
          r= lxSPIReadWrite(&gSPI, res, regID, 2);
+         SET_CS(1);
          LOG("[%d]: r=%d : 0x%X,%0X\n", i, r, res[0], res[1]);
       }
       lxSPIClose(&gSPI);
    }
 #else
    if (lxi2cOpen(&gI2C, "/dev/i2c-1", 400))
-   {  // I2C addr: AG= 6B/6A
-      const U8 ag_m[]={0x6a,0x1e}; // NB: AG alternate addr (SDO-AG pulldown disconnected)
+   {  // I2C addr: AG= 6B/6A (alternate addr when SDO-AG pulldown disconnected)
+      const U8 ag_m[]={0x6a,0x1e};
       testIMU(&gI2C, ag_m, 3);
 
       lxi2cClose(&gI2C);

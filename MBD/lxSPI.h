@@ -7,7 +7,7 @@
 #define LX_SPI_H
 
 #include "util.h"
-#include <linux/spi/spidev.h>
+#include <linux/spi/spidev.h> // necessary ???
 
 
 /***/
