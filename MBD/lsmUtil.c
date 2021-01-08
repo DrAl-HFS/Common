@@ -485,31 +485,31 @@ void initWP (void)
 #define SET_CS(x) //SET_CS(x)
 #endif
 
-#define LSM_SPI_REG_WR(x) ((x)<<1)
-#define LSM_SPI_REG_RD(x) (LSM_SPI_REG_WR(x)|0x1)
+// SPI read/write mimics I2C
+#define LSM_SPI_REG_WR(x) ((x) & 0x7F)
+#define LSM_SPI_REG_RD(x) (LSM_SPI_REG_WR(x)|0x80)
 
 // Experiment with SPI + I2C dual connection: SCL(K) requires
 // isolation (diodes?) to function. SDA/MOSI may also ?
 int main (int argc, char *argv[])
 {
    int r= 0;
-#if 0 // Something wrong with SPI interface - 'Duino diagnosis pending ...
+#if 0 // Still something wrong with SPI interface. 'Duino diagnosis proved unhelpful.
    SPIProfile prof;
 
-   prof.kdmf= SPI_MODE_3; // CS active low, SPI_MODE_3=SPI_CPOL|SPI_CPHA
-   prof.clk= 2E6;
+   prof.kdmf= SPI_MODE_3; // CS active low, SCLK idle high, capture on pulse trailing (rising) edge
+   prof.clk= 1E5;
    prof.delay= 0;
    prof.bpw= 8;
    // mode 1,2 -> 0xF,0 (mode 0,3 -> 0,0)
    if (lxSPIOpen(&gSPI, "/dev/spidev0.0", &prof))
    {
-      U8 regID[2]={LSM_SPI_REG_RD(LSM_REG_AG_ID),0}, res[2]; // expect res[1]=0x68 for AG
+      U8 regID[2]={LSM_SPI_REG_RD(LSM_REG_IDENT),0}, res[2]; // expect res[1]=0x68 for AG, 0x3D for Mag
 
       initWP();
       for (int i=0; i <= 3; i++)
       {
-         sleep(1);
-         modeSwitchHack(i);
+         //sleep(1); modeSwitchHack(i);
          sleep(1);
          res[0]= res[1]= 0xa5;
          SET_CS(0);

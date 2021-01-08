@@ -29,11 +29,6 @@ enum LSMAccM16RegID
    LSM_REG_LIN_Z=0x2C,
 }; // LSMRegAccM16
 
-enum LSMAccInfoRegID
-{
-   LSM_REG_AG_ID=0xF // chip ID
-}; // LSMAccInfoRegID
-
 enum LSMAccCtrlRegID // Control registers (8b)
 {
    LSM_REG_ACTRL_ACT1=0x04,
@@ -87,6 +82,11 @@ enum LSMMagCtrlRegID // Control registers (8b)
    LSM_REG_MCTRL_INTR1=0x30,
    LSM_REG_MCTRL_INTR2=0x31
 }; // LSMAccCtrlRegID
+
+enum LSMInfoRegID
+{
+   LSM_REG_IDENT=0xF // chip ID
+}; // LSMInfoRegID
 
 
 #ifdef __cplusplus
