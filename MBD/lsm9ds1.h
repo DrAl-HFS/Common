@@ -83,9 +83,11 @@ enum LSMMagCtrlRegID // Control registers (8b)
    LSM_REG_MCTRL_INTR2=0x31
 }; // LSMAccCtrlRegID
 
-enum LSMInfoRegID
+enum LSMInfoRegID // Miscellaneous
 {
-   LSM_REG_IDENT=0xF // chip ID
+   LSM_REG_IDENT=0xF, // chip ID register
+   LSM_ID_AG=0x68,   // ID values
+   LSM_ID_MAG=0x3D
 }; // LSMInfoRegID
 
 

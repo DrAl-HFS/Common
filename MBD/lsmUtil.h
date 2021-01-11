@@ -17,12 +17,15 @@
 extern "C" {
 #endif
 
+typedef struct { U8 addr, id; } HWUAID; // Bus address and device ID
+
+
 /***/
 
 //#ifdef LSM_TEST
 //#define LSM_TEST_MODE_
 
-extern int testIMU (const LXI2CBusCtx *pC, const U8 dev[2], const U8 maxIter);
+extern int testIMU (const LXI2CBusCtx *pC, const HWUAID aid[], const int nD, const int maxIter);
 
 //#endif // LSM_TEST
 
