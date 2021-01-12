@@ -55,10 +55,11 @@ ADS_OBJ := $(ADS_MOD:%=$(OBJ_DIR)/%.o)
 ADS_HDR+= $(HDR_DIR)/ads1x.h
 
 LSM_MOD := lsmUtil
-LSM_SRC := $(LSM_MOD:%=$(SRC_DIR)/%.c)
-LSM_HDR := $(LSM_MOD:%=$(HDR_DIR)/%.h)
+LSM_DIR := $(SRC_DIR)/IMU/Junk
+LSM_SRC := $(LSM_MOD:%=$(LSM_DIR)/%.c)
+LSM_HDR := $(LSM_MOD:%=$(LSM_DIR)/%.h)
 LSM_OBJ := $(LSM_MOD:%=$(OBJ_DIR)/%.o)
-LSM_HDR+= $(HDR_DIR)/lsm9ds1.h
+LSM_HDR+= $(LSM_DIR)/lsm9ds1.h
 
 # Support modules
 SUPP_MOD := report util sciFmt
@@ -75,7 +76,7 @@ SPI_INCDEF := -I$(COM_DIR) -DLX_SPI_MAIN -DLX_SPI_TEST
 LED_INCDEF := -I$(COM_DIR) -I$(SRC_DIR) -DLED_MAIN -DLED_TEST
 UBX_INCDEF := -I$(COM_DIR) -I$(SRC_DIR) -DUBX_MAIN -DUBX_TEST
 ADS_INCDEF := -I$(COM_DIR) -DADS1X_MAIN -DADS1X_TEST
-LSM_INCDEF := -I$(COM_DIR) -DLSM_MAIN -DLSM_TEST
+LSM_INCDEF := -I$(COM_DIR) -I$(SRC_DIR) -DLSM_MAIN -DLSM_TEST
 
 
 .PHONY : all clean run
