@@ -80,7 +80,7 @@ int ubxReadDDS (const MemBuff *pMB, const UBXInfoDDS *pD, const int avail, const
    do // Repeated chunk read (no register update necessary)
    {
       pB[bR]= UBXM8_DSB_INVALID;  // set guard byte
-      r= lxi2cRead(pD->pI2C, pD->busAddr, pB+bR, chunk);
+      r= lxi2cReadStream(pD->pI2C, pD->busAddr, pB+bR, chunk);
       if ((r < 0) || (UBXM8_DSB_INVALID == pB[bR]))
       {
          if (t-- > 0) { ubxSyncDDS(pD); }

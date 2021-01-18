@@ -78,14 +78,46 @@ Bool32 lxi2cOpen (LXI2CBusCtx *pBC, const char devPath[], const int clk)
    m[1].buf=    pB;
 #endif
 
-int lxi2cRead (const LXI2CBusCtx *pBC, const U8 busAddr, U8 b[], const U8 nB)
+// Explicit register byte for external API compatibility
+int lxi2cReadReg (const LXI2CBusCtx *pBC, const U8 busAddr, U8 regCmd, U8 b[], const U8 nB)
+{
+   struct i2c_msg m[]= {
+      { .addr= busAddr,  .flags= I2C_M_WR,  .len= 1,  .buf= &regCmd },
+      { .addr= busAddr,  .flags= I2C_M_RD,  .len= nB,  .buf= b } };
+   struct i2c_rdwr_ioctl_data d={ m, 2 };
+   return ioctl(pBC->fd, I2C_RDWR, &d);
+} // lxi2cReadReg
+
+int lxi2cWriteReg (const LXI2CBusCtx *pBC, const U8 busAddr, U8 regCmd, const U8 b[], const U8 nB)
+{
+#if 0 // _NOSTART may not work in all cases...
+   struct i2c_msg m[]= {
+      { .addr= busAddr,  .flags= I2C_M_WR,  .len= 1,  .buf= &regCmd },
+      { .addr= busAddr,  .flags= I2C_M_WR | I2C_M_NOSTART,  .len= nB,  .buf= (void*)b } };
+   struct i2c_rdwr_ioctl_data d={ m, 2 };
+   return ioctl(pBC->fd, I2C_RDWR, &d);
+#else
+   U8 rb[32]; // typical max transaction size ?
+   if (nB < sizeof(rb))
+   {
+      rb[0]= regCmd;
+      memcpy(rb+1, b, nB);
+      return lxi2cWriteRB(pBC, busAddr, rb, nB+1);
+   } //else
+   return(-1);
+#endif
+} // lxi2cWriteReg
+
+// Simple read with nothing written
+int lxi2cReadStream (const LXI2CBusCtx *pBC, const U8 busAddr, U8 b[], const U8 nB)
 {
    struct i2c_msg m[]= {
       { .addr= busAddr,  .flags= I2C_M_RD,  .len= nB,  .buf= b } };
    struct i2c_rdwr_ioctl_data d={ m, 1 };
    return ioctl(pBC->fd, I2C_RDWR, &d);
-} // lxi2cRead
+} // lxi2cReadStream
 
+// Read with contiguous prefix register byte
 int lxi2cReadRB (const LXI2CBusCtx *pBC, const U8 busAddr, U8 regBytes[], const U8 nRB)
 {
    struct i2c_msg m[]= {
@@ -166,7 +198,7 @@ int lxi2cWriteMultiRB (const LXI2CBusCtx *pBC, const MemBuff *pWS, const U8 busA
    return(r);
 } // lxi2cWriteMultiRB
 
-// DEPRECATE: inital "transaction" design flawed but retained for compatibility...
+#if 0 // FINAL DEPRECATION
 #define TRANS_WRITE_MAX 15
 int lxi2cTrans (const LXI2CBusCtx *pBC, const U16 busAddr, const U16 f, U16 nB, U8 *pB, U8 reg)
 {
@@ -202,7 +234,7 @@ int lxi2cTrans (const LXI2CBusCtx *pBC, const U16 busAddr, const U16 f, U16 nB, 
    if (r > 0) { r= 0 - (LX_I2C_TRANS_NM != r); }
    return(r);
 } // lxi2cTrans
-
+#endif
 
 Bool32 lxi2cOpenSMBUS (LXI2CBusCtx *pBC, const char *path, I8 devID)
 {
@@ -263,6 +295,14 @@ void lxi2cClose (LXI2CBusCtx *pC)
 
 /***/
 
+#ifdef LX_I2C_TEST
+#define LX_I2C_SLEEP
+#define LX_I2C_PING
+#define LX_I2C_DUMP
+#define LX_I2C_HACK
+#endif
+
+#ifdef LX_I2C_SLEEP
 void lxi2cSleepm (U32 milliSec)
 {
    int r=0;
@@ -273,7 +313,9 @@ void lxi2cSleepm (U32 milliSec)
    { r= usleep(milliSec*1000); }
    if (0 != r) { WARN_CALL("(%u) -> %d\n", milliSec, r); }
 } // lxi2cSleepm
+#endif // LX_I2C_SLEEP
 
+#ifdef LX_I2C_DUMP
 int lxi2cDumpDevAddr (const LXI2CBusCtx *pC, U8 busAddr, U8 bytes, U8 regAddr)
 {
    int r;
@@ -311,9 +353,11 @@ int lxi2cDumpDevAddr (const LXI2CBusCtx *pC, U8 busAddr, U8 bytes, U8 regAddr)
    }
    return(r);
 } // lxi2cDumpDevAddr
+#endif // LX_I2C_DUMP
 
-/*** PING ***/
+/***/
 
+#ifdef LX_I2C_PING
 typedef struct
 {
    //const LXI2CPing *pP;
@@ -401,10 +445,31 @@ int lxi2cPing (const LXI2CBusCtx *pC, U8 busAddr, const LXI2CPing *pP, U8 modeFl
    return(r);
 } // lxi2cPing
 
+#endif // LX_I2C_PING
+
+/***/
 
 #ifdef LX_I2C_MAIN
 
-/*** PING ARGS ***/
+int hack (const LXI2CBusCtx *pC, U8 busAddr)
+{
+   LOG_CALL("(%x)\n", busAddr);
+   U8 rb[2]= {0xD0,0xA5}; // expect 0x61
+   int r= lxi2cReadRB(pC, busAddr, rb, 2);
+   LOG(" ReadRB() - %d : [%x,%x]\n", r, rb[0], rb[1]);
+   //lxi2cReadReg(pC, busAddr, rb[0], rb+1, 1);
+   //LOG(" ReadReg() - %d : [%x,%x]\n", r, rb[0], rb[1]);
+   if (0x61 == rb[1])
+   {
+      rb[0]= 0xE0; // reset
+      rb[1]= 0xB6;
+      r= lxi2cWriteRB(pC, busAddr, rb, 2);
+      LOG(" WriteRB() - %d : [%x,%x]\n", r, rb[0], rb[1]);
+   }
+   return(r);
+} // hack
+
+/*** ARG HANDLING FOR STANDALONE BUILD (PING) ***/
 
 #define ARG_ACTION 0xF0  // Mask
 #define ARG_PING   (1<<7)
@@ -476,9 +541,8 @@ void argDump (LXI2CArgs *pP)
 
 void i2cArgTrans (LXI2CArgs *pA, int argc, char *argv[])
 {
-   F64 f;
    int t, n[3]={0,0,0};
-   signed char ch, nCh;
+   signed char ch;
    do
    {
       ch= getopt(argc,argv,"a:b:c:d:e:t:PDXHvh");
@@ -507,13 +571,16 @@ void i2cArgTrans (LXI2CArgs *pA, int argc, char *argv[])
                pA->ping.maxErr= t;
                break;
             case 't' :
+            {
 #ifdef SCI_FMT_H
-               nCh= sciFmtScanF64(&f, optarg, strlen(optarg));
+               F64 f;
+               I8 nCh= sciFmtScanF64(&f, optarg, strlen(optarg));
                if ((nCh > 0) && (nCh < 6) && (f > 1E-9) && (f < 2)) { t= 1.000001E9 * f; } else
 #endif // SCI_FMT_H
                sscanf(optarg,"%d", &t);
                if (t > 0) { pA->ping.ivlNanoSec= t; }
                break;
+            }
             case 'P' : pA->flags|= ARG_PING; break;
             case 'D' : pA->flags|= ARG_DUMP; break;
             case 'X' : pA->flags|= ARG_XPT; break;
@@ -561,6 +628,7 @@ int main (int argc, char *argv[])
 
    if ((gArgs.flags & ARG_ACTION) && lxi2cOpen(&gBusCtx, gArgs.devPath, 400))
    {
+      if (gArgs.flags & ARG_HACK) { r= hack(&gBusCtx, defBA(gArgs.busAddr, 0x77)); }
       //if (gArgs.flags & ARG_XPT) { r= ledMatHack(&gBusCtx, defBA(gArgs.busAddr, 0x75), MODE_SHUTDOWN); }
       if (gArgs.flags & ARG_PING) { r= lxi2cPing(&gBusCtx, defBA(gArgs.busAddr, 0x48), &(gArgs.ping), gArgs.flags); }
       if (gArgs.flags & ARG_DUMP) { r= lxi2cDumpDevAddr(&gBusCtx, gArgs.busAddr, 0xFF,0x00); }
