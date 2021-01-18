@@ -1,4 +1,5 @@
 // Common/MBD/lsm9ds1.h - Definitions for ST 9dof IMU device
+// * DEPRECATED * due to hardware problems (see "lsmUtil.h").
 // https://github.com/DrAl-HFS/Common.git
 // Licence: GPL V3
 // (c) Project Contributors Aug 2020

@@ -1,4 +1,5 @@
 // Common/MBD/lsmUtil.c - utility code for STMicro. lsm9ds1 IMU
+// * DEPRECATED * due to hardware problems (see "lsmUtil.h").
 // https://github.com/DrAl-HFS/Common.git
 // Licence: GPL V3
 // (c) Project Contributors Aug 2020 - Jan 2021
