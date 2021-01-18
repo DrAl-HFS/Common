@@ -16,6 +16,12 @@
 
 
 /***/
+#ifdef LX_I2C_TEST
+#define LX_I2C_SLEEP
+#define LX_I2C_PING
+#define LX_I2C_DUMP
+#define LX_I2C_HACK
+#endif
 
 #define LX_I2C_TRANS_NM (2) // number of i2c_msg blocks per transaction
 #define LX_I2C_FLAG_TRACE (1<<4)
@@ -198,7 +204,7 @@ int lxi2cWriteMultiRB (const LXI2CBusCtx *pBC, const MemBuff *pWS, const U8 busA
    return(r);
 } // lxi2cWriteMultiRB
 
-#if 0 // FINAL DEPRECATION
+#ifdef LX_I2C_DUMP // FINAL DEPRECATION
 #define TRANS_WRITE_MAX 15
 int lxi2cTrans (const LXI2CBusCtx *pBC, const U16 busAddr, const U16 f, U16 nB, U8 *pB, U8 reg)
 {
@@ -294,13 +300,6 @@ void lxi2cClose (LXI2CBusCtx *pC)
 } // lxi2cClose
 
 /***/
-
-#ifdef LX_I2C_TEST
-#define LX_I2C_SLEEP
-#define LX_I2C_PING
-#define LX_I2C_DUMP
-#define LX_I2C_HACK
-#endif
 
 #ifdef LX_I2C_SLEEP
 void lxi2cSleepm (U32 milliSec)
