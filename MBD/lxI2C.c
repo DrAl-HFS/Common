@@ -96,13 +96,7 @@ int lxi2cReadReg (const LXI2CBusCtx *pBC, const U8 busAddr, U8 regCmd, U8 b[], c
 
 int lxi2cWriteReg (const LXI2CBusCtx *pBC, const U8 busAddr, U8 regCmd, const U8 b[], const U8 nB)
 {
-#if 0 // _NOSTART may not work in all cases...
-   struct i2c_msg m[]= {
-      { .addr= busAddr,  .flags= I2C_M_WR,  .len= 1,  .buf= &regCmd },
-      { .addr= busAddr,  .flags= I2C_M_WR | I2C_M_NOSTART,  .len= nB,  .buf= (void*)b } };
-   struct i2c_rdwr_ioctl_data d={ m, 2 };
-   return ioctl(pBC->fd, I2C_RDWR, &d);
-#else
+#if 1
    U8 rb[32]; // typical max transaction size ?
    if (nB < sizeof(rb))
    {
@@ -111,6 +105,12 @@ int lxi2cWriteReg (const LXI2CBusCtx *pBC, const U8 busAddr, U8 regCmd, const U8
       return lxi2cWriteRB(pBC, busAddr, rb, nB+1);
    } //else
    return(-1);
+#else // _NOSTART seems ineffective & no I2C_M_NOSTOP ?
+   struct i2c_msg m[]= {
+      { .addr= busAddr,  .flags= I2C_M_WR,  .len= 1,  .buf= &regCmd },
+      { .addr= busAddr,  .flags= I2C_M_WR | I2C_M_NOSTART,  .len= nB,  .buf= (void*)b } };
+   struct i2c_rdwr_ioctl_data d={ m, 2 };
+   return ioctl(pBC->fd, I2C_RDWR, &d);
 #endif
 } // lxi2cWriteReg
 
