@@ -52,7 +52,36 @@ typedef struct
 
 /***/
 
+int payloadBytes (const U8 id[])
+{
+static const U8 bytesFx[]=
+{
+   0, // ???
+   16, 12,  // Command res, req
+   0, 0, 0, 0, 0, // FRS
+   16, 2,   // ID res, req
+   0, 0,  // ???
+   16, 16, 16,  // Feature res,cmd,req
+   0
+};
+   switch(id[0] & 0xF0)
+   {
+      case 0xF0: return( bytesFx[ (id[0] & 0x0F) ] );
+   }
+   return(0);
+} // payloadBytes
+
 int validID (const PldID *pP) { return(0xF8 == pP->id); }
+
+int dumpID (const PldID *pP)
+{
+   if (validID(pP))
+   {
+      LOG("V%d.%d, Part%d, Build%d, Patch%d\n", pP->ver[0], pP->ver[1], pP->part, pP->build, pP->patch);
+      return(16);
+   }
+   return(0);
+} // dumpID
 
 U16 dumpHdr (const BNOHdr *pH, int i)
 {
@@ -66,7 +95,7 @@ U16 dumpHdr (const BNOHdr *pH, int i)
 int dumpRead (const LXI2CBusCtx *pC, const U8 busAddr, PktAny *pA)
 {
    const int max= MIN(sizeof(*pA), I2C_BLK_BYTES);
-   int r=0;
+   int l=0, r=0;
    r= lxi2cReadStream(pC, busAddr, pA->hdr.b, sizeof(pA->hdr));
    if (r >= 0)
    {
@@ -80,13 +109,14 @@ int dumpRead (const LXI2CBusCtx *pC, const U8 busAddr, PktAny *pA)
             r= lxi2cReadStream(pC, busAddr, pA->hdr.b, b+4);
             if (r >= 0)
             {
-               int l= dumpHdr(&(pA->hdr),0);
+               l= dumpHdr(&(pA->hdr),0);
                b= MIN(b, l);
                reportBytes(0, pA->pld, b);
                t+= b; i++;
             }
          } while ((r >= 0) && (t < s));
          LOG(" : [%d] (%d)\n", i, t);
+         r= l;
       }
    }
    return(r);
@@ -109,7 +139,7 @@ int bnoHack (const LXI2CBusCtx *pC, const U8 busAddr, const U8 modeFlags)
 {
    PktReqID pkt;
    PktAny any;
-   int r=0, tries=3;
+   int r=0, n=0, tries=3;
 
    bnoReset(pC, busAddr, 10);
    dumpRead(pC,busAddr,&any); // flush any junk
@@ -128,10 +158,17 @@ int bnoHack (const LXI2CBusCtx *pC, const U8 busAddr, const U8 modeFlags)
       {
          dumpHdr(&(pkt.hdr),1);
          pkt.hdr.seq++;
-         dumpRead(pC,busAddr,&any);
-         if (validID((PldID*)any.pld)) { tries= 0; } // correct response
+         int i=0, s=1, l= dumpRead(pC,busAddr,&any);
+         while ((i < l) && (s > 0))
+         {
+            s= dumpID((void*)(any.pld+i));
+            if (0 == s) { s= payloadBytes(any.pld+i); }
+            else { n+= s; }
+            i+= s;
+         }
+         if (n > 0) { tries= 0; } // correct response
       }
-  } while (--tries > 0);
+   } while (--tries > 0);
    return(r);
 } // bnoHack
 
