@@ -80,6 +80,7 @@ int report (const U8 id, const char fmt[], ...)
 
 int reportBytes (const U8 id, const U8 *pB, int nB)
 {
+   const int maxl= 16;
    char chBuff[8*REPORT_WIDTH_BYTES];
    const int mCh= sizeof(chBuff)-1;
    int r= 0;
@@ -97,9 +98,9 @@ int reportBytes (const U8 id, const U8 *pB, int nB)
             nCh+= snprintf(chBuff+nCh, mCh-nCh, " %02x", pB[iB]);
             ++iB;
          }
-         if (remB > (REPORT_WIDTH_BYTES<<1)) //&& mode=SKIP
+         if ((maxl > 2) && (remB > (REPORT_WIDTH_BYTES*maxl)))
          {
-            int skip= remB & ~(REPORT_WIDTH_BYTES-1);
+            int skip= remB - (2 * REPORT_WIDTH_BYTES);
             iB+= skip;
             nCh+= snprintf(chBuff+nCh, mCh-nCh, "\n... [%d] ...\n", skip);
          }

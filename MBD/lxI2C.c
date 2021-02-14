@@ -115,7 +115,7 @@ int lxi2cWriteReg (const LXI2CBusCtx *pBC, const U8 busAddr, U8 regCmd, const U8
 } // lxi2cWriteReg
 
 // Simple read with nothing written
-int lxi2cReadStream (const LXI2CBusCtx *pBC, const U8 busAddr, U8 b[], const U8 nB)
+int lxi2cReadStream (const LXI2CBusCtx *pBC, const U8 busAddr, U8 b[], const U16 nB)
 {
    struct i2c_msg m[]= {
       { .addr= busAddr,  .flags= I2C_M_RD,  .len= nB,  .buf= b } };
@@ -605,7 +605,7 @@ void i2cArgTrans (LXI2CArgs *pA, int argc, char *argv[])
 
 /***/
 
-//#include "ledMatrix.h"
+#include "IMU/bnoHack.h"
 
 // Default bus address selector
 U8 defBA (U8 a, U8 d)
@@ -628,7 +628,7 @@ int main (int argc, char *argv[])
    if ((gArgs.flags & ARG_ACTION) && lxi2cOpen(&gBusCtx, gArgs.devPath, 400))
    {
       if (gArgs.flags & ARG_HACK) { r= hack(&gBusCtx, defBA(gArgs.busAddr, 0x77)); }
-      //if (gArgs.flags & ARG_XPT) { r= ledMatHack(&gBusCtx, defBA(gArgs.busAddr, 0x75), MODE_SHUTDOWN); }
+      if (gArgs.flags & ARG_XPT) { r= bnoHack(&gBusCtx, defBA(gArgs.busAddr, 0x4a), 0); }
       if (gArgs.flags & ARG_PING) { r= lxi2cPing(&gBusCtx, defBA(gArgs.busAddr, 0x48), &(gArgs.ping), gArgs.flags); }
       if (gArgs.flags & ARG_DUMP) { r= lxi2cDumpDevAddr(&gBusCtx, gArgs.busAddr, 0xFF,0x00); }
 

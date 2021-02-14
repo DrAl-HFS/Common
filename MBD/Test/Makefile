@@ -30,6 +30,12 @@ SER_SRC := $(SER_MOD:%=$(SRC_DIR)/%.c)
 SER_HDR := $(SER_MOD:%=$(HDR_DIR)/%.h)
 SER_OBJ := $(SER_MOD:%=$(OBJ_DIR)/%.o)
 
+I2C_TST_MOD := bnoHack
+I2C_TST_SRC := $(I2C_TST_MOD:%=$(SRC_DIR)/IMU/%.c)
+I2C_TST_HDR := $(I2C_TST_MOD:%=$(HDR_DIR)/IMU/%.h)
+I2C_TST_OBJ := $(I2C_TST_MOD:%=$(OBJ_DIR)/%.o)
+#I2C_TST_HDR+= $(HDR_DIR)/LED/bno.h
+
 LED_TST_MOD := ledMatrix ledMapRGB
 LED_TST_SRC := $(LED_TST_MOD:%=$(SRC_DIR)/LED/%.c)
 LED_TST_HDR := $(LED_TST_MOD:%=$(HDR_DIR)/LED/%.h)
@@ -71,7 +77,7 @@ SUPP_OBJ := $(SUPP_MOD:%=$(OBJ_DIR)/%.o)
 LIBS := -lm
 # LIBS+= -lwiringPi
 # -lrt	Solaris "real-time" library, deprecated
-I2C_INCDEF := -I$(COM_DIR) -DLX_I2C_MAIN -DLX_I2C_TEST
+I2C_INCDEF := -I$(COM_DIR) -I$(SRC_DIR) -DLX_I2C_MAIN -DLX_I2C_TEST
 SPI_INCDEF := -I$(COM_DIR) -DLX_SPI_MAIN -DLX_SPI_TEST
 LED_INCDEF := -I$(COM_DIR) -I$(SRC_DIR) -DLED_MAIN -DLED_TEST
 UBX_INCDEF := -I$(COM_DIR) -I$(SRC_DIR) -DUBX_MAIN -DUBX_TEST
