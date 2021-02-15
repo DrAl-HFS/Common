@@ -55,6 +55,8 @@ extern "C" {
 
 
 /***/
+// HACK
+extern int printable (const char c);
 
 // General filtered reporting
 extern int report (const U8 id, const char fmt[], ...);

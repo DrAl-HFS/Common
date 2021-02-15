@@ -78,7 +78,7 @@ int report (const U8 id, const char fmt[], ...)
    return(r);
 } // report
 
-//bool
+//bool FACTOR to where ?
 int printable (const char c) { return((c > 0x1F) && (c < 0x7F)); }
 
 int snputnc (char s[], const int m, const char c, int n)
