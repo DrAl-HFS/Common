@@ -78,6 +78,27 @@ int report (const U8 id, const char fmt[], ...)
    return(r);
 } // report
 
+//bool
+int printable (const char c) { return((c > 0x1F) && (c < 0x7F)); }
+
+int snputnc (char s[], const int m, const char c, int n)
+{
+   n= MIN(m,n);
+   for (int i=0; i<n; i++) { s[i]= c; }
+   return(n);
+} // snputnc
+
+int contigSet (int x)
+{
+   int c= 0;
+   while (x)
+   {
+      c+= (0x3 == (x & 0x3));
+      x>>= 1;
+   }
+   return(c);
+} // contigSet
+
 int reportBytes (const U8 id, const U8 *pB, int nB)
 {
    const int maxl= 16;
@@ -86,20 +107,33 @@ int reportBytes (const U8 id, const U8 *pB, int nB)
    int r= 0;
    if (displayable(id) && pB && (nB > 0))
    {
-      int iB=0;
+      int mP= 0, iB=0;
       do
       {
          int lB= MIN(nB-iB, REPORT_WIDTH_BYTES);
          int remB= nB - (iB+lB);
          int nCh= 0;
          chBuff[0]= 0;
-         while (lB-- > 0)
+         mP&= 0x1; // mask off all but last from preceding line
+         for (int i= iB; i < (iB+lB); i++)
          {
-            nCh+= snprintf(chBuff+nCh, mCh-nCh, " %02x", pB[iB]);
-            ++iB;
+            mP=  (mP << 1) | printable(pB[i]);
+            nCh+= snprintf(chBuff+nCh, mCh-nCh, " %02x", pB[i]);
          }
-         if ((maxl > 2) && (remB > (REPORT_WIDTH_BYTES*maxl)))
+         if (contigSet(mP))
          {
+            int n= (((REPORT_WIDTH_BYTES - lB) * 3 + 7) >> 3); // NB: 8 space tab assumed
+            nCh+= snputnc(chBuff+nCh, mCh-nCh, '\t', 1+n);
+            for (int i= iB; i < (iB+lB); i++)
+            {
+               signed char ch= pB[i];
+               if (!printable(ch)) { ch='.'; }
+               nCh+= snputnc(chBuff+nCh, mCh-nCh, ch, 1);
+            }
+         }
+         iB+= lB;
+         if ((maxl > 2) && (remB > (REPORT_WIDTH_BYTES*maxl)))
+         {  // head & tail for large dump
             int skip= remB - (2 * REPORT_WIDTH_BYTES);
             iB+= skip;
             nCh+= snprintf(chBuff+nCh, mCh-nCh, "\n... [%d] ...\n", skip);
