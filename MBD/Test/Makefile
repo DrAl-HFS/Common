@@ -7,8 +7,8 @@ OPT := -Wall -Oz
 else
 CC := gcc
 OPT := -Wall -Os -march=native
-#OPT := -v -Wall -g -O0
-# -std=c11 -D__USE_MISC -pedantic
+#OPT := -Wall -g -O0
+# -v -std=c11 -D__USE_MISC -pedantic
 endif
 
 # ??? BLD_DIR := .
