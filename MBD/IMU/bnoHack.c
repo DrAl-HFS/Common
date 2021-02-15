@@ -10,7 +10,7 @@
 
 #define BNO_PLD_MAX  ((1<<15)-5)
 #define BNO_PLD_INIT 508
-#define BNO_PLD_STD  60
+#define BNO_PLD_STD  124
 
 // "Sensor Hub Transport Protocol" - Hillcrest labs proprietary
 typedef union
@@ -88,10 +88,10 @@ int addTLV (TLVDatum *pD, const U8 b[], const int remB)
             pD->t= b[0];
             if (b[1] > 4) { pD->t|= 0x80; }
             if (0x80 & pD->t)
-            { // ASCII
+            { // ASCII string
                int e= b[1]-1;
                pD->p= (void*)(b+2);
-               if (!(printable(pD->p[0]) && (0 == pD->p[e]))) { pD->t|= 0x40; }
+               if (!(printable(pD->p[0]) && (0 == pD->p[e]))) { return(0); }
             }
             else { pD->v= readBytesLE(b, 2, b[1]); }
          }
@@ -176,6 +176,20 @@ int bnoReset (const LXI2CBusCtx *pC, const U8 busAddr, int syncDelay)
    return(r);
 } // bnoReset
 
+const char *getStrTLV (U8 id)
+{
+static const char *tlvIDStr[]=
+{
+   "Ver", "GUID",
+   "MaxW", "MaxR", "MaxTW", "MaxTR",
+   "NormC", "WakeC",
+   "AName", "CName"
+};
+   if (id < 10) { return(tlvIDStr[id]); }
+   //else
+   return("?");
+} // getStrTLV
+
 int init (const LXI2CBusCtx *pC, const U8 busAddr)
 {
    TLVDatum tlv[TLV_MAX];
@@ -191,7 +205,7 @@ int init (const LXI2CBusCtx *pC, const U8 busAddr)
       for (int i=0; i<n; i++)
       {
          U8 x= 0xC0 & tlv[i].t;
-         LOG("0x%X : ", tlv[i].t & 0x3F);
+         LOG("%s : ", getStrTLV(tlv[i].t & 0x3F));
          if (0 == x) { LOG("%d\n", tlv[i].v); }
          else if (0x80 == x) { LOG("%s\n", tlv[i].p); }
          else { LOG("0x%02X?\n", tlv[i].p[0]); }
