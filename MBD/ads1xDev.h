@@ -1,14 +1,12 @@
 // Common/MBD/ads1xDev.h - development, test & debug code for TI I2C ADC devices (ADS1xxx series)
 // https://github.com/DrAl-HFS/Common.git
-// Licence: GPL V3
+// Licence: AGPL3
 // (c) Project Contributors Sept 2020
 
 #ifndef ADS1X_DEV_H
 #define ADS1X_DEV_H
 
-#include "ads1xUtil.h"
-#include "lxI2C.h"
-#include "lxTiming.h"
+#include "ads1xAuto.h"
 
 
 /***/
@@ -22,8 +20,6 @@ typedef struct
    U8 cmp;
 } ADS1xTrans;
 
-// i2c "packet" bytes for ADS1x registers
-#define ADS1X_NRB (3)
 typedef struct
 {  // Result & config registers (minimum required)
    U8 res[ADS1X_NRB], cfg[ADS1X_NRB];
@@ -58,18 +54,6 @@ extern int ads1xInitRB (ADS1xFullPB *pFPB, const MemBuff *pWS, const LXI2CBusCtx
 #define ADS1X_MODE_XTIMING (1<<1)   // Extended timing information
 #define ADS1X_MODE_VERBOSE (1<<0)   // Diagnostic info (to console)
 
-#define ADS1X_MUX_MAX 4
-
-typedef struct
-{
-   U16 rate[2]; // outer, inner
-   U8 mux[ADS1X_MUX_MAX];
-   U8 nMux;
-   //U8 cfg[ADS1X_NRB]; ? consider ?
-   U8 maskAG;
-   U8 timeEst; // Sample timing measure/estimation method
-   U8 modeFlags;
-} ADSReadParam;
 
 // Auto gain, & accurate timing test
 int testAutoGain

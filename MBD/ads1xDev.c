@@ -1,44 +1,13 @@
 // Common/MBD/ads1xDev.c - development, test & debug code for TI I2C ADC devices (ADS1xxx series)
 // https://github.com/DrAl-HFS/Common.git
-// Licence: GPL V3
+// Licence: AGPL3
 // (c) Project Contributors Sept 2020
 
 #include "ads1xDev.h"
+//#include "ads1xAuto.h"
 
 
 /***/
-
-// Auto-gain raw reading group parameters
-typedef struct
-{
-   const LXI2CBusCtx *pC;
-   long  ivlNanoSec[2]; // Conversion interval (hardware rate dependant 303usec~125msec. for 400kHz bus clock)
-   I16   fsr;    // Full scale raw reading (value is hardware version dependant)
-   U8    busAddr; // I2C device address
-   U8    maxTrans;    // Max transactions per mux channel
-   U8    nMux;
-   U8    cfgPB[ADS1X_NRB]; // Config packet bytes
-} AutoRawCtx;
-
-#define AGR_FLAG_AUTO 1<<7 // Enable auto gain
-#define AGR_FLAG_SGND 1<<6 // Mux selects single ended operation
-#define AGR_FLAG_VROK 1<<5 // Valid result
-#define AGR_FLAG_ORNG 1<<4 // out of range (uncorrectable over/under-flow)
-#define RMG_MASK_TRNS 0xF  // Transaction count mask
-typedef struct
-{
-   I16 res;       // raw result (target hardware format)
-   U8  cfgRB0[1]; // First byte of config register: describes mux gain and single/multi conversion control
-   U8  flSt;      // flags (see above) in high nybble & 4bit transaction count in low
-} RawAGR;
-
-typedef struct
-{
-   AutoRawCtx arc;
-   RawAGR      rawAGR[ADS1X_MUX_MAX];
-   long        outerIvlNanoSec;
-   RawTimeStamp targetTS[2];
-} AutoExtCtx;
 
 
 /***/
@@ -63,21 +32,6 @@ void ads1xTransCfg (ADS1xTrans *pT, const U8 cfg[2], const ADS1xHWID id)
    pT->cmp= (((cfg[1] >> ADS1X_SH1_CQ) & ADS1X_CMP_M) + 1 ) & ADS1X_CMP_M; // rotate by +1 so 0->off
 } // ads1xTransCfg
 
-// Conversion interval (ns), rate stored optionally (else NULL)
-long ads1xConvIvl (U16 *pRate, const U8 cfg[2], const ADS1xHWID id)
-{
-   U16 rate= ads1xRateToU( ads1xGetRate(cfg), id);
-   if (pRate) { *pRate= rate; }
-   if (0 != rate) { return(NANO_TICKS / (long)rate); } // else
-   return(0);
-} // ads1xConvIvl
-
-F32 ads1xGainScaleV (const U8 cfg[1], const ADS1xHWID x)
-{
-   static const F32 rawFS[]= { 1.0 / ADS10_FSR, 1.0 / ADS11_FSR };
-   if ((x & 1) != x) { return(0); } //else
-   return ads1xGainToFSV( ads1xGetGain(cfg) ) * rawFS[x];
-} // ads1xGainScaleV
 
 // DEBUG & TEST
 //char muxCh (const U8 c) { if (c<=3) return('0'+c); else return('G'); }
@@ -120,12 +74,6 @@ int idxMaxNU16 (const U16 u[], int n)
 } // idxMaxNU16
 
 /***/
-#define EXT_RTS_COUNT (5)
-#define EXT_RTS_MUXCH_BGN (4)
-#define EXT_RTS_WRCFG_BGN (3)
-#define EXT_RTS_WRCFG_END (2)
-#define EXT_RTS_RDVAL_BGN (1)
-#define EXT_RTS_RDVAL_END (0)
 // Special extended values used to generate estimator parameters
 #define EXT_RTS_GEP01  (5) // EXT_RTS_RDVAL_END -> EXT_RTS_RDVAL_BGN
 #define EXT_RTS_GEP02  (6) // EXT_RTS_RDVAL_END -> EXT_RTS_WRCFG_END
@@ -133,10 +81,6 @@ int idxMaxNU16 (const U16 u[], int n)
 #define EXT_RTS_GEP_BITS   (3)
 #define EXT_RTS_GEP_MASK   ((1<<EXT_RTS_GEP_BITS)-1)
 #define EXT_RTS_VAL_SHIFT  EXT_RTS_GEP_BITS
-
-typedef struct {  // TODO: reverse order
-   RawTimeStamp ts[EXT_RTS_COUNT]; // channel start plus begin-end for two transactions (setup & read)
-} ExtRawTiming;
 
 typedef struct
 {
@@ -179,106 +123,7 @@ U8 packTE (U8 ta, U8 tb, F32 f)
 
 
 // DISPLACE : ads1xUtil ?
-// Read a set of mux channels, updating the gain setting for each to maximise precison.
-// Performs multiple reads per channel as appropriate, if permitted.
-// Optionally provides transaction timing information
-int readAutoRawADS1x (RawAGR agr[], ExtRawTiming *pT, int nR, RawTimeStamp *pTarget, AutoRawCtx *pARC)
-{
-   RawTimeStamp wait[3];
-   int n=0, r=-1, vr, tFSR; // intermediate values at machine word-length: intended to reduce operations
-   U8 resPB[ADS1X_NRB], gainID, iTrans;
 
-   resPB[0]= ADS1X_REG_RES;
-   for (int i=0; i<nR; i++)
-   {  // per-mux iteration
-      vr= 0; iTrans= 0; // clean start
-      agr[i].flSt&= AGR_FLAG_AUTO|AGR_FLAG_SGND; // clear status, preserve setting
-      gainID= ads1xGetGain(agr[i].cfgRB0);
-      if (pARC->ivlNanoSec[1] > 0)
-      {
-         timeSpinWaitUntil(wait+0, pTarget);
-         if (pT) { pT[i].ts[EXT_RTS_MUXCH_BGN]= wait[0]; }
-         timeSetTarget(pTarget, NULL, pARC->ivlNanoSec[1], TIME_MODE_RELATIVE);
-      } else if (pT) { timeStamp(pT[i].ts+EXT_RTS_MUXCH_BGN); } // MUX channel begin
-
-      do
-      {  // Get best available reading
-         pARC->cfgPB[1]= agr[i].cfgRB0[0]; // Sets Gain, Mux, flags (Single Shot & Start)
-         if (pT) { timeStamp(pT[i].ts+EXT_RTS_WRCFG_BGN); }  // Config write begin
-         r= lxi2cWriteRB(pARC->pC, pARC->busAddr, pARC->cfgPB, ADS1X_NRB);
-         if (r > 0)
-         {  // Config write complete, conversion started
-            timeSetTarget(wait+1, wait+0, pARC->ivlNanoSec[0], TIME_MODE_NOW);
-            iTrans++;
-            timeSpinWaitUntil(wait+2, wait+1); // Wait for conversion
-            r= lxi2cReadRB(pARC->pC, pARC->busAddr, resPB, ADS1X_NRB);
-            if (r > 0)
-            {  // got result
-               if (pT)
-               {
-                  timeStamp(pT[i].ts+EXT_RTS_RDVAL_END);  // Read complete
-                  pT[i].ts[EXT_RTS_RDVAL_BGN]= wait[2];   // Wait done / begin read
-                  pT[i].ts[EXT_RTS_WRCFG_END]= wait[0];   // Write complete
-               }
-               iTrans++;
-               vr= rdI16BE(resPB+1);
-               if ((vr < 0) && (agr[i].flSt & AGR_FLAG_SGND))
-               {  // single ended: reverse polarity -> abort
-                  agr[i].flSt|= AGR_FLAG_ORNG;
-                  r= 0;
-               }
-               else if (agr[i].flSt & AGR_FLAG_AUTO)
-               {  // Check for better gain setting
-                  tFSR= (int)(pARC->fsr) / 2;
-                  if ((vr < tFSR) && (gainID < ADS1X_GAIN_0V256))
-                  {
-                     do // Search for appropriate gain to improve
-                     {  // precision based on last reading
-                        gainID++;
-                        tFSR/= 2;
-                     } while ((vr < tFSR) && (gainID < ADS1X_GAIN_0V256));
-                     ads1xSetGain(agr[i].cfgRB0, gainID);
-                  }
-                  else if ((vr >= pARC->fsr) && (gainID > ADS1X_GAIN_6V144))
-                  {  // Reduce gain by half
-                     gainID/= 2;
-                     ads1xSetGain(agr[i].cfgRB0, gainID);
-                  }
-                  else { r= 0; } // done
-               }
-            } // Result
-         } // Start
-      } while ((r > 0) && (iTrans < pARC->maxTrans));
-      if (r >= 0)
-      { // Set final status info
-         const int fsr= pARC->fsr;
-         if (0 == (agr[i].flSt & AGR_FLAG_ORNG))
-         {
-            if ((vr >= fsr) || (vr <= -(fsr+1))) { agr[i].flSt|= AGR_FLAG_ORNG; }
-            else
-            {
-               agr[i].flSt|= AGR_FLAG_VROK;
-               ++n;
-            }
-         }
-         agr[i].res= vr;
-         agr[i].flSt|= RMG_MASK_TRNS & iTrans;
-      }
-   }
-   return(n);
-} // readAutoRawADS1x
-
-U8 setupRawAGR (RawAGR r[], const U8 mux[], U8 n, const U8 maskAG, const enum ADS1xGain initGain)
-{
-   if (n > ADS1X_MUX_MAX) { WARN_CALL("(..nMux=%u..) - clamped to ADS_MUX_MAX=%d\n", n, ADS1X_MUX_MAX); n= ADS1X_MUX_MAX; }
-   for (int i=0; i<n; i++)
-   {  // set config byte to start single conversion (plus gain & mux)
-      ads1xGenCfgRB0(r[i].cfgRB0, mux[i], initGain, ADS1X_FL0_OS|ADS1X_FL0_MODE);
-      if (maskAG & (1<<n)) { r[i].flSt= AGR_FLAG_AUTO; }
-      if (mux[i] >= ADS1X_MUX0G) { r[i].flSt|= AGR_FLAG_SGND; }
-   }
-   return(n);
-} // setupRawAGR
 
 int convertRawAGR (F32 f[], const RawAGR r[], const int n, const ADSInstProp *pP)
 {
@@ -377,54 +222,6 @@ void analyseInterval (const F32 t[], const int nM, const int nN)
    report(LOG0,"Mux channel inter-sample mean, stdev : %G, %G, D=%G, rate=%G\n", sr.m, s, s * r, r);
 } // analyseInterval
 
-static int setupAEC (AutoExtCtx *pAEC, const ADSInstProp *pP, const ADSReadParam *pM, const U8 * pCfgPB, const LXI2CBusCtx *pC)
-{
-   int r= -1;
-
-   pAEC->arc.nMux= setupRawAGR(pAEC->rawAGR, pM->mux, pM->nMux, pM->maskAG, ADS1X_GAIN_4V096);
-   if (pAEC->arc.nMux > 0)
-   {
-      r= 0;
-      pAEC->arc.pC= pC;
-      if (pCfgPB) { memcpy(pAEC->arc.cfgPB, pCfgPB, ADS1X_NRB); } // Paranoid VALIDATE ?
-      else
-      {
-         pAEC->arc.cfgPB[0]= ADS1X_REG_CFG;
-         r= lxi2cReadRB(pAEC->arc.pC, pP->busAddr, pAEC->arc.cfgPB, ADS1X_NRB);
-         if (r <= 0) { return(r); }
-      }
-
-      // Set hard & soft rates
-      U16 hardRate, softRate=0;
-      pAEC->arc.ivlNanoSec[0]= ads1xConvIvl(&hardRate, pAEC->arc.cfgPB+1, pP->hwID);
-      if (pM->rate[1] >= hardRate) { pAEC->arc.ivlNanoSec[1]= 0; } // no extra delays
-      else { pAEC->arc.ivlNanoSec[1]= NANO_TICKS / (long)(pM->rate[1]); }
-      if (pM->rate[0] > 0)
-      {
-         U16 consRate= MIN(hardRate, pM->rate[1]) / pAEC->arc.nMux; // *nAG
-         if (pM->rate[0] > consRate) { WARN_CALL("() - requested rate %d exceeds constraint %d\n", pM->rate[0], consRate); }
-         if (pM->rate[0] < consRate)
-         {  // delay required
-            softRate= pM->rate[0];
-            pAEC->outerIvlNanoSec= NANO_TICKS / (long)softRate;
-         }
-      }
-      //LOG_CALL("() - rate=%d -> ivl=%d\n", r, pAEC->arc.ivl);
-      pAEC->arc.fsr= ads1xRawFSR(pP->hwID);
-      pAEC->arc.busAddr= pP->busAddr;
-      if (softRate > 0)
-      {
-         const long i2cTransWait= ADS1X_TRANS_NCLK * (float)NANO_TICKS / pC->clk;
-         const long hardTime= (pAEC->arc.ivlNanoSec[0] + 2 * i2cTransWait);
-         const long window= pAEC->outerIvlNanoSec / pAEC->arc.nMux;
-         pAEC->arc.maxTrans= 2*(window / hardTime);
-         LOG("transWait=%d, hardTime=%d, window=%d -> maxTrans=%d\n", i2cTransWait, hardTime, window, pAEC->arc.maxTrans);
-      } else { pAEC->arc.maxTrans= 2; }
-
-      timeSetTarget(pAEC->targetTS+1, pAEC->targetTS+0, 100, TIME_MODE_NOW); // start at +100ns
-   }
-   return(r);
-} // setupAEC
 
 #define FLAGS_ARE_SET(f,x) (((f) & (x)) == (f))
 
