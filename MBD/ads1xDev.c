@@ -436,7 +436,7 @@ int readAutoADS1X
 
       pEstRTS= getTimeEstimator(pM->timeEst);
 
-      timeSetTarget(targetTS+1, targetTS+0, 100, TIME_MODE_NOW);
+      timeSetTarget(targetTS+1, targetTS+0, 100, TIME_MODE_NOW); // start at +100ns
       if (pDT || (pM->modeFlags & ADS1X_MODE_XTIMING))
       {
          pET= extT+0;
@@ -583,6 +583,7 @@ int testAutoGain
    if (pV) { free(pV); }
    return(r);
 } // testAutoGain
+
 
 /***/
 
