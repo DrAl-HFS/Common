@@ -11,11 +11,13 @@
 // Auto-gain raw reading group parameters
 typedef struct
 {
-   U8    *pCfgPB;       // Config packet bytes - (pointer to outer level declaration eliminates copying)
+   const LXI2CBusCtx *pC;
    long  ivlNanoSec[2]; // Conversion interval (hardware rate dependant 303usec~125msec. for 400kHz bus clock)
    I16   fsr;    // Full scale raw reading (value is hardware version dependant)
-   U8 busAddr; // I2C device address
-   U8 maxTrans;    // Max transactions per mux channel
+   U8    busAddr; // I2C device address
+   U8    maxTrans;    // Max transactions per mux channel
+   U8    nMux;
+   U8    cfgPB[ADS1X_NRB]; // Config packet bytes
 } AutoRawCtx;
 
 #define AGR_FLAG_AUTO 1<<7 // Enable auto gain
@@ -29,6 +31,14 @@ typedef struct
    U8  cfgRB0[1]; // First byte of config register: describes mux gain and single/multi conversion control
    U8  flSt;      // flags (see above) in high nybble & 4bit transaction count in low
 } RawAGR;
+
+typedef struct
+{
+   AutoRawCtx arc;
+   RawAGR      rawAGR[ADS1X_MUX_MAX];
+   long        outerIvlNanoSec;
+   RawTimeStamp targetTS[2];
+} AutoExtCtx;
 
 
 /***/
@@ -172,7 +182,7 @@ U8 packTE (U8 ta, U8 tb, F32 f)
 // Read a set of mux channels, updating the gain setting for each to maximise precison.
 // Performs multiple reads per channel as appropriate, if permitted.
 // Optionally provides transaction timing information
-int readAutoRawADS1x (RawAGR agr[], ExtRawTiming *pT, int nR, RawTimeStamp *pTarget, AutoRawCtx *pARC, const LXI2CBusCtx *pC)
+int readAutoRawADS1x (RawAGR agr[], ExtRawTiming *pT, int nR, RawTimeStamp *pTarget, AutoRawCtx *pARC)
 {
    RawTimeStamp wait[3];
    int n=0, r=-1, vr, tFSR; // intermediate values at machine word-length: intended to reduce operations
@@ -193,15 +203,15 @@ int readAutoRawADS1x (RawAGR agr[], ExtRawTiming *pT, int nR, RawTimeStamp *pTar
 
       do
       {  // Get best available reading
-         pARC->pCfgPB[1]= agr[i].cfgRB0[0]; // Sets Gain, Mux, flags (Single Shot & Start)
+         pARC->cfgPB[1]= agr[i].cfgRB0[0]; // Sets Gain, Mux, flags (Single Shot & Start)
          if (pT) { timeStamp(pT[i].ts+EXT_RTS_WRCFG_BGN); }  // Config write begin
-         r= lxi2cWriteRB(pC, pARC->busAddr, pARC->pCfgPB, ADS1X_NRB);
+         r= lxi2cWriteRB(pARC->pC, pARC->busAddr, pARC->cfgPB, ADS1X_NRB);
          if (r > 0)
          {  // Config write complete, conversion started
             timeSetTarget(wait+1, wait+0, pARC->ivlNanoSec[0], TIME_MODE_NOW);
             iTrans++;
             timeSpinWaitUntil(wait+2, wait+1); // Wait for conversion
-            r= lxi2cReadRB(pC, pARC->busAddr, resPB, ADS1X_NRB);
+            r= lxi2cReadRB(pARC->pC, pARC->busAddr, resPB, ADS1X_NRB);
             if (r > 0)
             {  // got result
                if (pT)
@@ -367,6 +377,55 @@ void analyseInterval (const F32 t[], const int nM, const int nN)
    report(LOG0,"Mux channel inter-sample mean, stdev : %G, %G, D=%G, rate=%G\n", sr.m, s, s * r, r);
 } // analyseInterval
 
+static int setupAEC (AutoExtCtx *pAEC, const ADSInstProp *pP, const ADSReadParam *pM, const U8 * pCfgPB, const LXI2CBusCtx *pC)
+{
+   int r= -1;
+
+   pAEC->arc.nMux= setupRawAGR(pAEC->rawAGR, pM->mux, pM->nMux, pM->maskAG, ADS1X_GAIN_4V096);
+   if (pAEC->arc.nMux > 0)
+   {
+      r= 0;
+      pAEC->arc.pC= pC;
+      if (pCfgPB) { memcpy(pAEC->arc.cfgPB, pCfgPB, ADS1X_NRB); } // Paranoid VALIDATE ?
+      else
+      {
+         pAEC->arc.cfgPB[0]= ADS1X_REG_CFG;
+         r= lxi2cReadRB(pAEC->arc.pC, pP->busAddr, pAEC->arc.cfgPB, ADS1X_NRB);
+         if (r <= 0) { return(r); }
+      }
+
+      // Set hard & soft rates
+      U16 hardRate, softRate=0;
+      pAEC->arc.ivlNanoSec[0]= ads1xConvIvl(&hardRate, pAEC->arc.cfgPB+1, pP->hwID);
+      if (pM->rate[1] >= hardRate) { pAEC->arc.ivlNanoSec[1]= 0; } // no extra delays
+      else { pAEC->arc.ivlNanoSec[1]= NANO_TICKS / (long)(pM->rate[1]); }
+      if (pM->rate[0] > 0)
+      {
+         U16 consRate= MIN(hardRate, pM->rate[1]) / pAEC->arc.nMux; // *nAG
+         if (pM->rate[0] > consRate) { WARN_CALL("() - requested rate %d exceeds constraint %d\n", pM->rate[0], consRate); }
+         if (pM->rate[0] < consRate)
+         {  // delay required
+            softRate= pM->rate[0];
+            pAEC->outerIvlNanoSec= NANO_TICKS / (long)softRate;
+         }
+      }
+      //LOG_CALL("() - rate=%d -> ivl=%d\n", r, pAEC->arc.ivl);
+      pAEC->arc.fsr= ads1xRawFSR(pP->hwID);
+      pAEC->arc.busAddr= pP->busAddr;
+      if (softRate > 0)
+      {
+         const long i2cTransWait= ADS1X_TRANS_NCLK * (float)NANO_TICKS / pC->clk;
+         const long hardTime= (pAEC->arc.ivlNanoSec[0] + 2 * i2cTransWait);
+         const long window= pAEC->outerIvlNanoSec / pAEC->arc.nMux;
+         pAEC->arc.maxTrans= 2*(window / hardTime);
+         LOG("transWait=%d, hardTime=%d, window=%d -> maxTrans=%d\n", i2cTransWait, hardTime, window, pAEC->arc.maxTrans);
+      } else { pAEC->arc.maxTrans= 2; }
+
+      timeSetTarget(pAEC->targetTS+1, pAEC->targetTS+0, 100, TIME_MODE_NOW); // start at +100ns
+   }
+   return(r);
+} // setupAEC
+
 #define FLAGS_ARE_SET(f,x) (((f) & (x)) == (f))
 
 static const char gSepCh[2]={'\t','\n'};
@@ -386,74 +445,31 @@ int readAutoADS1X
    EstimatorRTS *pEstRTS=NULL;
    ExtRawTiming extT[ADS1X_MUX_MAX], *pET=NULL;
    F32 sumTransDT[3]={0};  // StatMomD1R2 md1r2;
-   RawTimeStamp targetTS[2];
-   long outerIvlNanoSec=0;
-   AutoRawCtx arc;
-   RawAGR rawAGR[ADS1X_MUX_MAX];
+   AutoExtCtx aec;
    int n=0, r=-1;
-   U8 cfgPB[ADS1X_NRB];
 
-   const U8 nMux= setupRawAGR(rawAGR, pM->mux, pM->nMux, pM->maskAG, ADS1X_GAIN_4V096);
-   if ((nMax > 0) && (nMux > 0))
+   if (nMax > 0)
    {
-      if (pCfgPB) { arc.pCfgPB= pCfgPB; } // Paranoid VALIDATE ?
-      else
-      {
-         cfgPB[0]= ADS1X_REG_CFG;
-         r= lxi2cReadRB(pC, pP->busAddr, cfgPB, ADS1X_NRB);
-         //LOG_CALL(" : lxi2cReadRB() - r=%d\n", r);
-         if (r <= 0) { return(r); }
-         //else
-         arc.pCfgPB= cfgPB;
-      }
-
-      // Set hard & soft rates
-      U16 hardRate, softRate=0;
-      arc.ivlNanoSec[0]= ads1xConvIvl(&hardRate, arc.pCfgPB+1, pP->hwID);
-      if (pM->rate[1] >= hardRate) { arc.ivlNanoSec[1]= 0; } // no extra delays
-      else { arc.ivlNanoSec[1]= NANO_TICKS / (long)(pM->rate[1]); }
-      if (pM->rate[0] > 0)
-      {
-         U16 consRate= MIN(hardRate, pM->rate[1]) / nMux; // *nAG
-         if (pM->rate[0] > consRate) { WARN_CALL("() - requested rate %d exceeds constraint %d\n", pM->rate[0], consRate); }
-         if (pM->rate[0] < consRate)
-         {  // delay required
-            softRate= pM->rate[0];
-            outerIvlNanoSec= NANO_TICKS / (long)softRate;
-         }
-      }
-      //LOG_CALL("() - rate=%d -> ivl=%d\n", r, arc.ivl);
-      arc.fsr= ads1xRawFSR(pP->hwID);
-      arc.busAddr= pP->busAddr;
-      if (softRate > 0)
-      {
-         const long i2cTransWait= ADS1X_TRANS_NCLK * (float)NANO_TICKS / pC->clk;
-         const long hardTime= (arc.ivlNanoSec[0] + 2 * i2cTransWait);
-         const long window= outerIvlNanoSec / nMux;
-         arc.maxTrans= 2*(window / hardTime);
-         LOG("transWait=%d, hardTime=%d, window=%d -> maxTrans=%d\n", i2cTransWait, hardTime, window, arc.maxTrans);
-      } else { arc.maxTrans= 2; }
-
+      r= setupAEC(&aec, pP, pM, pCfgPB, pC);
+      if (r < 0) { return(r); }
       pEstRTS= getTimeEstimator(pM->timeEst);
-
-      timeSetTarget(targetTS+1, targetTS+0, 100, TIME_MODE_NOW); // start at +100ns
       if (pDT || (pM->modeFlags & ADS1X_MODE_XTIMING))
       {
          pET= extT+0;
-         if (NULL == pRefTS) { pRefTS= targetTS+0; }
+         if (NULL == pRefTS) { pRefTS= aec.targetTS+0; }
       }
       do
       {
-         r= readAutoRawADS1x(rawAGR, pET, nMux, targetTS+1, &arc, pC); //LOG("readAutoRawADS1x() - r=%d\n", r);
+         r= readAutoRawADS1x(aec.rawAGR, pET, aec.arc.nMux, aec.targetTS+1, &(aec.arc)); //LOG("readAutoRawADS1x() - r=%d\n", r);
          if (r > 0)
          {
-            convertRawAGR(rV+n, rawAGR, nMux, pP);
+            convertRawAGR(rV+n, aec.rawAGR, aec.arc.nMux, pP);
             if (pDT)
             {  // Convert post-reading time stamp to elapsed since reference
                if (NULL == pEstRTS) // pM->timeEst < EXT_RTS_COUNT)
-               { elapsedStrideRTS(pDT+n, nMux, pET[0].ts+pM->timeEst, EXT_RTS_COUNT, pRefTS); }
+               { elapsedStrideRTS(pDT+n, aec.arc.nMux, pET[0].ts+pM->timeEst, EXT_RTS_COUNT, pRefTS); }
                else
-               { elapsedEstStrideRTS(pDT+n, nMux, pET[0].ts, EXT_RTS_COUNT, pRefTS, pEstRTS); }
+               { elapsedEstStrideRTS(pDT+n, aec.arc.nMux, pET[0].ts, EXT_RTS_COUNT, pRefTS, pEstRTS); }
             }
 
             if FLAGS_ARE_SET( ADS1X_MODE_XTIMING|ADS1X_MODE_VERBOSE, pM->modeFlags)
@@ -462,24 +478,24 @@ static const char *dtID[]= {"rdvE","rdvB","cfgE","cfgB","muxB"};
                F32 t[EXT_RTS_COUNT*ADS1X_MUX_MAX], timeScale= 1000;
                int k= 0;
 
-               report(LOG0,"%d..%d\n",n,n+nMux-1);
+               report(LOG0,"%d..%d\n",n,n+aec.arc.nMux-1);
                report(LOG0,"Raw\t");
-               for (int i=0; i<nMux; i++)
+               for (int i=0; i<aec.arc.nMux; i++)
                {
-                  U8 g= ads1xGetGain(rawAGR[i].cfgRB0);
-                  U8 t= rawAGR[i].flSt & RMG_MASK_TRNS;
-                  U8 f= rawAGR[i].flSt >> 4;	// rawAGR[i].res,
-                  report(LOG0,"%d,%X,%d%c", g, f, t, gSepCh[i >= (nMux-1)]);
+                  U8 g= ads1xGetGain(aec.rawAGR[i].cfgRB0);
+                  U8 t= aec.rawAGR[i].flSt & RMG_MASK_TRNS;
+                  U8 f= aec.rawAGR[i].flSt >> 4;	// rawAGR[i].res,
+                  report(LOG0,"%d,%X,%d%c", g, f, t, gSepCh[i >= (aec.arc.nMux-1)]);
                }
                // Transpose timings into mux then category order
-               elapsedTrnStrdRTS(t, nMux * EXT_RTS_COUNT, pET[0].ts+0, nMux, EXT_RTS_COUNT, pRefTS);
+               elapsedTrnStrdRTS(t, aec.arc.nMux * EXT_RTS_COUNT, pET[0].ts+0, aec.arc.nMux, EXT_RTS_COUNT, pRefTS);
                for (int j=0; j<EXT_RTS_COUNT; j++)
                {
                   report(LOG0,"%s (ms)\t", dtID[j]);
-                  for (int i=0; i<nMux; i++) { report(LOG0,"%G%c", t[k+i] * timeScale, gSepCh[i >= (nMux-1)]); }
-                  k+= nMux;
+                  for (int i=0; i<aec.arc.nMux; i++) { report(LOG0,"%G%c", t[k+i] * timeScale, gSepCh[i >= (aec.arc.nMux-1)]); }
+                  k+= aec.arc.nMux;
                }
-               for (int i=0; i<nMux; i++)
+               for (int i=0; i<aec.arc.nMux; i++)
                {
                   const F32 dt1= timeDiff(pET[i].ts+EXT_RTS_WRCFG_BGN, pET[i].ts+EXT_RTS_WRCFG_END);
                   const F32 dt2= timeDiff(pET[i].ts+EXT_RTS_RDVAL_BGN, pET[i].ts+EXT_RTS_RDVAL_END);
@@ -488,20 +504,21 @@ static const char *dtID[]= {"rdvE","rdvB","cfgE","cfgB","muxB"};
                   sumTransDT[2]+= dt1*dt1 + dt2*dt2;
                }
             }
-            n+= nMux;
+            n+= aec.arc.nMux;
          }
-         if (outerIvlNanoSec > 0)
+         if (aec.outerIvlNanoSec > 0)
          {  RawTimeStamp wait[1];
-            timeSetTarget(targetTS+1, NULL, outerIvlNanoSec, TIME_MODE_RELATIVE);
-            timeSpinWaitUntil(wait+0, targetTS+1);
+            timeSetTarget(aec.targetTS+1, NULL, aec.outerIvlNanoSec, TIME_MODE_RELATIVE);
+            timeSpinWaitUntil(wait+0, aec.targetTS+1);
          }
-      } while ((n <= (nMax-nMux)) && (r > 0));
+      } while ((n <= (nMax-aec.arc.nMux)) && (r > 0));
       //if (refTS.tv_nsec > 0) { ; } ???
       if FLAGS_ARE_SET( ADS1X_MODE_XTIMING|ADS1X_MODE_VERBOSE, pM->modeFlags)
       {
          sumTransDT[0]= 2 * n;
          reportStat(sumTransDT, 1000, sumTransDT[0]-1);
       }
+      if (pCfgPB) { memcpy(pCfgPB, aec.arc.cfgPB, ADS1X_NRB); } // Copy back any changes
    }
    return(n);
 } // readAutoADS1X
