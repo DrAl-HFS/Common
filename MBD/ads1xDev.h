@@ -58,7 +58,7 @@ extern int ads1xInitRB (ADS1xFullPB *pFPB, const MemBuff *pWS, const LXI2CBusCtx
 #define ADS1X_MODE_XTIMING (1<<1)   // Extended timing information
 #define ADS1X_MODE_VERBOSE (1<<0)   // Diagnostic info (to console)
 
-#define ADS1X_MUX_MAX 4
+#define ADS1X_MUX_MAX 8
 
 typedef struct
 {

@@ -618,7 +618,7 @@ int testADS1x15
       }
       ads1xDumpCfg(fpb.rc.cfg+1, 0);
       memcpy(cfgStatus, fpb.rc.cfg, ADS1X_NRB);
-      ads1xGenCfg(fpb.rc.cfg+1, ADS1X_MUX0G, ADS1X_GAIN_6V144, rateID, ADS1X_CMP_DISABLE);
+      ads1xGenCfg(fpb.rc.cfg+1, pM->mux[0], ADS1X_GAIN_6V144, rateID, ADS1X_CMP_DISABLE);
       fpb.rc.cfg[1]|= ADS1X_FL0_OS|ADS1X_FL0_MODE; // Now enable single-shot conversion
       // NB: Config packet written to device in loop that follows
       convWait= ads1xConvIvl(NULL,fpb.rc.cfg+1, pP->hwID);
@@ -705,6 +705,57 @@ int testADS1x15
 
 #ifdef ADS1X_MAIN
 
+// Displace to generic multiplexor code where ?
+U8 getMuxChanID (const char c, const char max) // ='3')
+{
+   if ((c >= '0') && (c <= max)) { return(c-'0'); } // else
+   if ('G' == c) { return(0xF); } // else
+   return(0xFF);
+} // getMuxChanID
+
+U8 scanMap (const U8 id, const U8 map[], const U8 max)
+{
+   U8 i=0;
+   while ((id != map[i]) && (i < max)) { i++; }
+   return(i);
+} // scanMap
+
+int muxMap (U8 m[ADS1X_MUX_MAX], const char *s, const U8 chanChMax, const U8 *map, const U8 mapMax)
+{
+   int r= 0, l= -1, i= 0;
+   
+   //report(OUT,"muxMap(%s)",s);
+   while (s[i] && (l != i) && (r < ADS1X_MUX_MAX))
+   {
+      l= i;
+      U8 mc1= getMuxChanID(s[i],chanChMax);
+      if ((mc1 <= 3) && ('/' == s[i+1]))
+      {
+         U8 mc2= getMuxChanID(s[i+2],chanChMax);
+         if ((mc2 <= 0xF) && (mc1 != mc2))
+         {
+            U8 j= (mc1 << 4) | mc2;
+            if (map && (mapMax > 0))
+            {
+               j= scanMap(j, map, mapMax);
+               if (j < ADS1X_MUX_MAX) { m[r++]= j; }
+            } else { m[r++]= j; }
+            //report(OUT,"*** 0x%x,0x%x -> %d\n",mc1,mc2,j);
+        }
+         i+= 2;
+         i+= (0 != s[i]);
+      }
+      i+= (',' == s[i]);
+   }
+   return(r);
+} // muxMap
+
+int ads1xMuxMap (U8 m[], const char *s)
+{
+   const U8 map[ADS1X_MUX_MAX]={0x01,0x03,0x13,0x23,0x0F,0x1F,0x2F,0x3F};
+   return muxMap(m,s,'3',map, ADS1X_MUX_MAX);
+} // ads1xMuxMap
+
 typedef struct
 {
    ADSReadParam param;
@@ -723,13 +774,13 @@ static ADS1XArgs gArgs=
 
    },
    32,   // samples
-   "/dev/i2c-1", ADS11, 0x48, 0
+   "/dev/i2c-1", ADS10, 0x48, 0
 };
 
 void usageMsg (const char name[])
 {
-static const char optCh[]="adimnrAvhT";
-static const char argCh[]="######   #";
+static const char optCh[]="adimnrAvhMT";
+static const char argCh[]="######    #";
 static const char *desc[]=
 {
    "I2C bus address: 2digit hex (no prefix)",
@@ -741,6 +792,7 @@ static const char *desc[]=
    "auto gain mode",
    "verbose diagnostic messages",
    "help (display this text)",
+   "multiplexor selection (0/G,1/G,0/1,1/2 etc.)"
    "timestamp control"
 };
    const int n= sizeof(desc)/sizeof(desc[0]);
@@ -775,7 +827,7 @@ void argTrans (ADS1XArgs *pA, int argc, char *argv[])
    int i, c, t;
    do
    {
-      c= getopt(argc,argv,"a:d:i:m:n:r:T:Ahv");
+      c= getopt(argc,argv,"a:d:i:m:n:r:M:T:Ahv");
       switch(c)
       {
          case 'a' :
@@ -804,6 +856,11 @@ void argTrans (ADS1XArgs *pA, int argc, char *argv[])
          case 'r' :
             sscanf(optarg, "%d", &t);
             if (t > 0) { pA->param.rate[0]= t; }
+            break;
+         case 'M' :
+            t= ads1xMuxMap(pA->param.mux, optarg);
+            report(OUT,"* mux %d,%d *\n",pA->param.mux[0],pA->param.mux[1]);
+            if (t > 0) { pA->param.nMux=  t; }
             break;
          case 'T' :
             sscanf(optarg, "%X", &t);
