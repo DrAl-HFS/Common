@@ -13,7 +13,7 @@
 
 /***/
 
-#define ADS1X_MUX_MAX 4
+#define ADS1X_MUX_MAX 8
 
 // Auto-gain raw reading group parameters
 typedef struct
