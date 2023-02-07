@@ -2,7 +2,7 @@
 // NB: Targets ADS1015 & ADS1115, many other ADS1xxx series with I2C use
 // compatible register map except: ADS1119, (?)
 // https://github.com/DrAl-HFS/Common.git
-// Licence: GPL V3
+// Licence: AGPL3
 // (c) Project Contributors Aug 2020
 
 // HW Ref:  http://www.ti.com/lit/gpn/ads1015
@@ -21,6 +21,9 @@ extern "C" {
 // Transaction clock cycles: (ADR+REG+2*B) * (8b + 1 ack) + 1 stop
 // Used along with bus clock rate to determine wait duration
 #define ADS1X_TRANS_NCLK (1 + 4 * (8+1))
+
+// i2c "packet" bytes for all ADS1x registers
+#define ADS1X_NRB (3)
 
 // Typedef vs. enum-tag : no difference in type enforcement...
 typedef enum ads1x_hwid

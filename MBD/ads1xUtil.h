@@ -1,6 +1,6 @@
 // Common/MBD/ads1xUtil.h - low level utility code for TI I2C ADC devices (ADS1xxx series)
 // https://github.com/DrAl-HFS/Common.git
-// Licence: GPL V3
+// Licence: AGPL3
 // (c) Project Contributors Aug-Sept. 2020
 
 #ifndef ADS1X_UTIL_H

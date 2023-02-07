@@ -54,7 +54,7 @@ UBX_HDR := $(UBX_MOD:%=$(HDR_DIR)/UBX/%.h)
 UBX_OBJ := $(UBX_MOD:%=$(OBJ_DIR)/%.o)
 UBX_HDR+= $(HDR_DIR)/UBX/ubxM8.h $(HDR_DIR)/UBX/ubxPDU.h $(HDR_DIR)/mbdUtil.h
 
-ADS_MOD := ads1xDev ads1xUtil
+ADS_MOD := ads1xDev ads1xAuto ads1xUtil
 ADS_SRC := $(ADS_MOD:%=$(SRC_DIR)/%.c)
 ADS_HDR := $(ADS_MOD:%=$(HDR_DIR)/%.h)
 ADS_OBJ := $(ADS_MOD:%=$(OBJ_DIR)/%.o)
