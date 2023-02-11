@@ -11,7 +11,7 @@
 
 /***/
 
-int muxMapFromA (U8 m[], int mMax, const char *s, const U8 hwID);
+extern int muxMapFromA (U8 m[], int mMax, const char *s, const U8 hwID);
 
 
 #endif // ADS1X_TXT_IF_H

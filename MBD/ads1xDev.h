@@ -58,19 +58,19 @@ extern int ads1xInitRB (ADS1xFullPB *pFPB, const MemBuff *pWS, const LXI2CBusCtx
 int testAutoGain
 (
    const int maxSamples,
-   const LXI2CBusCtx *pC,
-   const ADSInstProp *pP,
+   const LXI2CBusCtx  *pC,
+   const ADSInstProp  *pP,
    const ADSReadParam *pM,
-   const F32      *pResDiv
+   const ADSResDiv    *pRD
 );
 
 // Hacky mode tests
 int testADS1x15
 (
    const int maxSamples,
-   const LXI2CBusCtx *pC,
-   const MemBuff      *pWS,
-   const ADSInstProp *pP,
+   const LXI2CBusCtx  *pC,
+   const MemBuff       *pWS,
+   const ADSInstProp  *pP,
    const ADSReadParam *pM
 );
 

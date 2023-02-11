@@ -7,6 +7,21 @@
 
 /***/
 
+// unsigned mantissa, base & exponent
+U32 scalePowU (const U32 m, const U32 b, const U8 e)
+{
+   switch (e)
+   {
+      case 0 : return(m);
+      case 1 : return(m * b);
+      default :
+      {
+         U32 s= b * b;
+         for (U8 i=3; i<=e; i++) { s*= b; }
+         return(m * s);
+      }
+   }
+} // scalePowU
 
 #ifndef INLINE
 

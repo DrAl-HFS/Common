@@ -116,3 +116,20 @@ const ADSInstProp * adsInitProp (ADSInstProp *pP, const F32 vdd, const U8 hwID, 
    pP->vdd= vdd;
    return(pP);
 } // adsInitProp
+
+static U32 unpackResistance (UEX16 x)
+{
+   return scalePowU(UEX_MASK_M & x, 100, x>>UEX_SHIFT);
+} // unpackResistance
+
+int adsGetResDiv (F32 r[], const F32 v[], const int n, const ADSResDiv *pRD, const ADSInstProp *pP)
+{
+   F32 vlh[2]; // // high / low side sensor config bit ?
+   for (int i=0; i<n; i++)
+   {
+      vlh[0]= v[i];
+      vlh[1]= pP->vdd - vlh[0];
+      r[i]= unpackResistance(pRD->r[i]) * vlh[0] * rcpF(vlh[1]); //  R0 = R1 * V0 / V1
+   }
+   return(n);
+} // adsGetResDiv

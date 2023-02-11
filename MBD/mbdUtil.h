@@ -16,6 +16,19 @@
 extern "C" {
 #endif
 
+// DIY unsigned exponent & mantissa encoding
+// Base is application defined, but commonly
+// power of ten or hundred is used for baud
+// rates, resistor values etc.
+#define UEX_SHIFT   14
+#define UEX_MASK_M ((1<<UEX_SHIFT)-1)
+//#define UEX_E0 (0<<UEX_SHIFT)
+
+typedef U16 UEX16;
+
+// unsigned mantissa, base & exponent
+extern U32 scalePowU (const U32 m, const U32 b, const U8 e);
+
 // GCC happiest, others?
 #define INLINE static inline
 

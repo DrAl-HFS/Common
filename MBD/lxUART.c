@@ -7,6 +7,7 @@
 #include <errno.h>
 
 #include "lxUART.h"
+#include "mbdUtil.h"
 
 /*
 Basic checks for RPi -
@@ -29,19 +30,15 @@ dtoverlay=uart#,<param>=<val>
 TODO : Model PL011 / serial clock to assess
 possible inaccuracy in baud rates. (Mini-uart?)
 */
-// DIY power-of-hundred exponent & mantissa encoding
-#define UEX_SHIFT   14
-#define UEX_MASK_M ((1<<UEX_SHIFT)-1)
-//#define UEX_E0 (0<<14)
-#define UEX_ET2 (1<<14) // 10^2
-#define UEX_ET4 (2<<14) // 10^4
-#define UEX_ET6 (3<<14) // 10^6
-
-typedef U16 UEX16;
 #define REF_BAUD_ULO  (7)  // Communicating with objects nearing the Oort cloud?
 #define REF_BAUD_LO  (13)  // Geriatric equipment / very noisy environments
 #define REF_BAUD_STD (19)  // Widely supported (assume good quality wire & connectors)
 #define REF_BAUD_HI  (21)  // Special installations: low-capacitance/screened structured cable
+
+#define UEX_ET2 (1<<UEX_SHIFT) // *10^2
+#define UEX_ET4 (2<<UEX_SHIFT) // *10^4
+#define UEX_ET6 (3<<UEX_SHIFT) // *10^6
+
 static const UEX16 refBaud[]=
 {
    50,75,110,134,150,200,300,       // 7 ultra-low
@@ -53,26 +50,11 @@ static const UEX16 refBaud[]=
 
 /***/
 
-// mantissa, base & exponent
-static U32 scalePowU (const U32 m, const U32 b, const U8 e)
-{
-   switch (e)
-   {
-      case 0 : return(m);
-      case 1 : return(m * b);
-      default :
-      {
-         U32 s= b * b;
-         for (U8 i=3; i<=e; i++) { s*= b; }
-         return(m * s);
-      }
-   }
-} // scalePowU
 
-static U32 unpackUEX16 (UEX16 x)
+static U32 unpackBaudRate (UEX16 x)
 {
    return scalePowU(UEX_MASK_M & x, 100, x>>UEX_SHIFT);
-} // unpackUEX16
+} // unpackBaudRate
 
 U32 adiff (U32 a, U32 b) { if (a > b) return(a - b); else return (b-a); }
 
@@ -85,7 +67,7 @@ int matchUEX16 (U32 *pR, const U32 x, const UEX16 ref[], int n)
       do
       {
          ld= d;
-         r= unpackUEX16(ref[--n]);
+         r= unpackBaudRate(ref[--n]);
          d= adiff(x,r);
          if (d < dB) { iB= n; rB= r; dB= d; }
       } while ((n > 0) && (d < ld));
@@ -102,9 +84,9 @@ int matchBaudRate (int *pR, const int r, const U8 range)
 
 void testUEX (void)
 {
-   for (int i=0; i<REF_BAUD_HI; i++) { LOG("S%d : %u\n", i, unpackUEX16(refBaud[i])); }
+   for (int i=0; i<REF_BAUD_HI; i++) { LOG("S%d : %u\n", i, unpackBaudRate(refBaud[i])); }
    //n= sizeof(extBaud)/sizeof(extBaud[0]);
-   //for (int i=0; i<n; i++) { LOG("E%d : %u\n", i, unpackUEX16(extBaud[i])); }
+   //for (int i=0; i<n; i++) { LOG("E%d : %u\n", i, unpackBaudRate(extBaud[i])); }
    for (int i=100; i<100000000; i*= 1.5)
    {
       I32 r;
@@ -200,7 +182,7 @@ static I32 termiosBaudIdx (int i)
 {
    if (i > 0)
    {
-      if ((i-1) < REF_BAUD_TERMIOS_IMAX) { return unpackUEX16(refBaud[i-1]); }
+      if ((i-1) < REF_BAUD_TERMIOS_IMAX) { return unpackBaudRate(refBaud[i-1]); }
       switch (i)
       {
          case B57600  : return(57600);

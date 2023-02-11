@@ -323,10 +323,10 @@ static const char *dtID[]= {"rdvE","rdvB","cfgE","cfgB","muxB"};
 int testAutoGain
 (
    const int maxSamples,
-   const LXI2CBusCtx *pC,
-   const ADSInstProp *pP,
+   const LXI2CBusCtx  *pC,
+   const ADSInstProp  *pP,
    const ADSReadParam *pM,
-   const F32      *pResDiv
+   const ADSResDiv    *pRD
 )
 {
    RawTimeStamp   ts;
@@ -379,15 +379,16 @@ int testAutoGain
             report(LOG0,"V (V)\t\t");
             for (int i=0; i<nMux; i++) { report(LOG0,"%G%c", pV[n+i], gSepCh[i >= (nMux-1)]); }
 
-            if (pResDiv)
+            if (pRD)
             {
-               F32 rScale= 0.001;
+               F32 rScale= 0.001, r[ADS_RES_DIV_MAX];
+               adsGetResDiv(r, pV+n, nMux, pRD, pP);
                report(LOG0,"R (kOhm)\t",n);
                for (int i=0; i<nMux; i++)
                {
-                  F32 v0= pV[n+i]; // v1= pP->vdd - v0
-                  F32 res= pResDiv[i] * v0 * rcpF(pP->vdd - v0);
-                  report(LOG0,"%G%c", res * rScale, gSepCh[i >= (nMux-1)]);
+                  //F32 v0= pV[n+i]; // v1= pP->vdd - v0
+                  //F32 res= pResDiv[i] * v0 * rcpF(pP->vdd - v0);
+                  report(LOG0,"%G%c", r[i] * rScale, gSepCh[i >= (nMux-1)]);
                }
             }
             n+= nMux;
@@ -520,55 +521,11 @@ int testADS1x15
 
 #ifdef ADS1X_MAIN
 
-// Displace to generic multiplexor code where ?
-U8 getMuxChanID (const char c, const char max) // ='3')
-{
-   if ((c >= '0') && (c <= max)) { return(c-'0'); } // else
-   if ('G' == c) { return(0xF); } // else
-   return(0xFF);
-} // getMuxChanID
+#include "ads1xTxtIF.h"
 
-U8 scanMap (const U8 id, const U8 map[], const U8 max)
+int ads1xMuxMap (U8 m[], const char *s, const U8 hwID)
 {
-   U8 i=0;
-   while ((id != map[i]) && (i < max)) { i++; }
-   return(i);
-} // scanMap
-
-int muxMap (U8 m[ADS1X_MUX_MAX], const char *s, const U8 chanChMax, const U8 *map, const U8 mapMax)
-{
-   int r= 0, l= -1, i= 0;
-
-   //report(OUT,"muxMap(%s)",s);
-   while (s[i] && (l != i) && (r < ADS1X_MUX_MAX))
-   {
-      l= i;
-      U8 mc1= getMuxChanID(s[i],chanChMax);
-      if ((mc1 <= 3) && ('/' == s[i+1]))
-      {
-         U8 mc2= getMuxChanID(s[i+2],chanChMax);
-         if ((mc2 <= 0xF) && (mc1 != mc2))
-         {
-            U8 j= (mc1 << 4) | mc2;
-            if (map && (mapMax > 0))
-            {
-               j= scanMap(j, map, mapMax);
-               if (j < ADS1X_MUX_MAX) { m[r++]= j; }
-            } else { m[r++]= j; }
-            //report(OUT,"*** 0x%x,0x%x -> %d\n",mc1,mc2,j);
-        }
-         i+= 2;
-         i+= (0 != s[i]);
-      }
-      i+= (',' == s[i]);
-   }
-   return(r);
-} // muxMap
-
-int ads1xMuxMap (U8 m[], const char *s)
-{
-   const U8 map[ADS1X_MUX_MAX]={0x01,0x03,0x13,0x23,0x0F,0x1F,0x2F,0x3F};
-   return muxMap(m,s,'3',map, ADS1X_MUX_MAX);
+   return muxMapFromA(m, ADS1X_MUX_MAX, s, hwID);
 } // ads1xMuxMap
 
 typedef struct
@@ -586,7 +543,6 @@ static ADS1XArgs gArgs=
    {  { 20, 250 },   // inner & outer rates
       { ADS1X_MUX0G, ADS1X_MUX1G, ADS1X_MUX2G, ADS1X_MUX3G }, 4,
       0x0F, EXT_RTS_RDVAL_END, 0    // maskAG, timeEst, modeFlags
-
    },
    32,   // samples
    "/dev/i2c-1", ADS10, 0x48, 0
@@ -673,7 +629,7 @@ void argTrans (ADS1XArgs *pA, int argc, char *argv[])
             if (t > 0) { pA->param.rate[0]= t; }
             break;
          case 'M' :
-            t= ads1xMuxMap(pA->param.mux, optarg);
+            t= ads1xMuxMap(pA->param.mux, optarg, pA->hwID);
             //report(OUT,"* mux %d,%d *\n",pA->param.mux[0],pA->param.mux[1]);
             if (t > 0) { pA->param.nMux=  t; }
             break;
@@ -718,8 +674,8 @@ int main (int argc, char *argv[])
       gArgs.param.modeFlags|= ADS1X_MODE_XTIMING;
       if (gArgs.testFlags & ARG_AUTO)
       {
-         F32 rDiv[]= {2200, 330, 330, 0};
-         r= testAutoGain(gArgs.maxSamples, &gBusCtx, pP, &(gArgs.param), rDiv);
+         ADSResDiv resDiv= {{2200, 330, 330, 10000}};
+         r= testAutoGain(gArgs.maxSamples, &gBusCtx, pP, &(gArgs.param), &resDiv);
       }
       else
       {

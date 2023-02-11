@@ -99,7 +99,8 @@ enum ADS1xMux
    ADS1X_MUX1G,
    ADS1X_MUX2G,
    ADS1X_MUX3G=7,
-   ADS1X_MUX_M= 0x7   // mask
+   ADS1X_MUX_M= 0x7,  // mask
+   ADS1X_MUX_N= 8     // count
 }; // ADS1xMux;
 
 enum ADS1xGain

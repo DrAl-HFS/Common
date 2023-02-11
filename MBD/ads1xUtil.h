@@ -25,6 +25,15 @@ typedef struct
    U8 minUGID, maxUGID; // Limits of useful gainID (derived from vdd)
 } ADSInstProp;
 
+#define ADS_RES_DIV_MAX 4
+
+// Resistive sensor measurement using a divider
+// Ordering assumed to match mux settings
+typedef struct
+{  // power of hundred unsigned exponential representation: 0..16383 (*100,10k,1M)
+   UEX16 r[ADS_RES_DIV_MAX]; // fixed resistance values
+} ADSResDiv;
+
 
 /***/
 
@@ -82,5 +91,7 @@ extern I16 ads1xRawFSR (ADS1xHWID hwID);
 
 // Initialise device installation properties (determined by device type and actual supply voltage)
 extern const ADSInstProp *adsInitProp (ADSInstProp *pP, const F32 vdd, const U8 hwID, const U8 busAddr);
+
+extern int adsGetResDiv (F32 r[], const F32 v[], const int n, const ADSResDiv *pRD, const ADSInstProp *pP);
 
 #endif // ADS1X_UTIL_H
